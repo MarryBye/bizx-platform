@@ -22,6 +22,7 @@ bizx-platform/
 │   └── bizx-mobile/              # Мобильное приложение на Expo SDK 52 + React Native (порт 8081)
 │
 ├── packages/                     # Общие переиспользуемые модули
+│   ├── api-client/               # Единый типизированный HTTP-клиент (fetch + refresh token)
 │   ├── database/                 # Drizzle ORM + подключение к PostgreSQL
 │   ├── ui/                       # Общие UI-компоненты (Tailwind + shadcn/ui)
 │   ├── common-types/             # Общие Zod-схемы и TypeScript-типы (DTO)
@@ -83,6 +84,43 @@ export type CreateProductDto = z.infer<typeof createProductSchema>;
 
 - в `apps/api` (для валидации входящего тела запроса);
 - в `apps/bizx-admin` или `apps/bizx-landing` (для валидации формы перед отправкой).
+
+---
+
+### 3.1. Клиентский HTTP-клиент (`packages/api-client`)
+
+#### Почему не Axios?
+Вместо Axios в проекте создан легковесный пакет `@bizx/api-client` на базе нативного **Fetch API**:
+- **0 КБ лишних зависимостей** в бандлах фронтенда и мобилки.
+- **Поддержка SSR в Next.js 15:** нативный `fetch` на 100% совместим с системой серверного кэширования Next.js (`cache: 'no-store'`, `revalidate`).
+- **Единый для всех клиентов:** работает одинаково в вебе (Next.js, Vite SPA) и в React Native (Expo).
+- **Встроенная защита и автообновление токенов:** при ошибке `401 Unauthorized` клиент автоматически вызывает `/auth/refresh` и повторяет оригинальный запрос без дублирования вызовов (с защитой мьютексом).
+
+#### Пример использования в клиентских приложениях:
+
+```typescript
+import { createApiClient } from '@bizx/api-client';
+
+// Создаем инстанс клиента:
+export const api = createApiClient({
+  baseUrl: 'http://localhost:3101'
+});
+
+// 1. Авторизация (вход)
+const loginRes = await api.auth.login({
+  email: 'owner@example.com',
+  password: 'my-password-123'
+});
+
+// 2. Получение текущего профиля (GET /auth/me)
+const me = await api.auth.me();
+
+// 3. Выход (POST /auth/logout)
+await api.auth.logout();
+
+// 4. Произвольные запросы к API с типизацией:
+const products = await api.client.get('/products');
+```
 
 ---
 

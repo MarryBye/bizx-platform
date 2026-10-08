@@ -11,6 +11,7 @@
     "lint": "eslint ."
   },
   "dependencies": {
+    "@bizx/api-client": "workspace:*",
     "@bizx/common-types": "workspace:*",
     "@bizx/ui": "workspace:*",
     "@bizx/utils": "workspace:*",

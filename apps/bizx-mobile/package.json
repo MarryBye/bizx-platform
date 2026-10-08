@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@babel/runtime": "^8.0.5",
+    "@bizx/api-client": "workspace:*",
     "@bizx/common-types": "workspace:*",
     "@bizx/utils": "workspace:*",
     "@expo/metro-runtime": "~4.0.1",
