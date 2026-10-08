@@ -22,6 +22,7 @@ bizx-platform/
 │   └── bizx-mobile/              # Мобильное приложение на Expo SDK 52 + React Native (порт 8081)
 │
 ├── packages/                     # Общие переиспользуемые модули
+│   ├── api-client/               # Единый типизированный HTTP-клиент (fetch + refresh token)
 │   ├── database/                 # Drizzle ORM + подключение к PostgreSQL
 │   ├── ui/                       # Общие UI-компоненты (Tailwind + shadcn/ui)
 │   ├── common-types/             # Общие Zod-схемы и TypeScript-типы (DTO)
@@ -161,6 +162,43 @@ export const productResponseSchema = z.object({
   createdAt: z.string()
 });
 export type ProductResponseDto = z.infer<typeof productResponseSchema>;
+```
+
+---
+
+### 3.1. Клиентский HTTP-клиент (`packages/api-client`)
+
+#### Почему не Axios?
+Вместо Axios в проекте создан легковесный пакет `@bizx/api-client` на базе нативного **Fetch API**:
+- **0 КБ лишних зависимостей** в бандлах фронтенда и мобилки.
+- **Поддержка SSR в Next.js 15:** нативный `fetch` на 100% совместим с системой серверного кэширования Next.js (`cache: 'no-store'`, `revalidate`).
+- **Единый для всех клиентов:** работает одинаково в вебе (Next.js, Vite SPA) и в React Native (Expo).
+- **Встроенная защита и автообновление токенов:** при ошибке `401 Unauthorized` клиент автоматически вызывает `/auth/refresh` и повторяет оригинальный запрос без дублирования вызовов (с защитой мьютексом).
+
+#### Пример использования в клиентских приложениях:
+
+```typescript
+import { createApiClient } from '@bizx/api-client';
+
+// Создаем инстанс клиента:
+export const api = createApiClient({
+  baseUrl: 'http://localhost:3101'
+});
+
+// 1. Авторизация (вход)
+const loginRes = await api.auth.login({
+  email: 'owner@example.com',
+  password: 'my-password-123'
+});
+
+// 2. Получение текущего профиля (GET /auth/me)
+const me = await api.auth.me();
+
+// 3. Выход (POST /auth/logout)
+await api.auth.logout();
+
+// 4. Произвольные запросы к API с типизацией:
+const products = await api.client.get('/products');
 ```
 
 ---
@@ -517,6 +555,40 @@ const { uploadUrl, fileKey, publicUrl } = await this.storageService.getPresigned
   'documents/invoice-123.pdf',
   'application/pdf'
 );
+```
+
+### Модуль авторизации (`AuthModule`) — JWT + Refresh Tokens + Защита от XSS
+
+Модуль авторизации (`apps/api/src/auth`) предоставляет безопасную аутентификацию для всех платформ:
+
+1. **Access Token (JWT, 15 минут)**: передается в заголовке `Authorization: Bearer <token>` или в куке `access_token`.
+2. **Refresh Token (7 дней)**: 
+   - Для веб-браузеров сохраняется в защищенной куке `httpOnly`, `Secure`, `SameSite=Lax` (полная защита от XSS-атак).
+   - Для мобильного приложения (React Native/Expo) возвращается в теле JSON-ответа для сохранения в `SecureStore`.
+3. **Хранение в PostgreSQL**: таблица `refresh_tokens` хранит SHA-256 хеши токенов, `userAgent` и `ipAddress` с ротацией токенов при каждом обновлении (Token Rotation).
+
+#### Доступные эндпоинты:
+- `POST /auth/register` — регистрация (`email`, `password`, `name`, `role`).
+- `POST /auth/login` — вход по email и паролю.
+- `POST /auth/refresh` — обновление токенов (читает куку `refresh_token` или поле `refreshToken` в JSON).
+- `POST /auth/logout` — выход и инвалидация refresh токена.
+- `GET /auth/me` — получение профиля текущего пользователя (защищен `JwtAuthGuard`).
+
+#### Как защитить любой контроллер или эндпоинт:
+
+```typescript
+import { Controller, Get, UseGuards } from '@nestjs/common';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
+import { CurrentUser } from '../auth/decorators/auth.decorators.js';
+
+@Controller('profile')
+@UseGuards(JwtAuthGuard) // <-- Защищает все методы контроллера
+export class ProfileController {
+  @Get()
+  getProfile(@CurrentUser('sub') userId: string) {
+    return { userId };
+  }
+}
 ```
 
 ---
