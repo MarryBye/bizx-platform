@@ -359,6 +359,40 @@ const { uploadUrl, fileKey, publicUrl } = await this.storageService.getPresigned
 );
 ```
 
+### Модуль авторизации (`AuthModule`) — JWT + Refresh Tokens + Защита от XSS
+
+Модуль авторизации (`apps/api/src/auth`) предоставляет безопасную аутентификацию для всех платформ:
+
+1. **Access Token (JWT, 15 минут)**: передается в заголовке `Authorization: Bearer <token>` или в куке `access_token`.
+2. **Refresh Token (7 дней)**: 
+   - Для веб-браузеров сохраняется в защищенной куке `httpOnly`, `Secure`, `SameSite=Lax` (полная защита от XSS-атак).
+   - Для мобильного приложения (React Native/Expo) возвращается в теле JSON-ответа для сохранения в `SecureStore`.
+3. **Хранение в PostgreSQL**: таблица `refresh_tokens` хранит SHA-256 хеши токенов, `userAgent` и `ipAddress` с ротацией токенов при каждом обновлении (Token Rotation).
+
+#### Доступные эндпоинты:
+- `POST /auth/register` — регистрация (`email`, `password`, `name`, `role`).
+- `POST /auth/login` — вход по email и паролю.
+- `POST /auth/refresh` — обновление токенов (читает куку `refresh_token` или поле `refreshToken` в JSON).
+- `POST /auth/logout` — выход и инвалидация refresh токена.
+- `GET /auth/me` — получение профиля текущего пользователя (защищен `JwtAuthGuard`).
+
+#### Как защитить любой контроллер или эндпоинт:
+
+```typescript
+import { Controller, Get, UseGuards } from '@nestjs/common';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
+import { CurrentUser } from '../auth/decorators/auth.decorators.js';
+
+@Controller('profile')
+@UseGuards(JwtAuthGuard) // <-- Защищает все методы контроллера
+export class ProfileController {
+  @Get()
+  getProfile(@CurrentUser('sub') userId: string) {
+    return { userId };
+  }
+}
+```
+
 ---
 
 ## 7. Лендинг (`apps/bizx-landing`) — Next.js 15 App Router (SSR)

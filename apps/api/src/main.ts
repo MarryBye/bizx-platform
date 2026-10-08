@@ -1,5 +1,6 @@
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
+import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module.js';
 import { createLogger } from '@bizx/utils';
 
@@ -10,8 +11,10 @@ async function bootstrap() {
     logger: ['error', 'warn', 'log']
   });
 
+  app.use(cookieParser());
+
   app.enableCors({
-    origin: '*',
+    origin: true,
     credentials: true
   });
 
