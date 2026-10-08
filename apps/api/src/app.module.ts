@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { DatabaseModule } from './database/database.module.js';
 import { StorageModule } from './storage/storage.module.js';
 import { QueuesModule } from './queues/queues.module.js';
+import { AuthModule } from './auth/auth.module.js';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 
@@ -21,7 +22,8 @@ import * as path from 'path';
     }),
     DatabaseModule,
     StorageModule,
-    QueuesModule
+    QueuesModule,
+    AuthModule
   ],
   controllers: [AppController],
   providers: [AppService]

@@ -1,0 +1,27 @@
+{
+  "name": "@bizx/api-client",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "check-types": "tsc --noEmit",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@bizx/common-types": "workspace:*"
+  },
+  "devDependencies": {
+    "@bizx/eslint-config": "workspace:*",
+    "@bizx/typescript-config": "workspace:*",
+    "eslint": "^9.21.0",
+    "typescript": "^5.7.3"
+  }
+}

@@ -22,6 +22,7 @@ bizx-platform/
 │   └── bizx-mobile/              # Мобильное приложение на Expo SDK 52 + React Native (порт 8081)
 │
 ├── packages/                     # Общие переиспользуемые модули
+│   ├── api-client/               # Единый типизированный HTTP-клиент (fetch + refresh token)
 │   ├── database/                 # Drizzle ORM + подключение к PostgreSQL
 │   ├── ui/                       # Общие UI-компоненты (Tailwind + shadcn/ui)
 │   ├── common-types/             # Общие Zod-схемы и TypeScript-типы (DTO)
@@ -56,33 +57,149 @@ bizx-platform/
 
 ---
 
-## 3. Общие типы и валидация (`packages/common-types`)
+## 3. Общие типы, DTO и валидация (`packages/common-types` vs `packages/database`)
 
-### Зачем нужен этот пакет?
+### Главный вопрос: зачем разделены `common-types` и `database`?
 
-Чтобы не дублировать типы данных и валидацию на фронтенде и бэкенде. Схема пишется один раз на **Zod**, и из неё автоматически получается тип TypeScript.
+В монорепозитории есть два разных уровня моделей данных, которые **нельзя смешивать**:
 
-### Тривиальный пример создания новой схемы
+| Критерий | `packages/common-types` (Контракт API) | `packages/database` (Слой базы данных) |
+| :--- | :--- | :--- |
+| **Что внутри** | Zod-схемы валидации, DTO запросов и ответов | Схемы таблиц PostgreSQL (`pgTable`), SQL-типы, миграции |
+| **Где используется** | **Везде**: фронтенд, админка, мобилка, бэкенд | **ТОЛЬКО на бэкенде** (`apps/api`, воркеры) |
+| **Зависимости** | Легковесный чистый `zod` без привязки к БД | `drizzle-orm`, драйвер `pg`, PostgreSQL-типы |
+| **Безопасность** | Публичные данные, доступные клиенту | Внутренние поля: хэши паролей, системные токены, внешние ключи |
 
-Откройте [packages/common-types/src/index.ts](file:///C:/Users/vluki/Documents/Projects/bizx-platform/packages/common-types/src/index.ts) и добавьте:
+> ⚠️ **Критически важно:** Фронтенд (Next.js, Vite, Expo) никогда не должен импортировать ничего из `packages/database`! Если импортировать схему базы на клиент, в веб-бандл попадут тяжелые серверные драйверы, а структура базы данных и секретные поля окажутся открыты пользователям.
+
+---
+
+### Что такое DTO и почему это не только «для отдачи»?
+
+**DTO (Data Transfer Object)** — это объект для **передачи** данных между клиентом и сервером. В реальной разработке DTO бывает двух типов:
+
+1. **Входной DTO (Request / Input DTO)** — данные, которые клиент **отправляет** на сервер:
+   - Пример: `CreateUserDto` — содержит только то, что ввел пользователь (`email`, `password`, `name`). Здесь нет `id`, `createdAt` или `role`, потому что их генерирует сервер.
+2. **Выходной DTO (Response / Output DTO)** — данные, которые сервер **отдает** клиенту в ответ:
+   - Пример: `UserResponseDto` — содержит публичную информацию (`id`, `email`, `name`, `createdAt`), но **не содержит** `passwordHash` или технические служебные поля базы.
+
+---
+
+### Роль `drizzle-zod` и зачем он нужен в `packages/database`
+
+В `packages/database` таблицы описываются через Drizzle ORM:
+```typescript
+export const users = pgTable('users', { ... });
+```
+
+Библиотека `drizzle-zod` автоматически строит Zod-схемы на основе структуры таблицы:
+- `createInsertSchema(users)` — проверяет валидность данных перед записью в PostgreSQL (INSERT).
+- `createSelectSchema(users)` — валидирует сырую строку, полученную из базы данных (SELECT).
+
+**Зачем они нужны, если есть `common-types`?**
+- `drizzle-zod` используется внутри бэкенда для типизации и валидации на уровне работы с базой данных (ORM).
+- А `packages/common-types` описывает **публичный интерфейс общения** фронтенда и бэкенда.
+
+---
+
+### Полный жизненный цикл данных (End-to-End Data Flow)
+
+Вот как данные проходят путь от экрана мобильного телефона до диска в PostgreSQL:
+
+```
+[Форма в React / Expo]
+         │
+         ▼  (1) Валидация перед отправкой формы (react-hook-form + createUserDtoSchema)
+  JSON Body { email, name, password }
+         │
+         ▼  (2) HTTP POST /api/users
+[Nest.js Controller]
+         │
+         ▼  (3) ZodValidationPipe(createUserDtoSchema) проверяет входящий JSON
+  CreateUserDto (чистые, проверенные типы)
+         │
+         ▼  (4) Вызов UsersService.createUser(dto)
+[Nest.js Service]
+         │  — Хеширует пароль (password -> passwordHash)
+         │  — Генерирует недостающие поля
+         ▼
+[Drizzle ORM]
+         │  db.insert(users).values({ email, name, passwordHash })
+         ▼
+[PostgreSQL] (запись сохранена)
+         │
+         ▼  Возвращает сырую строку UserRecord (включая passwordHash)
+[Nest.js Service]
+         │  (5) Отрезает passwordHash, оставляя только безопасные поля
+         ▼
+[Nest.js Controller]
+         │  Отдает клиенту ApiResponse<UserResponseDto>
+         ▼
+[Фронтенд / Мобилка] отображает профиль
+```
+
+---
+
+### Практический пример создания новой сущности в `common-types`
+
+Откройте [packages/common-types/src/index.ts](file:///C:/Users/vluki/Documents/Projects/bizx-platform/packages/common-types/src/index.ts):
 
 ```typescript
 import { z } from 'zod';
 
-// 1. Описываем схему валидации
+// 1. Входной DTO (что шлет клиент при создании)
 export const createProductSchema = z.object({
   title: z.string().min(3, 'Название товара должно быть не короче 3 символов'),
   price: z.number().positive('Цена должна быть больше нуля')
 });
-
-// 2. Автоматически извлекаем TypeScript тип (DTO)
 export type CreateProductDto = z.infer<typeof createProductSchema>;
+
+// 2. Выходной DTO (что сервер отдает клиенту)
+export const productResponseSchema = z.object({
+  id: z.string().uuid(),
+  title: z.string(),
+  price: z.number(),
+  createdAt: z.string()
+});
+export type ProductResponseDto = z.infer<typeof productResponseSchema>;
 ```
 
-Теперь этот `createProductSchema` и `CreateProductDto` можно импортировать:
+---
 
-- в `apps/api` (для валидации входящего тела запроса);
-- в `apps/bizx-admin` или `apps/bizx-landing` (для валидации формы перед отправкой).
+### 3.1. Клиентский HTTP-клиент (`packages/api-client`)
+
+#### Почему не Axios?
+Вместо Axios в проекте создан легковесный пакет `@bizx/api-client` на базе нативного **Fetch API**:
+- **0 КБ лишних зависимостей** в бандлах фронтенда и мобилки.
+- **Поддержка SSR в Next.js 15:** нативный `fetch` на 100% совместим с системой серверного кэширования Next.js (`cache: 'no-store'`, `revalidate`).
+- **Единый для всех клиентов:** работает одинаково в вебе (Next.js, Vite SPA) и в React Native (Expo).
+- **Встроенная защита и автообновление токенов:** при ошибке `401 Unauthorized` клиент автоматически вызывает `/auth/refresh` и повторяет оригинальный запрос без дублирования вызовов (с защитой мьютексом).
+
+#### Пример использования в клиентских приложениях:
+
+```typescript
+import { createApiClient } from '@bizx/api-client';
+
+// Создаем инстанс клиента:
+export const api = createApiClient({
+  baseUrl: 'http://localhost:3101'
+});
+
+// 1. Авторизация (вход)
+const loginRes = await api.auth.login({
+  email: 'owner@example.com',
+  password: 'my-password-123'
+});
+
+// 2. Получение текущего профиля (GET /auth/me)
+const me = await api.auth.me();
+
+// 3. Выход (POST /auth/logout)
+await api.auth.logout();
+
+// 4. Произвольные запросы к API с типизацией:
+const products = await api.client.get('/products');
+```
 
 ---
 
@@ -208,15 +325,80 @@ export function MyWidget() {
 
 ---
 
-## 6. Бэкенд (`apps/api`) — Nest.js
+## 6. Бэкенд (`apps/api`) — Архитектура Nest.js
 
-### Как устроен Nest.js?
+### Зачем нужен Nest.js и какая у него философия?
 
-Nest.js делит код на логические блоки — **Модули (Module)**. Каждый модуль состоит из:
+В чистом Express или Fastify каждый разработчик пишет структуру как захочет. В небольших проектах это работает, но в масштабируемых платформах (как BizX) быстро превращается в запутанный «спагетти-код».
 
-1. **Controller** — принимает HTTP-запросы (`@Get()`, `@Post()`), валидирует входные параметры и отдает ответы.
-2. **Service** — содержит бизнес-логику и работу с базой данных/сторонними API.
-3. **Module** — регистрирует контроллер и сервис.
+**Nest.js** решает эту проблему, предлагая строгую энтерпрайз-архитектуру (в стиле Angular или Spring Boot):
+- **Модульность:** приложение делится на изолированные изолированные блоки (фичи).
+- **Dependency Injection (DI):** классы не создают свои зависимости через `new Class()`, а запрашивают их в конструкторе. Nest сам собирает дерево приложения.
+- **Декларативность:** маршрутизация, статусы, валидация и авторизация настраиваются через удобные декораторы (`@Get()`, `@Post()`, `@UseGuards()`, `@UsePipes()`).
+
+---
+
+### Главные строительные блоки Nest.js
+
+| Файл / Компонент | Роль в приложении | Что делает |
+| :--- | :--- | :--- |
+| **`*.controller.ts`** | **Входная дверь (HTTP-интерфейс)** | Принимает HTTP-запрос, считывает `@Body()`, `@Query()`, `@Param()`, запускает пайпы валидации и вызывает сервис. **Никогда не пишет в БД напрямую!** |
+| **`*.service.ts`** | **Мозг и руки (Бизнес-логика)** | Выполняет расчёты, обращается к базе данных (`DatabaseService`), ставит задачи в очереди, шифрует пароли. Помечается декоратором `@Injectable()`. |
+| **`*.module.ts`** | **Сборщик (Контейнер модуля)** | Объединяет контроллеры и сервисы в одну самодостаточную коробку. Управляет тем, что модуль берет снаружи (`imports`) и что отдает другим (`exports`). |
+| **`*.pipe.ts`** | **Валидатор и трансформер** | Превращает сырой входящий JSON в проверенный типизированный DTO (в нашем проекте это `ZodValidationPipe`). Выбрасывает `400 Bad Request` при ошибке. |
+| **`*.guard.ts`** | **Охранник (Безопасность)** | Проверяет, имеет ли клиент право выполнить запрос (проверка JWT-токена, проверка прав роли `Admin`, `User`, `BusinessOwner`). |
+| **`*.interceptor.ts`** | **Перехватчик** | Выполняет действия до или после обработки запроса: замеряет время выполнения, логирует запросы, упаковывает ответ в формат `{ success: true, data: ... }`. |
+| **`*.filter.ts`** | **Ловец ошибок** | Перехватывает любые исключения в приложении и формирует красивый стандартный ответ клиенту вместо падения сервера. |
+
+---
+
+### Как работает Dependency Injection (DI) простыми словами?
+
+**Без DI (плохо):**
+```typescript
+class UsersService {
+  private db = new DatabaseClient(); // Сервис сам жестко привязан к базе, его трудно тестировать
+}
+```
+
+**С DI в Nest.js (правильно):**
+```typescript
+@Injectable()
+export class UsersService {
+  // Мы просто объявляем, ЧТО нам нужно. Nest сам создаст DatabaseService и передаст его:
+  constructor(private readonly databaseService: DatabaseService) {}
+
+  async findUser(id: string) {
+    return this.databaseService.db.select().from(users).where(eq(users.id, id));
+  }
+}
+```
+Nest.js создает единственный экземпляр `DatabaseService` (Singleton) и передает его всем, кто его попросил.
+
+---
+
+### Как устроен `*.module.ts`?
+
+Модуль описывается 4 ключевыми массивами:
+
+```typescript
+@Module({
+  // 1. Модули, чьи сервисы нужны НАМ (например, доступ к БД):
+  imports: [DatabaseModule],
+
+  // 2. Контроллеры, которые принадлежат этому модулю:
+  controllers: [UsersController],
+
+  // 3. Сервисы, которые создаются внутри этого модуля:
+  providers: [UsersService],
+
+  // 4. Сервисы, которые мы разрешаем использовать ДРУГИМ модулям:
+  exports: [UsersService]
+})
+export class UsersModule {}
+```
+
+---
 
 ### Пример создания нового модуля `Products`
 
@@ -241,8 +423,10 @@ export class ProductsService {
 #### Шаг 2: Контроллер (`apps/api/src/products/products.controller.ts`)
 
 ```typescript
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Post, Body, UsePipes } from '@nestjs/common';
 import { ProductsService } from './products.service.js';
+import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
+import { createProductSchema, type CreateProductDto } from '@bizx/common-types';
 
 @Controller('products')
 export class ProductsController {
@@ -251,6 +435,13 @@ export class ProductsController {
   @Get()
   async getProducts() {
     return await this.productsService.getAll();
+  }
+
+  @Post()
+  @UsePipes(new ZodValidationPipe(createProductSchema))
+  async createProduct(@Body() dto: CreateProductDto) {
+    // В dto попадают гарантированно проверенные данные
+    return await this.productsService.create(dto);
   }
 }
 ```
@@ -266,14 +457,15 @@ import { DatabaseModule } from '../database/database.module.js';
 @Module({
   imports: [DatabaseModule],
   controllers: [ProductsController],
-  providers: [ProductsService]
+  providers: [ProductsService],
+  exports: [ProductsService]
 })
 export class ProductsModule {}
 ```
 
-#### Шаг 4: Регистрация в `app.module.ts`
+#### Шаг 4: Регистрация в корневом `app.module.ts`
 
-В [apps/api/src/app.module.ts](file:///C:/Users/vluki/Documents/Projects/bizx-platform/apps/api/src/app.module.ts) просто добавьте `ProductsModule` в массив `imports`:
+В [apps/api/src/app.module.ts](file:///C:/Users/vluki/Documents/Projects/bizx-platform/apps/api/src/app.module.ts) добавьте `ProductsModule` в массив `imports`:
 
 ```typescript
 @Module({
@@ -290,7 +482,51 @@ export class ProductsModule {}
 export class AppModule {}
 ```
 
-После этого эндпоинт `GET http://localhost:3101/products` станет активным!
+---
+
+### Как будет развиваться структура `apps/api` дальше?
+
+По мере разработки платформы BizX архитектура будет расширяться по принципу **Feature-First**:
+
+```
+apps/api/src/
+├── common/                      # Общесистемные утилиты Nest.js
+│   ├── pipes/                   # zod-validation.pipe.ts
+│   ├── guards/                  # jwt-auth.guard.ts, roles.guard.ts
+│   ├── interceptors/            # logging.interceptor.ts, transform.interceptor.ts
+│   └── filters/                 # http-exception.filter.ts
+│
+├── database/                    # DatabaseModule + DatabaseService (Drizzle клиент)
+├── storage/                     # StorageModule (Cloudflare R2 / S3 Presigned URLs)
+├── queues/                      # QueuesModule (BullMQ + Redis очереди)
+│
+├── auth/                        # Модуль авторизации и регистрации
+│   ├── auth.controller.ts       # POST /auth/login, POST /auth/register, POST /auth/refresh
+│   ├── auth.service.ts          # Логика генерации JWT, проверка хеша пароля
+│   ├── auth.module.ts
+│   └── strategies/              # Passport JWT стратегия
+│
+├── users/                       # Модуль управления профилями пользователей
+│   ├── users.controller.ts      # GET /users/me, PATCH /users/me
+│   ├── users.service.ts
+│   └── users.module.ts
+│
+├── businesses/                  # Модуль компаний / бизнесов платформы
+│   ├── businesses.controller.ts # Создание компании, настройки филиалов
+│   ├── businesses.service.ts
+│   └── businesses.module.ts
+│
+├── bookings/                    # Модуль онлайн-записи и бронирования
+│   ├── bookings.controller.ts
+│   ├── bookings.service.ts
+│   └── bookings.module.ts
+│
+├── app.controller.ts            # Проверка здоровья сервиса (Health Check)
+├── app.module.ts                # Главный узел приложения (импортирует все фичи)
+└── main.ts                      # Точка входа, порт, CORS, глобальные интерцепторы
+```
+
+---
 
 ### Фоновые задачи с Redis + BullMQ (`QueuesService`)
 
@@ -319,6 +555,40 @@ const { uploadUrl, fileKey, publicUrl } = await this.storageService.getPresigned
   'documents/invoice-123.pdf',
   'application/pdf'
 );
+```
+
+### Модуль авторизации (`AuthModule`) — JWT + Refresh Tokens + Защита от XSS
+
+Модуль авторизации (`apps/api/src/auth`) предоставляет безопасную аутентификацию для всех платформ:
+
+1. **Access Token (JWT, 15 минут)**: передается в заголовке `Authorization: Bearer <token>` или в куке `access_token`.
+2. **Refresh Token (7 дней)**: 
+   - Для веб-браузеров сохраняется в защищенной куке `httpOnly`, `Secure`, `SameSite=Lax` (полная защита от XSS-атак).
+   - Для мобильного приложения (React Native/Expo) возвращается в теле JSON-ответа для сохранения в `SecureStore`.
+3. **Хранение в PostgreSQL**: таблица `refresh_tokens` хранит SHA-256 хеши токенов, `userAgent` и `ipAddress` с ротацией токенов при каждом обновлении (Token Rotation).
+
+#### Доступные эндпоинты:
+- `POST /auth/register` — регистрация (`email`, `password`, `name`, `role`).
+- `POST /auth/login` — вход по email и паролю.
+- `POST /auth/refresh` — обновление токенов (читает куку `refresh_token` или поле `refreshToken` в JSON).
+- `POST /auth/logout` — выход и инвалидация refresh токена.
+- `GET /auth/me` — получение профиля текущего пользователя (защищен `JwtAuthGuard`).
+
+#### Как защитить любой контроллер или эндпоинт:
+
+```typescript
+import { Controller, Get, UseGuards } from '@nestjs/common';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
+import { CurrentUser } from '../auth/decorators/auth.decorators.js';
+
+@Controller('profile')
+@UseGuards(JwtAuthGuard) // <-- Защищает все методы контроллера
+export class ProfileController {
+  @Get()
+  getProfile(@CurrentUser('sub') userId: string) {
+    return { userId };
+  }
+}
 ```
 
 ---
