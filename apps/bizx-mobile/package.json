@@ -1,0 +1,44 @@
+{
+  "name": "@bizx/mobile",
+  "version": "0.0.1",
+  "private": true,
+  "main": "index.js",
+  "scripts": {
+    "start": "expo start",
+    "dev": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "check-types": "tsc --noEmit",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@babel/runtime": "^8.0.5",
+    "@bizx/common-types": "workspace:*",
+    "@bizx/utils": "workspace:*",
+    "@expo/metro-runtime": "~4.0.1",
+    "babel-preset-expo": "~12.0.12",
+    "expo": "~52.0.49",
+    "expo-status-bar": "~2.0.1",
+    "nativewind": "^4.2.7",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "react-native": "0.76.9",
+    "react-native-css-interop": "0.2.7",
+    "react-native-reanimated": "~3.16.2",
+    "react-native-safe-area-context": "4.12.0",
+    "react-native-screens": "~4.4.0",
+    "react-native-web": "~0.19.13",
+    "zod": "^3.24.2",
+    "zustand": "^5.0.3"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.25.0",
+    "@bizx/eslint-config": "workspace:*",
+    "@bizx/typescript-config": "workspace:*",
+    "@types/react": "~18.3.12",
+    "eslint": "^9.21.0",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.7.3"
+  }
+}

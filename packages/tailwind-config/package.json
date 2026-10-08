@@ -1,0 +1,13 @@
+{
+  "name": "@bizx/tailwind-config",
+  "version": "0.0.1",
+  "private": true,
+  "main": "./tailwind.config.js",
+  "files": [
+    "tailwind.config.js"
+  ],
+  "devDependencies": {
+    "tailwindcss": "^3.4.17",
+    "tailwindcss-animate": "^1.0.7"
+  }
+}
