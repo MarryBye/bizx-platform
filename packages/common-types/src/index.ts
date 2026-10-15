@@ -338,6 +338,23 @@ export interface PlatformAnalytics {
 }
 
 /**
+ * Загрузка файлов и медиа (Cloudflare R2)
+ */
+export const presignedUploadDtoSchema = z.object({
+  folder: z.enum(['avatars', 'stores/logos', 'stores/banners', 'products']),
+  fileName: z.string().min(1, 'Имя файла обязательно'),
+  contentType: z.enum(['image/jpeg', 'image/png', 'image/webp', 'image/svg+xml', 'image/gif'])
+});
+export type PresignedUploadDto = z.infer<typeof presignedUploadDtoSchema>;
+
+export const presignedUploadResponseSchema = z.object({
+  uploadUrl: z.string(),
+  fileKey: z.string(),
+  publicUrl: z.string()
+});
+export type PresignedUploadResponse = z.infer<typeof presignedUploadResponseSchema>;
+
+/**
  * Унифицированный формат ответа API
  */
 export interface ApiResponse<T> {
