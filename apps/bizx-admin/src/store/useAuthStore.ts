@@ -23,6 +23,11 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       const res = await api.auth.me();
       if (res.success && res.data) {
+        if (res.data.role !== 'business_owner') {
+          api.client.setAccessToken(null);
+          set({ user: null, isLoading: false });
+          return;
+        }
         set({ user: res.data, isLoading: false });
         return;
       }
@@ -37,6 +42,15 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       const res = await api.auth.login(dto);
       if (res.success && res.data) {
+        if (res.data.user.role !== 'business_owner') {
+          api.client.setAccessToken(null);
+          set({
+            user: null,
+            error: 'Доступ заборонено: портал призначений виключно для бізнес-партнерів. Клієнти та адміністратори платформи не мають доступу до цієї панелі.',
+            isLoading: false
+          });
+          return false;
+        }
         set({ user: res.data.user, isLoading: false });
         return true;
       }

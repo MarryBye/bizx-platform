@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAuthStore } from '../store/useAuthStore';
 import { Button, Input, Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@bizx/ui';
-import { Store, Coffee, Laptop, Croissant, ArrowRight, ShieldCheck } from 'lucide-react';
+import { Store } from 'lucide-react';
 
 export const LoginView: React.FC = () => {
   const { login, register, isLoading, error } = useAuthStore();
@@ -19,12 +19,6 @@ export const LoginView: React.FC = () => {
     }
   };
 
-  const handleQuickLogin = async (presetEmail: string) => {
-    setEmail(presetEmail);
-    setPassword('password123');
-    await login({ email: presetEmail, password: 'password123' });
-  };
-
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col justify-center items-center p-4 sm:p-6 lg:p-8">
       <div className="w-full max-w-md space-y-6">
@@ -39,67 +33,6 @@ export const LoginView: React.FC = () => {
           <p className="text-sm text-slate-500">
             Кабінет керування магазином, товарами та аналітикою продажів
           </p>
-        </div>
-
-        {/* Quick Test Login Presets */}
-        <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm space-y-3">
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 uppercase tracking-wider">
-            <ShieldCheck className="w-4 h-4 text-emerald-600" />
-            <span>Швидкий вхід під тестовими партнерами:</span>
-          </div>
-
-          <div className="grid grid-cols-1 gap-2">
-            <button
-              type="button"
-              onClick={() => handleQuickLogin('owner.coffee@bizx.ua')}
-              className="flex items-center justify-between p-2.5 rounded-xl border border-slate-100 hover:border-blue-200 hover:bg-blue-50/50 transition-all text-left group"
-            >
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 bg-amber-100 text-amber-800 rounded-lg group-hover:scale-105 transition-transform">
-                  <Coffee className="w-4 h-4" />
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-slate-900">Львівська Фабрика Кави</p>
-                  <p className="text-[11px] text-slate-500">Тарас Шевчук (owner.coffee@bizx.ua)</p>
-                </div>
-              </div>
-              <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-blue-600 group-hover:translate-x-0.5 transition-all" />
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleQuickLogin('owner.tech@bizx.ua')}
-              className="flex items-center justify-between p-2.5 rounded-xl border border-slate-100 hover:border-blue-200 hover:bg-blue-50/50 transition-all text-left group"
-            >
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 bg-slate-100 text-slate-800 rounded-lg group-hover:scale-105 transition-transform">
-                  <Laptop className="w-4 h-4" />
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-slate-900">CyberTech Ukraine</p>
-                  <p className="text-[11px] text-slate-500">Ірина Мельник (owner.tech@bizx.ua)</p>
-                </div>
-              </div>
-              <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-blue-600 group-hover:translate-x-0.5 transition-all" />
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleQuickLogin('owner.bakery@bizx.ua')}
-              className="flex items-center justify-between p-2.5 rounded-xl border border-slate-100 hover:border-blue-200 hover:bg-blue-50/50 transition-all text-left group"
-            >
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 bg-orange-100 text-orange-800 rounded-lg group-hover:scale-105 transition-transform">
-                  <Croissant className="w-4 h-4" />
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-slate-900">Хлібна Майстерня</p>
-                  <p className="text-[11px] text-slate-500">Богдан Кравченко (owner.bakery@bizx.ua)</p>
-                </div>
-              </div>
-              <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-blue-600 group-hover:translate-x-0.5 transition-all" />
-            </button>
-          </div>
         </div>
 
         {/* Main Auth Form */}
