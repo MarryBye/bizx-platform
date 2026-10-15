@@ -18,10 +18,64 @@ const db = drizzle(queryClient, { schema });
 // bcrypt хэш для тестового пароля: "password123"
 const PASSWORD_HASH = '$2b$10$HPDJ8QBCeeaHqSugqyYmee0NR1Ab3dWqnsUY7mBdVyWJUe4cimoei';
 
+// Функция загрузки файла в Cloudflare R2
+async function uploadToR2(
+  s3Client: unknown,
+  PutCmd: unknown,
+  bucket: string,
+  key: string,
+  content: string | Buffer,
+  contentType: string
+): Promise<string> {
+  const S3 = s3Client as { send: (cmd: unknown) => Promise<unknown> };
+  const CommandClass = PutCmd as new (args: unknown) => unknown;
+
+  await S3.send(
+    new CommandClass({
+      Bucket: bucket,
+      Key: key,
+      Body: typeof content === 'string' ? Buffer.from(content) : content,
+      ContentType: contentType
+    })
+  );
+
+  return `/storage/file/${key}`;
+}
+
 async function seed() {
   console.info('🌱 Початок наповнення бази даних тестовими даними (seeds)...');
 
   try {
+    // 0. Ініціалізація Cloudflare R2
+    console.info('☁️ Підключення до Cloudflare R2...');
+    const accountId = process.env.CLOUDFLARE_R2_ACCOUNT_ID;
+    const accessKeyId = process.env.CLOUDFLARE_R2_ACCESS_KEY_ID;
+    const secretAccessKey = process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY;
+    const bucketName = process.env.CLOUDFLARE_R2_BUCKET_NAME || 'bizx-assets';
+
+    let s3Client: unknown = null;
+    let PutCmd: unknown = null;
+
+    if (accountId && accessKeyId && secretAccessKey) {
+      try {
+        const { createRequire } = await import('module');
+        const apiRequire = createRequire(
+          path.resolve(process.cwd(), '../../apps/api/package.json')
+        );
+        const { S3Client, PutObjectCommand } = apiRequire('@aws-sdk/client-s3');
+
+        s3Client = new S3Client({
+          region: 'auto',
+          endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
+          credentials: { accessKeyId, secretAccessKey }
+        });
+        PutCmd = PutObjectCommand;
+        console.info(`✅ Cloudflare R2 підключено до бакету: ${bucketName}`);
+      } catch (err) {
+        console.warn('⚠️ Не вдалося ініціалізувати S3Client:', err);
+      }
+    }
+
     // 1. Очищуємо таблиці перед заповненням (ідемпотентність)
     console.info('🧹 Очищення існуючих тестових даних...');
     await db.execute(sql`
@@ -37,6 +91,213 @@ async function seed() {
       CASCADE;
     `);
 
+    // Завантажуємо медіафайли в R2 якщо клієнт доступний
+    console.info('📤 Завантаження стартових медіафайлів у Cloudflare R2...');
+
+    const avatarSvg = (name: string, bg: string) => `
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="100%" height="100%">
+        <circle cx="64" cy="64" r="64" fill="${bg}"/>
+        <circle cx="64" cy="50" r="22" fill="#ffffff" opacity="0.95"/>
+        <path d="M64 78 C42 78 24 94 24 116 C35 124 50 128 64 128 C78 128 93 124 104 116 C104 94 86 78 64 78 Z" fill="#ffffff" opacity="0.95"/>
+        <text x="64" y="122" font-family="sans-serif" font-size="11" fill="#ffffff" text-anchor="middle" font-weight="bold">${name}</text>
+      </svg>
+    `;
+
+    const storeSvg = (title: string, color: string) => `
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="100%" height="100%">
+        <rect width="128" height="128" rx="28" fill="${color}"/>
+        <path d="M28 44 L64 24 L100 44 L100 52 L28 52 Z M34 58 L34 98 L94 98 L94 58 Z M50 98 L50 74 L78 74 L78 98 Z" fill="#ffffff" opacity="0.95"/>
+        <text x="64" y="116" font-family="sans-serif" font-size="10" fill="#ffffff" text-anchor="middle" font-weight="bold">${title}</text>
+      </svg>
+    `;
+
+    const bannerSvg = (title: string, fromColor: string, toColor: string) => `
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 300" width="100%" height="100%">
+        <defs>
+          <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="${fromColor}"/>
+            <stop offset="100%" stop-color="${toColor}"/>
+          </linearGradient>
+        </defs>
+        <rect width="800" height="300" fill="url(#bg)"/>
+        <circle cx="400" cy="150" r="70" fill="#ffffff" opacity="0.1"/>
+        <text x="400" y="160" font-family="sans-serif" font-size="32" fill="#ffffff" text-anchor="middle" font-weight="bold">${title}</text>
+      </svg>
+    `;
+
+    const productSvg = (title: string, color: string) => `
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="100%" height="100%">
+        <rect width="128" height="128" rx="24" fill="${color}"/>
+        <path d="M64 28 L98 46 L64 64 L30 46 Z M30 52 L60 68 L60 102 L30 86 Z M98 52 L68 68 L68 102 L98 86 Z" fill="#ffffff" opacity="0.95"/>
+        <text x="64" y="118" font-family="sans-serif" font-size="9" fill="#ffffff" text-anchor="middle" font-weight="bold">${title}</text>
+      </svg>
+    `;
+
+    let adminAvatarUrl = '/storage/defaults/avatar.svg';
+    let coffeeOwnerAvatarUrl = '/storage/defaults/avatar.svg';
+    let techOwnerAvatarUrl = '/storage/defaults/avatar.svg';
+    let bakeryOwnerAvatarUrl = '/storage/defaults/avatar.svg';
+
+    let coffeeLogoUrl = '/storage/defaults/store.svg';
+    let coffeeBannerUrl = '/storage/defaults/banner.svg';
+    let techLogoUrl = '/storage/defaults/store.svg';
+    let techBannerUrl = '/storage/defaults/banner.svg';
+    let bakeryLogoUrl = '/storage/defaults/store.svg';
+    let bakeryBannerUrl = '/storage/defaults/banner.svg';
+
+    let prodCoffee1Url = '/storage/defaults/product.svg';
+    let prodCoffee2Url = '/storage/defaults/product.svg';
+    let prodCoffeeDessertUrl = '/storage/defaults/product.svg';
+    let prodTech1Url = '/storage/defaults/product.svg';
+    let prodTech2Url = '/storage/defaults/product.svg';
+    let prodBread1Url = '/storage/defaults/product.svg';
+    let prodBread2Url = '/storage/defaults/product.svg';
+
+    if (s3Client && PutCmd) {
+      adminAvatarUrl = await uploadToR2(
+        s3Client,
+        PutCmd,
+        bucketName,
+        'avatars/admin.svg',
+        avatarSvg('Адмін', '#0f172a'),
+        'image/svg+xml'
+      );
+      coffeeOwnerAvatarUrl = await uploadToR2(
+        s3Client,
+        PutCmd,
+        bucketName,
+        'avatars/taras-shevchuk.svg',
+        avatarSvg('Тарас', '#78350f'),
+        'image/svg+xml'
+      );
+      techOwnerAvatarUrl = await uploadToR2(
+        s3Client,
+        PutCmd,
+        bucketName,
+        'avatars/iryna-melnyk.svg',
+        avatarSvg('Ірина', '#0284c7'),
+        'image/svg+xml'
+      );
+      bakeryOwnerAvatarUrl = await uploadToR2(
+        s3Client,
+        PutCmd,
+        bucketName,
+        'avatars/bohdan-kravchenko.svg',
+        avatarSvg('Богдан', '#d97706'),
+        'image/svg+xml'
+      );
+
+      coffeeLogoUrl = await uploadToR2(
+        s3Client,
+        PutCmd,
+        bucketName,
+        'stores/logos/lviv-coffee.svg',
+        storeSvg('Кава', '#451a03'),
+        'image/svg+xml'
+      );
+      coffeeBannerUrl = await uploadToR2(
+        s3Client,
+        PutCmd,
+        bucketName,
+        'stores/banners/lviv-coffee.svg',
+        bannerSvg('Львівська Кавова Мануфактура', '#451a03', '#78350f'),
+        'image/svg+xml'
+      );
+
+      techLogoUrl = await uploadToR2(
+        s3Client,
+        PutCmd,
+        bucketName,
+        'stores/logos/cybertech.svg',
+        storeSvg('Tech', '#0f172a'),
+        'image/svg+xml'
+      );
+      techBannerUrl = await uploadToR2(
+        s3Client,
+        PutCmd,
+        bucketName,
+        'stores/banners/cybertech.svg',
+        bannerSvg('CyberTech Ukraine', '#0f172a', '#1e293b'),
+        'image/svg+xml'
+      );
+
+      bakeryLogoUrl = await uploadToR2(
+        s3Client,
+        PutCmd,
+        bucketName,
+        'stores/logos/khlibna.svg',
+        storeSvg('Хліб', '#b45309'),
+        'image/svg+xml'
+      );
+      bakeryBannerUrl = await uploadToR2(
+        s3Client,
+        PutCmd,
+        bucketName,
+        'stores/banners/khlibna.svg',
+        bannerSvg('Хлібна Майстерня', '#b45309', '#d97706'),
+        'image/svg+xml'
+      );
+
+      prodCoffee1Url = await uploadToR2(
+        s3Client,
+        PutCmd,
+        bucketName,
+        'products/coffee-ethiopia.svg',
+        productSvg('Ефіопія', '#78350f'),
+        'image/svg+xml'
+      );
+      prodCoffee2Url = await uploadToR2(
+        s3Client,
+        PutCmd,
+        bucketName,
+        'products/coffee-lviv-blend.svg',
+        productSvg('Бленд', '#92400e'),
+        'image/svg+xml'
+      );
+      prodCoffeeDessertUrl = await uploadToR2(
+        s3Client,
+        PutCmd,
+        bucketName,
+        'products/coffee-syrnyk.svg',
+        productSvg('Сирник', '#b45309'),
+        'image/svg+xml'
+      );
+
+      prodTech1Url = await uploadToR2(
+        s3Client,
+        PutCmd,
+        bucketName,
+        'products/tech-cyberpods.svg',
+        productSvg('Навушники', '#1e293b'),
+        'image/svg+xml'
+      );
+      prodTech2Url = await uploadToR2(
+        s3Client,
+        PutCmd,
+        bucketName,
+        'products/tech-cyberkey.svg',
+        productSvg('Клавіатура', '#334155'),
+        'image/svg+xml'
+      );
+
+      prodBread1Url = await uploadToR2(
+        s3Client,
+        PutCmd,
+        bucketName,
+        'products/bread-tartin.svg',
+        productSvg('Тартин', '#d97706'),
+        'image/svg+xml'
+      );
+      prodBread2Url = await uploadToR2(
+        s3Client,
+        PutCmd,
+        bucketName,
+        'products/bread-croissant.svg',
+        productSvg('Круасан', '#f59e0b'),
+        'image/svg+xml'
+      );
+    }
+
     // 2. Користувачі (Users)
     console.info('👤 Створення користувачів...');
     await db.insert(schema.users).values({
@@ -45,7 +306,7 @@ async function seed() {
       passwordHash: PASSWORD_HASH,
       role: 'admin',
       phone: '+380501234567',
-      avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb'
+      avatarUrl: adminAvatarUrl
     });
 
     const [coffeeOwner] = await db
@@ -56,7 +317,7 @@ async function seed() {
         passwordHash: PASSWORD_HASH,
         role: 'business_owner',
         phone: '+380671112233',
-        avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d'
+        avatarUrl: coffeeOwnerAvatarUrl
       })
       .returning();
 
@@ -68,7 +329,7 @@ async function seed() {
         passwordHash: PASSWORD_HASH,
         role: 'business_owner',
         phone: '+380934445566',
-        avatarUrl: 'https://images.unsplash.com/photo-1517841905240-472988babdf9'
+        avatarUrl: techOwnerAvatarUrl
       })
       .returning();
 
@@ -80,10 +341,11 @@ async function seed() {
         passwordHash: PASSWORD_HASH,
         role: 'business_owner',
         phone: '+380667778899',
-        avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e'
+        avatarUrl: bakeryOwnerAvatarUrl
       })
       .returning();
 
+    // Клієнт: використовує аватарку-заглушку за замовчуванням
     const [clientUser] = await db
       .insert(schema.users)
       .values({
@@ -92,7 +354,7 @@ async function seed() {
         passwordHash: PASSWORD_HASH,
         role: 'client',
         phone: '+380991239876',
-        avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330'
+        avatarUrl: '/storage/defaults/avatar.svg' // Статична заглушка
       })
       .returning();
 
@@ -153,7 +415,7 @@ async function seed() {
       }
     ]);
 
-    // 4. Магазини (Stores)
+    // 4. Магазини (Stores) з медіафайлами в Cloudflare R2
     console.info('🏬 Створення магазинів...');
     const [storeCoffee] = await db
       .insert(schema.stores)
@@ -164,8 +426,8 @@ async function seed() {
         slug: 'lviv-coffee-factory',
         description:
           'Справжня львівська кава свіжого обсмаження, кавові бленди від майстрів та затишні десерти.',
-        logoUrl: 'https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?w=300',
-        bannerUrl: 'https://images.unsplash.com/photo-1447933601403-0c6688de566e?w=1200',
+        logoUrl: coffeeLogoUrl,
+        bannerUrl: coffeeBannerUrl,
         address: 'м. Львів, вул. Вірменська, 15',
         phone: '+380322998877',
         email: 'info@lvivcoffee.ua',
@@ -182,8 +444,8 @@ async function seed() {
         slug: 'cybertech-ua',
         description:
           'Офіційний дистрибʼютор сучасної компʼютерної техніки, ергономічної периферії та гаджетів.',
-        logoUrl: 'https://images.unsplash.com/photo-1550009158-9ebf69173e03?w=300',
-        bannerUrl: 'https://images.unsplash.com/photo-1518770660439-4636190af475?w=1200',
+        logoUrl: techLogoUrl,
+        bannerUrl: techBannerUrl,
         address: 'м. Київ, вул. Хрещатик, 24',
         phone: '+380442334455',
         email: 'sales@cybertech.ua',
@@ -200,8 +462,8 @@ async function seed() {
         slug: 'khlibna-maisternia',
         description:
           'Крафтовий хліб тривалого бродіння, французькі круасани та випічка за традиційними рецептами.',
-        logoUrl: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?w=300',
-        bannerUrl: 'https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=1200',
+        logoUrl: bakeryLogoUrl,
+        bannerUrl: bakeryBannerUrl,
         address: 'м. Київ, вул. Велика Васильківська, 42',
         phone: '+380445556677',
         email: 'order@khlibna.ua',
@@ -209,7 +471,7 @@ async function seed() {
       })
       .returning();
 
-    // 5. Категорії товарів всередині магазинів (Product Categories)
+    // 5. Категорії товарів
     console.info('📑 Створення категорій товарів...');
     const [pCatCoffeeBeans] = await db
       .insert(schema.productCategories)
@@ -247,7 +509,7 @@ async function seed() {
       })
       .returning();
 
-    // 6. Товари (Products) — ціни в копійках (1 грн = 100 коп)
+    // 6. Товари з фотографіями в Cloudflare R2
     console.info('📦 Створення товарів...');
     const [prodCoffee1] = await db
       .insert(schema.products)
@@ -260,7 +522,7 @@ async function seed() {
           'Яскравий квітковий аромат з нотами бергамоту, жасмину та цитрусових фруктів. Свіже обсмаження.',
         price: 38000, // 380.00 грн
         oldPrice: 42000,
-        imageUrl: 'https://images.unsplash.com/photo-1587734195503-904fca47e0e9?w=500',
+        imageUrl: prodCoffee1Url,
         inventoryCount: 45,
         isActive: true
       })
@@ -275,7 +537,7 @@ async function seed() {
         'Збалансований бленд з шоколадно-горіховим смаком та оксамитовою пінкою крема. Ідеально для еспресо.',
       price: 85000, // 850.00 грн
       oldPrice: 95000,
-      imageUrl: 'https://images.unsplash.com/photo-1559056199-641a0ac8b55e?w=500',
+      imageUrl: prodCoffee2Url,
       inventoryCount: 30,
       isActive: true
     });
@@ -291,7 +553,7 @@ async function seed() {
           'Класичний ніжний сирник з родзинками за автентичним галицьким рецептом, вкритий чорним шоколадом.',
         price: 13500, // 135.00 грн
         oldPrice: null,
-        imageUrl: 'https://images.unsplash.com/photo-1533134242443-d4fd215305ad?w=500',
+        imageUrl: prodCoffeeDessertUrl,
         inventoryCount: 20,
         isActive: true
       })
@@ -308,7 +570,7 @@ async function seed() {
           'Активне шумозаглушення (ANC), до 36 годин роботи з кейсом, підтримка швидкої бездротової зарядки.',
         price: 249900, // 2499.00 грн
         oldPrice: 289900,
-        imageUrl: 'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?w=500',
+        imageUrl: prodTech1Url,
         inventoryCount: 15,
         isActive: true
       })
@@ -323,7 +585,7 @@ async function seed() {
         'Компактний формат 75%, тихі лінійні перемикачі, гаряча заміна (Hot-Swap) та PBT-ковпачки з укр. гравіюванням.',
       price: 329900, // 3299.00 грн
       oldPrice: 360000,
-      imageUrl: 'https://images.unsplash.com/photo-1587829741301-dc798b83add3?w=500',
+      imageUrl: prodTech2Url,
       inventoryCount: 12,
       isActive: true
     });
@@ -339,7 +601,7 @@ async function seed() {
           'Хрустка скоринка та пористий ніжний мʼякуш з легкою кислинкою. Випікається у подовій печі.',
         price: 6800, // 68.00 грн
         oldPrice: null,
-        imageUrl: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?w=500',
+        imageUrl: prodBread1Url,
         inventoryCount: 25,
         isActive: true
       })
@@ -356,17 +618,16 @@ async function seed() {
           'Багатошарове листкове тісто на вершковому маслі 82% з ніжною мигдалевою начинкою франжипан.',
         price: 9500, // 95.00 грн
         oldPrice: 11000,
-        imageUrl: 'https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=500',
+        imageUrl: prodBread2Url,
         inventoryCount: 40,
         isActive: true
       })
       .returning();
 
-    // 7. Тестові замовлення (Orders + Order Items) за різні дати (для красивих графіків аналітики)
+    // 7. Тестові замовлення
     console.info('💳 Створення замовлень та позицій для аналітики...');
     const now = new Date();
 
-    // Замовлення 1: сьогодні (кав'ярня)
     const [order1] = await db
       .insert(schema.orders)
       .values({
@@ -374,7 +635,7 @@ async function seed() {
         storeId: storeCoffee.id,
         customerId: clientUser.id,
         status: 'delivered',
-        totalAmount: prodCoffee1.price + prodCoffeeDessert.price, // 380 + 135 = 515 грн
+        totalAmount: prodCoffee1.price + prodCoffeeDessert.price,
         deliveryAddress: 'м. Київ, вул. Саксаганського, 10, кв. 24',
         contactPhone: clientUser.phone || '+380991239876',
         contactName: clientUser.name,
@@ -407,7 +668,6 @@ async function seed() {
       }
     ]);
 
-    // Замовлення 2: 3 дні тому (техніка)
     const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
     const [order2] = await db
       .insert(schema.orders)
@@ -416,7 +676,7 @@ async function seed() {
         storeId: storeTech.id,
         customerId: clientUser.id,
         status: 'shipped',
-        totalAmount: prodTech1.price, // 2499 грн
+        totalAmount: prodTech1.price,
         deliveryAddress: 'м. Київ, Нова Пошта Відділення №45',
         contactPhone: clientUser.phone || '+380991239876',
         contactName: clientUser.name,
@@ -438,7 +698,6 @@ async function seed() {
       createdAt: threeDaysAgo
     });
 
-    // Замовлення 3: 7 днів тому (пекарня)
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const [order3] = await db
       .insert(schema.orders)
@@ -447,7 +706,7 @@ async function seed() {
         storeId: storeBakery.id,
         customerId: clientUser.id,
         status: 'delivered',
-        totalAmount: prodBread1.price * 2 + prodBread2.price * 2, // (68*2) + (95*2) = 326 грн
+        totalAmount: prodBread1.price * 2 + prodBread2.price * 2,
         deliveryAddress: 'м. Київ, вул. Антоновича, 55',
         contactPhone: clientUser.phone || '+380991239876',
         contactName: clientUser.name,
@@ -488,12 +747,14 @@ async function seed() {
  • Власник кав'ярні:       owner.coffee@bizx.ua (роль: business_owner)
  • Власниця електроніки:   owner.tech@bizx.ua (роль: business_owner)
  • Власник пекарні:        owner.bakery@bizx.ua (роль: business_owner)
- • Клієнт:                 client@bizx.ua (роль: client)
+ • Клієнт:                 client@bizx.ua (роль: client, дефолтна аватарка)
 
- 🏬 Створені магазини:
- • «Львівська Кавова Мануфактура» (slug: lviv-coffee-factory)
- • «CyberTech Ukraine»           (slug: cybertech-ua)
- • «Хлібна Майстерня»            (slug: khlibna-maisternia)
+ ☁️ Медіафайли завантажено у Cloudflare R2:
+ • Аватарки:               /storage/file/avatars/*.svg
+ • Логотипи магазинів:     /storage/file/stores/logos/*.svg
+ • Банери магазинів:       /storage/file/stores/banners/*.svg
+ • Зображення товарів:     /storage/file/products/*.svg
+ • Статична заглушка:      /storage/defaults/avatar.svg
 ══════════════════════════════════════════════════════════════════════════
     `);
   } catch (error) {
