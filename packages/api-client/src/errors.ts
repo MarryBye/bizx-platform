@@ -18,7 +18,10 @@ export class ApiClientError extends Error {
 
   constructor(status: number, statusText: string, data: unknown) {
     const errorPayload = data as ApiErrorPayload | undefined;
-    const message = errorPayload?.message || errorPayload?.error || `Request failed with status ${status}: ${statusText}`;
+    const message =
+      errorPayload?.message ||
+      errorPayload?.error ||
+      `Request failed with status ${status}: ${statusText}`;
     super(message);
     this.name = 'ApiClientError';
     this.status = status;

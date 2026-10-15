@@ -23,6 +23,7 @@
     "db:generate": "pnpm --filter @bizx/database db:generate",
     "db:migrate": "pnpm --filter @bizx/database db:migrate",
     "db:push": "pnpm --filter @bizx/database db:push",
+    "db:seed": "pnpm --filter @bizx/database db:seed",
     "db:studio": "pnpm --filter @bizx/database db:studio",
     "docker:db": "docker compose up -d postgres redis",
     "docker:up": "docker compose up -d",
