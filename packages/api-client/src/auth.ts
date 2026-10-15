@@ -1,11 +1,12 @@
-import type { ApiClient } from './client.js';
+import type { ApiClient } from './client';
 import type {
   ApiResponse,
   AuthResponse,
   LoginDto,
   RegisterDto,
   RefreshTokenDto,
-  UserProfile
+  UserProfile,
+  UpdateUserProfileDto
 } from '@bizx/common-types';
 
 export class AuthModule {
@@ -64,5 +65,30 @@ export class AuthModule {
    */
   async me(): Promise<ApiResponse<UserProfile>> {
     return this.client.get<ApiResponse<UserProfile>>('/auth/me');
+  }
+
+  /**
+   * Обновление данных профиля (PATCH /auth/me)
+   */
+  async updateProfile(dto: UpdateUserProfileDto): Promise<ApiResponse<UserProfile>> {
+    return this.client.patch<ApiResponse<UserProfile>>('/auth/me', dto);
+  }
+
+  /**
+   * Загрузка аватарки пользователя (POST /auth/me/avatar)
+   */
+  async uploadAvatar(fileOrFormData: unknown): Promise<ApiResponse<UserProfile>> {
+    let body: unknown;
+    if (typeof FormData !== 'undefined' && fileOrFormData instanceof FormData) {
+      body = fileOrFormData;
+    } else if (typeof FormData !== 'undefined') {
+      const fd = new FormData();
+      fd.append('file', fileOrFormData as any);
+      body = fd;
+    } else {
+      body = fileOrFormData;
+    }
+
+    return this.client.post<ApiResponse<UserProfile>>('/auth/me/avatar', body);
   }
 }

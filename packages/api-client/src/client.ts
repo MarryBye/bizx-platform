@@ -1,4 +1,4 @@
-import { ApiClientError } from './errors.js';
+import { ApiClientError } from './errors';
 import type { ApiResponse, AuthResponse } from '@bizx/common-types';
 
 export interface ApiClientConfig {
@@ -34,6 +34,10 @@ export class ApiClient {
     this.getAccessTokenFn = config.getAccessToken;
     this.setAccessTokenFn = config.setAccessToken;
     this.onUnauthorizedFn = config.onUnauthorized;
+  }
+
+  public getBaseUrl(): string {
+    return this.baseUrl;
   }
 
   public setAccessToken(token: string | null) {
@@ -75,7 +79,7 @@ export class ApiClient {
     }
 
     if (customHeaders) {
-      new Headers(customHeaders).forEach((val, key) => {
+      new Headers(customHeaders).forEach((val: string, key: string) => {
         headers.set(key, val);
       });
     }

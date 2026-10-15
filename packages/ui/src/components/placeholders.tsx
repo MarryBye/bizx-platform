@@ -84,3 +84,24 @@ export function ProductPlaceholder({ className, ...props }: PlaceholderProps): R
     </svg>
   );
 }
+
+export function BannerPlaceholder({ className, ...props }: PlaceholderProps): React.JSX.Element {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 800 300"
+      className={cn('w-full h-full object-cover', className)}
+      {...props}
+    >
+      <defs>
+        <linearGradient id="ui-grad-banner" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#1e293b" />
+          <stop offset="100%" stopColor="#0f172a" />
+        </linearGradient>
+      </defs>
+      <rect width="800" height="300" fill="url(#ui-grad-banner)" />
+      <circle cx="400" cy="150" r="70" fill="#ffffff" opacity="0.05" />
+    </svg>
+  );
+}
+
