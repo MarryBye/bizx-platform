@@ -36,6 +36,10 @@ export class ApiClient {
     this.onUnauthorizedFn = config.onUnauthorized;
   }
 
+  public getBaseUrl(): string {
+    return this.baseUrl;
+  }
+
   public setAccessToken(token: string | null) {
     if (this.setAccessTokenFn) {
       void this.setAccessTokenFn(token);
@@ -75,7 +79,7 @@ export class ApiClient {
     }
 
     if (customHeaders) {
-      new Headers(customHeaders).forEach((val, key) => {
+      new Headers(customHeaders).forEach((val: string, key: string) => {
         headers.set(key, val);
       });
     }
