@@ -125,7 +125,7 @@ export class StoresController {
   }
 
   @Get('my')
-  @Roles('business_owner', 'admin')
+  @Roles('business_owner')
   async getMyStores(@CurrentUser('sub') userId: string): Promise<ApiResponse<StoreListItem[]>> {
     const result = await this.storesService.getMyStores(userId);
     return {
