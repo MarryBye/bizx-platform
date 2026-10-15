@@ -8,7 +8,13 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { DatabaseService } from '../database/database.service.js';
 import { users, refreshTokens, eq, and, gt } from '@bizx/database';
-import type { RegisterDto, LoginDto, UserProfile, AuthResponse } from '@bizx/common-types';
+import type {
+  RegisterDto,
+  LoginDto,
+  UserProfile,
+  AuthResponse,
+  UpdateUserProfileDto
+} from '@bizx/common-types';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'node:crypto';
 
@@ -162,9 +168,7 @@ export class AuthService {
     }
 
     // Удаляем старый токен (Token Rotation)
-    await this.databaseService.db
-      .delete(refreshTokens)
-      .where(eq(refreshTokens.id, tokenRecord.id));
+    await this.databaseService.db.delete(refreshTokens).where(eq(refreshTokens.id, tokenRecord.id));
 
     const [user] = await this.databaseService.db
       .select()
@@ -203,10 +207,7 @@ export class AuthService {
   }
 
   async getProfile(userId: string): Promise<UserProfile> {
-    const [user] = await this.databaseService.db
-      .select()
-      .from(users)
-      .where(eq(users.id, userId));
+    const [user] = await this.databaseService.db.select().from(users).where(eq(users.id, userId));
 
     if (!user) {
       throw new NotFoundException('Пользователь не найден');
@@ -217,7 +218,69 @@ export class AuthService {
       email: user.email,
       name: user.name,
       role: user.role as UserProfile['role'],
+      phone: user.phone,
+      avatarUrl: user.avatarUrl,
       createdAt: user.createdAt.toISOString()
+    };
+  }
+
+  async updateProfile(userId: string, dto: UpdateUserProfileDto): Promise<UserProfile> {
+    const updateData: {
+      name?: string;
+      phone?: string | null;
+      avatarUrl?: string | null;
+      updatedAt: Date;
+    } = {
+      updatedAt: new Date()
+    };
+
+    if (dto.name !== undefined) updateData.name = dto.name;
+    if (dto.phone !== undefined) updateData.phone = dto.phone;
+    if (dto.avatarUrl !== undefined) updateData.avatarUrl = dto.avatarUrl;
+
+    const [updated] = await this.databaseService.db
+      .update(users)
+      .set(updateData)
+      .where(eq(users.id, userId))
+      .returning();
+
+    if (!updated) {
+      throw new NotFoundException('Пользователь не найден');
+    }
+
+    return {
+      id: updated.id,
+      email: updated.email,
+      name: updated.name,
+      role: updated.role as UserProfile['role'],
+      phone: updated.phone,
+      avatarUrl: updated.avatarUrl,
+      createdAt: updated.createdAt.toISOString()
+    };
+  }
+
+  async updateAvatar(userId: string, avatarUrl: string): Promise<UserProfile> {
+    const [updated] = await this.databaseService.db
+      .update(users)
+      .set({
+        avatarUrl,
+        updatedAt: new Date()
+      })
+      .where(eq(users.id, userId))
+      .returning();
+
+    if (!updated) {
+      throw new NotFoundException('Пользователь не найден');
+    }
+
+    return {
+      id: updated.id,
+      email: updated.email,
+      name: updated.name,
+      role: updated.role as UserProfile['role'],
+      phone: updated.phone,
+      avatarUrl: updated.avatarUrl,
+      createdAt: updated.createdAt.toISOString()
     };
   }
 }

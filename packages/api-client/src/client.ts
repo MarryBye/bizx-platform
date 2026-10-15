@@ -42,7 +42,10 @@ export class ApiClient {
     }
   }
 
-  private buildUrl(path: string, params?: Record<string, string | number | boolean | undefined>): string {
+  private buildUrl(
+    path: string,
+    params?: Record<string, string | number | boolean | undefined>
+  ): string {
     const cleanPath = path.startsWith('/') ? path : `/${path}`;
     const url = new URL(`${this.baseUrl}${cleanPath}`);
 
@@ -125,7 +128,10 @@ export class ApiClient {
   }
 
   public async request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-    const isJsonBody = options.body !== undefined && typeof options.body === 'object' && !(options.body instanceof FormData);
+    const isJsonBody =
+      options.body !== undefined &&
+      typeof options.body === 'object' &&
+      !(options.body instanceof FormData);
     const url = this.buildUrl(path, options.params);
     const headers = await this.prepareHeaders(options.headers, isJsonBody);
 
@@ -139,7 +145,12 @@ export class ApiClient {
     let response = await fetch(url, fetchOptions);
 
     // Auto-refresh token on 401 Unauthorized (unless it's an auth endpoint itself)
-    if (response.status === 401 && !options.skipAuthRefresh && !path.startsWith('/auth/login') && !path.startsWith('/auth/refresh')) {
+    if (
+      response.status === 401 &&
+      !options.skipAuthRefresh &&
+      !path.startsWith('/auth/login') &&
+      !path.startsWith('/auth/refresh')
+    ) {
       const refreshedToken = await this.handleRefreshToken();
       if (refreshedToken) {
         // Retry original request with new access token
