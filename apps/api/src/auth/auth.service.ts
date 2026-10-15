@@ -162,9 +162,7 @@ export class AuthService {
     }
 
     // Удаляем старый токен (Token Rotation)
-    await this.databaseService.db
-      .delete(refreshTokens)
-      .where(eq(refreshTokens.id, tokenRecord.id));
+    await this.databaseService.db.delete(refreshTokens).where(eq(refreshTokens.id, tokenRecord.id));
 
     const [user] = await this.databaseService.db
       .select()
@@ -203,10 +201,7 @@ export class AuthService {
   }
 
   async getProfile(userId: string): Promise<UserProfile> {
-    const [user] = await this.databaseService.db
-      .select()
-      .from(users)
-      .where(eq(users.id, userId));
+    const [user] = await this.databaseService.db.select().from(users).where(eq(users.id, userId));
 
     if (!user) {
       throw new NotFoundException('Пользователь не найден');

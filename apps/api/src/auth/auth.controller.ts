@@ -137,7 +137,8 @@ export class AuthController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response
   ): Promise<ApiResponse<{ message: string }>> {
-    const rawToken = req.cookies?.[REFRESH_COOKIE_NAME] || (req.body as RefreshTokenDto)?.refreshToken;
+    const rawToken =
+      req.cookies?.[REFRESH_COOKIE_NAME] || (req.body as RefreshTokenDto)?.refreshToken;
     await this.authService.logout(rawToken);
     this.clearRefreshCookie(res);
 
