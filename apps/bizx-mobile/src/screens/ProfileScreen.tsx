@@ -29,12 +29,6 @@ export const ProfileScreen: React.FC = () => {
     }
   };
 
-  const handleQuickClientLogin = async () => {
-    setEmail('client@bizx.ua');
-    setPassword('password123');
-    await login({ email: 'client@bizx.ua', password: 'password123' });
-  };
-
   // Logged In View
   if (user) {
     return (
@@ -142,23 +136,6 @@ export const ProfileScreen: React.FC = () => {
       </View>
 
       <View className="px-5 mt-3 space-y-4">
-        {/* Quick Test Login */}
-        <View className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm mb-2">
-          <Text className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-            ⚡ Швидкий вхід для тестування:
-          </Text>
-          <TouchableOpacity
-            onPress={handleQuickClientLogin}
-            className="bg-blue-50 border border-blue-200 rounded-xl p-3 flex-row items-center justify-between"
-          >
-            <View>
-              <Text className="text-xs font-bold text-blue-900">Марія Бондаренко</Text>
-              <Text className="text-[11px] text-blue-600">client@bizx.ua (пароль: password123)</Text>
-            </View>
-            <Text className="text-blue-600 font-bold text-sm">→</Text>
-          </TouchableOpacity>
-        </View>
-
         {/* Auth Card */}
         <View className="bg-white rounded-3xl p-5 border border-slate-200/90 shadow-sm space-y-4">
           {/* Tabs */}
