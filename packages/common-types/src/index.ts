@@ -37,6 +37,14 @@ export const userProfileSchema = z.object({
 
 export type UserProfile = z.infer<typeof userProfileSchema>;
 
+export const updateUserProfileDtoSchema = z.object({
+  name: z.string().min(2, { message: 'Имя должно содержать минимум 2 символа' }).optional(),
+  phone: z.string().nullable().optional(),
+  avatarUrl: z.string().nullable().optional()
+});
+
+export type UpdateUserProfileDto = z.infer<typeof updateUserProfileDtoSchema>;
+
 export const registerDtoSchema = z.object({
   email: z.string().email({ message: 'Некорректный email адрес' }),
   password: z.string().min(6, { message: 'Пароль должен содержать минимум 6 символов' }),
@@ -131,8 +139,8 @@ export const createStoreDtoSchema = z.object({
     .regex(/^[a-z0-9-]+$/, 'Slug может содержать только строчные латинские буквы, цифры и дефисы'),
   categoryId: z.string().uuid().optional(),
   description: z.string().optional(),
-  logoUrl: z.string().url().optional(),
-  bannerUrl: z.string().url().optional(),
+  logoUrl: z.string().optional(),
+  bannerUrl: z.string().optional(),
   address: z.string().optional(),
   phone: z.string().optional(),
   email: z.string().email().optional()
@@ -353,6 +361,15 @@ export const presignedUploadResponseSchema = z.object({
   publicUrl: z.string()
 });
 export type PresignedUploadResponse = z.infer<typeof presignedUploadResponseSchema>;
+
+export const uploadFileResponseSchema = z.object({
+  fileKey: z.string(),
+  publicUrl: z.string(),
+  originalName: z.string(),
+  size: z.number(),
+  mimeType: z.string()
+});
+export type UploadFileResponse = z.infer<typeof uploadFileResponseSchema>;
 
 /**
  * Унифицированный формат ответа API
