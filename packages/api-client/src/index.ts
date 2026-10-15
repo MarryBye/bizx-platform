@@ -1,19 +1,19 @@
-import { ApiClient, type ApiClientConfig } from './client.js';
-import { AuthModule } from './auth.js';
-import { StoresModule } from './stores.js';
-import { ProductsModule } from './products.js';
-import { OrdersModule } from './orders.js';
-import { AnalyticsModule } from './analytics.js';
-import { StorageClientModule } from './storage.js';
+import { ApiClient, type ApiClientConfig } from './client';
+import { AuthModule } from './auth';
+import { StoresModule } from './stores';
+import { ProductsModule } from './products';
+import { OrdersModule } from './orders';
+import { AnalyticsModule } from './analytics';
+import { StorageClientModule } from './storage';
 
-export * from './client.js';
-export * from './auth.js';
-export * from './stores.js';
-export * from './products.js';
-export * from './orders.js';
-export * from './analytics.js';
-export * from './storage.js';
-export * from './errors.js';
+export * from './client';
+export * from './auth';
+export * from './stores';
+export * from './products';
+export * from './orders';
+export * from './analytics';
+export * from './storage';
+export * from './errors';
 export * from '@bizx/common-types';
 
 export interface BizXClient {

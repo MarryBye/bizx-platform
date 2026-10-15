@@ -1,4 +1,4 @@
-import { ApiClientError } from './errors.js';
+import { ApiClientError } from './errors';
 import type { ApiResponse, AuthResponse } from '@bizx/common-types';
 
 export interface ApiClientConfig {
