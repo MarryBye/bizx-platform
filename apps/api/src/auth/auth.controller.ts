@@ -2,23 +2,31 @@ import {
   Controller,
   Post,
   Get,
+  Patch,
   Body,
   Req,
   Res,
   UsePipes,
   UseGuards,
+  UseInterceptors,
+  UploadedFile,
   UnauthorizedException
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import type { Request, Response } from 'express';
 import { AuthService } from './auth.service.js';
+import { StorageService } from '../storage/storage.service.js';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
 import { JwtAuthGuard } from './guards/jwt-auth.guard.js';
 import { CurrentUser, Public } from './decorators/auth.decorators.js';
+import { validateImageFile, type UploadedFileDto } from '../common/file-upload.utils.js';
 import {
   registerDtoSchema,
   loginDtoSchema,
+  updateUserProfileDtoSchema,
   type RegisterDto,
   type LoginDto,
+  type UpdateUserProfileDto,
   type RefreshTokenDto,
   type ApiResponse,
   type AuthResponse,
@@ -30,7 +38,10 @@ const REFRESH_MAX_AGE = 7 * 24 * 60 * 60 * 1000; // 7 дней
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly storageService: StorageService
+  ) {}
 
   private setRefreshCookie(res: Response, refreshToken: string) {
     res.cookie(REFRESH_COOKIE_NAME, refreshToken, {
@@ -153,6 +164,39 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   async me(@CurrentUser('sub') userId: string): Promise<ApiResponse<UserProfile>> {
     const profile = await this.authService.getProfile(userId);
+    return {
+      success: true,
+      data: profile,
+      timestamp: new Date().toISOString()
+    };
+  }
+
+  @Patch('me')
+  @UseGuards(JwtAuthGuard)
+  async updateProfile(
+    @CurrentUser('sub') userId: string,
+    @Body(new ZodValidationPipe(updateUserProfileDtoSchema)) dto: UpdateUserProfileDto
+  ): Promise<ApiResponse<UserProfile>> {
+    const profile = await this.authService.updateProfile(userId, dto);
+    return {
+      success: true,
+      data: profile,
+      timestamp: new Date().toISOString()
+    };
+  }
+
+  @Post('me/avatar')
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadAvatar(
+    @CurrentUser('sub') userId: string,
+    @UploadedFile() rawFile?: UploadedFileDto
+  ): Promise<ApiResponse<UserProfile>> {
+    const file = validateImageFile(rawFile);
+    const fileKey = this.storageService.generateFileKey('avatars', file.originalname);
+    const publicUrl = await this.storageService.uploadBuffer(fileKey, file.buffer, file.mimetype);
+
+    const profile = await this.authService.updateAvatar(userId, publicUrl);
     return {
       success: true,
       data: profile,

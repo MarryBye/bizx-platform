@@ -8,17 +8,22 @@ import {
   Param,
   Query,
   UseGuards,
-  UsePipes
+  UsePipes,
+  UseInterceptors,
+  UploadedFile
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ProductsService,
   type ProductListItem,
   type ProductDetailItem
 } from './products.service.js';
+import { StorageService } from '../storage/storage.service.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../auth/guards/roles.guard.js';
 import { CurrentUser, Roles, Public } from '../auth/decorators/auth.decorators.js';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
+import { validateImageFile, type UploadedFileDto } from '../common/file-upload.utils.js';
 import type { ProductRecord, ProductCategoryRecord } from '@bizx/database';
 import {
   createProductDtoSchema,
@@ -37,7 +42,10 @@ import {
 @Controller('products')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class ProductsController {
-  constructor(private readonly productsService: ProductsService) {}
+  constructor(
+    private readonly productsService: ProductsService,
+    private readonly storageService: StorageService
+  ) {}
 
   // ==================== КАТЕГОРИИ ТОВАРОВ ====================
 
@@ -146,6 +154,30 @@ export class ProductsController {
     @Body() dto: UpdateProductDto
   ): Promise<ApiResponse<ProductRecord>> {
     const updated = await this.productsService.updateProduct(id, userId, userRole, dto);
+    return {
+      success: true,
+      data: updated,
+      timestamp: new Date().toISOString()
+    };
+  }
+
+  @Post(':id/image')
+  @Roles('business_owner', 'admin')
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadProductImage(
+    @Param('id') id: string,
+    @CurrentUser('sub') userId: string,
+    @CurrentUser('role') userRole: UserRole,
+    @UploadedFile() rawFile?: UploadedFileDto
+  ): Promise<ApiResponse<ProductRecord>> {
+    await this.productsService.assertProductOwnership(id, userId, userRole);
+    const file = validateImageFile(rawFile);
+    const fileKey = this.storageService.generateFileKey('products', file.originalname);
+    const publicUrl = await this.storageService.uploadBuffer(fileKey, file.buffer, file.mimetype);
+
+    const updated = await this.productsService.updateProduct(id, userId, userRole, {
+      imageUrl: publicUrl
+    });
     return {
       success: true,
       data: updated,

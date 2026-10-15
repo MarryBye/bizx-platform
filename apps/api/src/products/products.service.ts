@@ -239,11 +239,10 @@ export class ProductsService {
     return product;
   }
 
-  async updateProduct(
+  async assertProductOwnership(
     id: string,
     userId: string,
-    userRole: UserRole,
-    dto: UpdateProductDto
+    userRole: UserRole
   ): Promise<ProductRecord> {
     const [product] = await this.databaseService.db
       .select()
@@ -255,6 +254,16 @@ export class ProductsService {
     }
 
     await this.storesService.assertStoreOwnership(product.storeId, userId, userRole);
+    return product;
+  }
+
+  async updateProduct(
+    id: string,
+    userId: string,
+    userRole: UserRole,
+    dto: UpdateProductDto
+  ): Promise<ProductRecord> {
+    const product = await this.assertProductOwnership(id, userId, userRole);
 
     if (dto.categoryId) {
       const [category] = await this.databaseService.db
@@ -289,16 +298,7 @@ export class ProductsService {
     userId: string,
     userRole: UserRole
   ): Promise<{ message: string }> {
-    const [product] = await this.databaseService.db
-      .select()
-      .from(products)
-      .where(eq(products.id, id));
-
-    if (!product) {
-      throw new NotFoundException('Товар не найден');
-    }
-
-    await this.storesService.assertStoreOwnership(product.storeId, userId, userRole);
+    await this.assertProductOwnership(id, userId, userRole);
 
     await this.databaseService.db.delete(products).where(eq(products.id, id));
 

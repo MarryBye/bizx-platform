@@ -7,18 +7,23 @@ import {
   Param,
   Res,
   UseGuards,
-  UsePipes
+  UsePipes,
+  UseInterceptors,
+  UploadedFile
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
 import { StorageService } from './storage.service.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../auth/guards/roles.guard.js';
 import { Public, Roles } from '../auth/decorators/auth.decorators.js';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
+import { validateImageFile, type UploadedFileDto } from '../common/file-upload.utils.js';
 import {
   presignedUploadDtoSchema,
   type PresignedUploadDto,
   type PresignedUploadResponse,
+  type UploadFileResponse,
   type ApiResponse
 } from '@bizx/common-types';
 
@@ -58,6 +63,36 @@ export class StorageController {
     return {
       success: true,
       data: result,
+      timestamp: new Date().toISOString()
+    };
+  }
+
+  /**
+   * Пряме завантаження файлу на сервер (multipart/form-data) з відправкою в Cloudflare R2
+   */
+  @Post('upload')
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadFile(
+    @UploadedFile() rawFile: UploadedFileDto | undefined,
+    @Body('folder') folderParam?: string
+  ): Promise<ApiResponse<UploadFileResponse>> {
+    const file = validateImageFile(rawFile);
+    const validFolders = ['avatars', 'stores/logos', 'stores/banners', 'products'];
+    const folder = validFolders.includes(folderParam || '') ? (folderParam as string) : 'general';
+
+    const fileKey = this.storageService.generateFileKey(folder, file.originalname);
+    const publicUrl = await this.storageService.uploadBuffer(fileKey, file.buffer, file.mimetype);
+
+    return {
+      success: true,
+      data: {
+        fileKey,
+        publicUrl,
+        originalName: file.originalname,
+        size: file.size,
+        mimeType: file.mimetype
+      },
       timestamp: new Date().toISOString()
     };
   }
