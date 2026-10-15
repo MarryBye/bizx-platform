@@ -2,7 +2,7 @@ import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
 import { AnalyticsService } from './analytics.service.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../auth/guards/roles.guard.js';
-import { CurrentUser, Roles } from '../auth/decorators/auth.decorators.js';
+import { CurrentUser, PlatformAdmin } from '../auth/decorators/auth.decorators.js';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
 import {
   analyticsQuerySchema,
@@ -10,6 +10,7 @@ import {
   type StoreAnalytics,
   type PlatformAnalytics,
   type UserRole,
+  type SystemRole,
   type ApiResponse
 } from '@bizx/common-types';
 
@@ -19,18 +20,19 @@ export class AnalyticsController {
   constructor(private readonly analyticsService: AnalyticsService) {}
 
   @Get('stores/:storeId')
-  @Roles('business_owner', 'admin')
   async getStoreAnalytics(
     @Param('storeId') storeId: string,
     @CurrentUser('sub') userId: string,
     @CurrentUser('role') userRole: UserRole,
+    @CurrentUser('systemRole') systemRole: SystemRole | undefined,
     @Query(new ZodValidationPipe(analyticsQuerySchema)) query: AnalyticsQuery
   ): Promise<ApiResponse<StoreAnalytics>> {
     const analytics = await this.analyticsService.getStoreAnalytics(
       storeId,
       userId,
       userRole,
-      query
+      query,
+      systemRole
     );
     return {
       success: true,
@@ -40,7 +42,7 @@ export class AnalyticsController {
   }
 
   @Get('platform')
-  @Roles('admin')
+  @PlatformAdmin()
   async getPlatformAnalytics(
     @Query(new ZodValidationPipe(analyticsQuerySchema)) query: AnalyticsQuery
   ): Promise<ApiResponse<PlatformAnalytics>> {

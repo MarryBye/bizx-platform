@@ -5,13 +5,14 @@ import {
   ForbiddenException
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import type { UserRole } from '@bizx/common-types';
-import { ROLES_KEY } from '../decorators/auth.decorators.js';
+import type { UserRole, SystemRole } from '@bizx/common-types';
+import { ROLES_KEY, PLATFORM_ADMIN_KEY } from '../decorators/auth.decorators.js';
 
 interface AuthenticatedUser {
   sub: string;
   email: string;
   role: UserRole;
+  systemRole: SystemRole;
   name: string;
 }
 
@@ -20,6 +21,21 @@ export class RolesGuard implements CanActivate {
   constructor(private reflector: Reflector) {}
 
   canActivate(context: ExecutionContext): boolean {
+    const isPlatformAdminRequired = this.reflector.getAllAndOverride<boolean>(PLATFORM_ADMIN_KEY, [
+      context.getHandler(),
+      context.getClass()
+    ]);
+
+    const request = context.switchToHttp().getRequest();
+    const user = request.user as AuthenticatedUser | undefined;
+
+    if (isPlatformAdminRequired) {
+      if (!user || user.systemRole !== 'platform_admin') {
+        throw new ForbiddenException('Доступ заборонено: потрібні права адміністратора платформи');
+      }
+      return true;
+    }
+
     const requiredRoles = this.reflector.getAllAndOverride<UserRole[]>(ROLES_KEY, [
       context.getHandler(),
       context.getClass()
@@ -29,16 +45,13 @@ export class RolesGuard implements CanActivate {
       return true;
     }
 
-    const request = context.switchToHttp().getRequest();
-    const user = request.user as AuthenticatedUser | undefined;
-
     if (!user || !user.role) {
-      throw new ForbiddenException('Доступ запрещен: требуется авторизация');
+      throw new ForbiddenException('Доступ заборонено: потрібна авторизація');
     }
 
-    const hasRole = requiredRoles.includes(user.role);
+    const hasRole = requiredRoles.includes(user.role) || user.systemRole === 'platform_admin';
     if (!hasRole) {
-      throw new ForbiddenException('Недостаточно прав для выполнения операции');
+      throw new ForbiddenException('Недостатньо прав для виконання операції');
     }
 
     return true;

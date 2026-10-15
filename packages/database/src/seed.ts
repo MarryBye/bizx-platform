@@ -84,6 +84,7 @@ async function seed() {
         orders,
         products,
         product_categories,
+        store_members,
         stores,
         store_categories,
         refresh_tokens,
@@ -305,6 +306,7 @@ async function seed() {
       name: 'Олександр Коваленко',
       passwordHash: PASSWORD_HASH,
       role: 'admin',
+      systemRole: 'platform_admin',
       phone: '+380501234567',
       avatarUrl: adminAvatarUrl
     });
@@ -471,7 +473,27 @@ async function seed() {
       })
       .returning();
 
-    // 5. Категорії товарів
+    // 5. Членство у магазинах (Store Members)
+    console.info('👥 Привʼязка власників до магазинів (store_members)...');
+    await db.insert(schema.storeMembers).values([
+      {
+        storeId: storeCoffee.id,
+        userId: coffeeOwner.id,
+        role: 'owner'
+      },
+      {
+        storeId: storeTech.id,
+        userId: techOwner.id,
+        role: 'owner'
+      },
+      {
+        storeId: storeBakery.id,
+        userId: bakeryOwner.id,
+        role: 'owner'
+      }
+    ]);
+
+    // 6. Категорії товарів
     console.info('📑 Створення категорій товарів...');
     const [pCatCoffeeBeans] = await db
       .insert(schema.productCategories)

@@ -5,3 +5,4 @@ export * from './stores.js';
 export * from './product-categories.js';
 export * from './products.js';
 export * from './orders.js';
+export * from './store-members.js';

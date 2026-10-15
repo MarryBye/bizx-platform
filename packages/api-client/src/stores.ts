@@ -4,6 +4,8 @@ import type {
   PaginatedResult,
   StoreCategory,
   Store,
+  StoreMember,
+  AddStoreMemberDto,
   CreateStoreDto,
   UpdateStoreDto,
   StoreFilterQuery
@@ -97,5 +99,31 @@ export class StoresModule {
    */
   async deleteStore(id: string): Promise<ApiResponse<{ message: string }>> {
     return this.client.delete<ApiResponse<{ message: string }>>(`/stores/${id}`);
+  }
+
+  /**
+   * Отримання списку учасників магазину (GET /stores/:id/members)
+   */
+  async getMembers(storeId: string): Promise<ApiResponse<StoreMember[]>> {
+    return this.client.get<ApiResponse<StoreMember[]>>(`/stores/${storeId}/members`);
+  }
+
+  /**
+   * Додавання нового учасника до магазину (POST /stores/:id/members)
+   */
+  async addMember(storeId: string, dto: AddStoreMemberDto): Promise<ApiResponse<StoreMember>> {
+    return this.client.post<ApiResponse<StoreMember>>(`/stores/${storeId}/members`, dto);
+  }
+
+  /**
+   * Видалення учасника з магазину (DELETE /stores/:id/members/:memberId)
+   */
+  async removeMember(
+    storeId: string,
+    memberId: string
+  ): Promise<ApiResponse<{ message: string }>> {
+    return this.client.delete<ApiResponse<{ message: string }>>(
+      `/stores/${storeId}/members/${memberId}`
+    );
   }
 }

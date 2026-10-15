@@ -30,11 +30,12 @@ export class AuthService {
     return crypto.createHash('sha256').update(token).digest('hex');
   }
 
-  private async generateTokens(user: { id: string; email: string; role: string; name: string }) {
+  private async generateTokens(user: { id: string; email: string; role: string; systemRole?: string; name: string }) {
     const payload = {
       sub: user.id,
       email: user.email,
       role: user.role,
+      systemRole: user.systemRole || 'user',
       name: user.name
     };
 
@@ -95,6 +96,7 @@ export class AuthService {
         email: users.email,
         name: users.name,
         role: users.role,
+        systemRole: users.systemRole,
         createdAt: users.createdAt
       });
 
@@ -103,6 +105,7 @@ export class AuthService {
       email: newUser.email,
       name: newUser.name,
       role: newUser.role as UserProfile['role'],
+      systemRole: (newUser.systemRole || 'user') as UserProfile['systemRole'],
       createdAt: newUser.createdAt.toISOString()
     };
 
@@ -139,6 +142,7 @@ export class AuthService {
       email: user.email,
       name: user.name,
       role: user.role as UserProfile['role'],
+      systemRole: (user.systemRole || 'user') as UserProfile['systemRole'],
       createdAt: user.createdAt.toISOString()
     };
 
@@ -184,6 +188,7 @@ export class AuthService {
       email: user.email,
       name: user.name,
       role: user.role as UserProfile['role'],
+      systemRole: (user.systemRole || 'user') as UserProfile['systemRole'],
       createdAt: user.createdAt.toISOString()
     };
 
@@ -218,6 +223,7 @@ export class AuthService {
       email: user.email,
       name: user.name,
       role: user.role as UserProfile['role'],
+      systemRole: (user.systemRole || 'user') as UserProfile['systemRole'],
       phone: user.phone,
       avatarUrl: user.avatarUrl,
       createdAt: user.createdAt.toISOString()
@@ -253,6 +259,7 @@ export class AuthService {
       email: updated.email,
       name: updated.name,
       role: updated.role as UserProfile['role'],
+      systemRole: (updated.systemRole || 'user') as UserProfile['systemRole'],
       phone: updated.phone,
       avatarUrl: updated.avatarUrl,
       createdAt: updated.createdAt.toISOString()
@@ -278,6 +285,7 @@ export class AuthService {
       email: updated.email,
       name: updated.name,
       role: updated.role as UserProfile['role'],
+      systemRole: (updated.systemRole || 'user') as UserProfile['systemRole'],
       phone: updated.phone,
       avatarUrl: updated.avatarUrl,
       createdAt: updated.createdAt.toISOString()

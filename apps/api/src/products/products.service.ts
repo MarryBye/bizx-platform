@@ -19,6 +19,8 @@ import type {
   ProductFilterQuery,
   CreateProductCategoryDto,
   UserRole,
+  SystemRole,
+  StoreMemberRole,
   PaginatedResult
 } from '@bizx/common-types';
 
@@ -64,10 +66,11 @@ export class ProductsService {
   async createProductCategory(
     storeId: string,
     userId: string,
-    userRole: UserRole,
-    dto: CreateProductCategoryDto
+    userRole: UserRole | undefined,
+    dto: CreateProductCategoryDto,
+    systemRole?: SystemRole
   ): Promise<ProductCategoryRecord> {
-    await this.storesService.assertStoreOwnership(storeId, userId, userRole);
+    await this.storesService.assertStoreAccess(storeId, userId, ['owner', 'manager'], systemRole);
 
     const [category] = await this.databaseService.db
       .insert(productCategories)
@@ -84,7 +87,8 @@ export class ProductsService {
   async deleteProductCategory(
     categoryId: string,
     userId: string,
-    userRole: UserRole
+    userRole?: UserRole,
+    systemRole?: SystemRole
   ): Promise<{ message: string }> {
     const [category] = await this.databaseService.db
       .select()
@@ -95,7 +99,7 @@ export class ProductsService {
       throw new NotFoundException('Категория товаров не найдена');
     }
 
-    await this.storesService.assertStoreOwnership(category.storeId, userId, userRole);
+    await this.storesService.assertStoreAccess(category.storeId, userId, ['owner', 'manager'], systemRole);
 
     await this.databaseService.db
       .delete(productCategories)
@@ -109,10 +113,11 @@ export class ProductsService {
   async createProduct(
     storeId: string,
     userId: string,
-    userRole: UserRole,
-    dto: CreateProductDto
+    userRole: UserRole | undefined,
+    dto: CreateProductDto,
+    systemRole?: SystemRole
   ): Promise<ProductRecord> {
-    await this.storesService.assertStoreOwnership(storeId, userId, userRole);
+    await this.storesService.assertStoreAccess(storeId, userId, ['owner', 'manager'], systemRole);
 
     if (dto.categoryId) {
       const [category] = await this.databaseService.db
@@ -242,7 +247,8 @@ export class ProductsService {
   async assertProductOwnership(
     id: string,
     userId: string,
-    userRole: UserRole
+    userRole?: UserRole,
+    systemRole?: SystemRole
   ): Promise<ProductRecord> {
     const [product] = await this.databaseService.db
       .select()
@@ -253,17 +259,18 @@ export class ProductsService {
       throw new NotFoundException('Товар не найден');
     }
 
-    await this.storesService.assertStoreOwnership(product.storeId, userId, userRole);
+    await this.storesService.assertStoreAccess(product.storeId, userId, ['owner', 'manager'], systemRole);
     return product;
   }
 
   async updateProduct(
     id: string,
     userId: string,
-    userRole: UserRole,
-    dto: UpdateProductDto
+    userRole: UserRole | undefined,
+    dto: UpdateProductDto,
+    systemRole?: SystemRole
   ): Promise<ProductRecord> {
-    const product = await this.assertProductOwnership(id, userId, userRole);
+    const product = await this.assertProductOwnership(id, userId, userRole, systemRole);
 
     if (dto.categoryId) {
       const [category] = await this.databaseService.db
@@ -296,9 +303,10 @@ export class ProductsService {
   async deleteProduct(
     id: string,
     userId: string,
-    userRole: UserRole
+    userRole?: UserRole,
+    systemRole?: SystemRole
   ): Promise<{ message: string }> {
-    await this.assertProductOwnership(id, userId, userRole);
+    await this.assertProductOwnership(id, userId, userRole, systemRole);
 
     await this.databaseService.db.delete(products).where(eq(products.id, id));
 
