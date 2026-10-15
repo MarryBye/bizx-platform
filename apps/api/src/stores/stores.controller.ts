@@ -17,7 +17,7 @@ import { StoresService, type StoreListItem, type StoreDetailItem } from './store
 import { StorageService } from '../storage/storage.service.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../auth/guards/roles.guard.js';
-import { CurrentUser, Roles, Public } from '../auth/decorators/auth.decorators.js';
+import { CurrentUser, Roles, Public, PlatformAdmin } from '../auth/decorators/auth.decorators.js';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
 import { validateImageFile, type UploadedFileDto } from '../common/file-upload.utils.js';
 import type { StoreRecord, StoreCategoryRecord } from '@bizx/database';
@@ -27,11 +27,15 @@ import {
   createStoreDtoSchema,
   updateStoreDtoSchema,
   storeFilterQuerySchema,
+  addStoreMemberDtoSchema,
   type CreateStoreCategoryDto,
   type UpdateStoreCategoryDto,
   type CreateStoreDto,
   type UpdateStoreDto,
   type StoreFilterQuery,
+  type AddStoreMemberDto,
+  type StoreMember,
+  type SystemRole,
   type UserRole,
   type ApiResponse,
   type PaginatedResult
@@ -59,7 +63,7 @@ export class StoresController {
   }
 
   @Get('categories/all')
-  @Roles('admin')
+  @PlatformAdmin()
   async getAllCategoriesAdmin(): Promise<ApiResponse<StoreCategoryRecord[]>> {
     const categories = await this.storesService.getAllCategoriesAdmin();
     return {
@@ -70,7 +74,7 @@ export class StoresController {
   }
 
   @Post('categories')
-  @Roles('admin')
+  @PlatformAdmin()
   @UsePipes(new ZodValidationPipe(createStoreCategoryDtoSchema))
   async createCategory(
     @Body() dto: CreateStoreCategoryDto
@@ -84,7 +88,7 @@ export class StoresController {
   }
 
   @Patch('categories/:id')
-  @Roles('admin')
+  @PlatformAdmin()
   @UsePipes(new ZodValidationPipe(updateStoreCategoryDtoSchema))
   async updateCategory(
     @Param('id') id: string,
@@ -99,7 +103,7 @@ export class StoresController {
   }
 
   @Delete('categories/:id')
-  @Roles('admin')
+  @PlatformAdmin()
   async deleteCategory(@Param('id') id: string): Promise<ApiResponse<{ message: string }>> {
     const result = await this.storesService.deleteCategory(id);
     return {
@@ -125,7 +129,6 @@ export class StoresController {
   }
 
   @Get('my')
-  @Roles('business_owner')
   async getMyStores(@CurrentUser('sub') userId: string): Promise<ApiResponse<StoreListItem[]>> {
     const result = await this.storesService.getMyStores(userId);
     return {
@@ -164,15 +167,15 @@ export class StoresController {
   }
 
   @Patch(':id')
-  @Roles('business_owner', 'admin')
   @UsePipes(new ZodValidationPipe(updateStoreDtoSchema))
   async updateStore(
     @Param('id') id: string,
     @CurrentUser('sub') userId: string,
     @CurrentUser('role') userRole: UserRole,
+    @CurrentUser('systemRole') systemRole: SystemRole | undefined,
     @Body() dto: UpdateStoreDto
   ): Promise<ApiResponse<StoreRecord>> {
-    const updated = await this.storesService.updateStore(id, userId, userRole, dto);
+    const updated = await this.storesService.updateStore(id, userId, userRole, dto, systemRole);
     return {
       success: true,
       data: updated,
@@ -181,22 +184,26 @@ export class StoresController {
   }
 
   @Post(':id/logo')
-  @Roles('business_owner', 'admin')
   @UseInterceptors(FileInterceptor('file'))
   async uploadStoreLogo(
     @Param('id') id: string,
     @CurrentUser('sub') userId: string,
     @CurrentUser('role') userRole: UserRole,
+    @CurrentUser('systemRole') systemRole: SystemRole | undefined,
     @UploadedFile() rawFile?: UploadedFileDto
   ): Promise<ApiResponse<StoreRecord>> {
-    await this.storesService.assertStoreOwnership(id, userId, userRole);
+    await this.storesService.assertStoreOwnership(id, userId, userRole, systemRole);
     const file = validateImageFile(rawFile);
     const fileKey = this.storageService.generateFileKey('stores/logos', file.originalname);
     const publicUrl = await this.storageService.uploadBuffer(fileKey, file.buffer, file.mimetype);
 
-    const updated = await this.storesService.updateStore(id, userId, userRole, {
-      logoUrl: publicUrl
-    });
+    const updated = await this.storesService.updateStore(
+      id,
+      userId,
+      userRole,
+      { logoUrl: publicUrl },
+      systemRole
+    );
     return {
       success: true,
       data: updated,
@@ -205,22 +212,26 @@ export class StoresController {
   }
 
   @Post(':id/banner')
-  @Roles('business_owner', 'admin')
   @UseInterceptors(FileInterceptor('file'))
   async uploadStoreBanner(
     @Param('id') id: string,
     @CurrentUser('sub') userId: string,
     @CurrentUser('role') userRole: UserRole,
+    @CurrentUser('systemRole') systemRole: SystemRole | undefined,
     @UploadedFile() rawFile?: UploadedFileDto
   ): Promise<ApiResponse<StoreRecord>> {
-    await this.storesService.assertStoreOwnership(id, userId, userRole);
+    await this.storesService.assertStoreOwnership(id, userId, userRole, systemRole);
     const file = validateImageFile(rawFile);
     const fileKey = this.storageService.generateFileKey('stores/banners', file.originalname);
     const publicUrl = await this.storageService.uploadBuffer(fileKey, file.buffer, file.mimetype);
 
-    const updated = await this.storesService.updateStore(id, userId, userRole, {
-      bannerUrl: publicUrl
-    });
+    const updated = await this.storesService.updateStore(
+      id,
+      userId,
+      userRole,
+      { bannerUrl: publicUrl },
+      systemRole
+    );
     return {
       success: true,
       data: updated,
@@ -229,13 +240,60 @@ export class StoresController {
   }
 
   @Delete(':id')
-  @Roles('business_owner', 'admin')
   async deleteStore(
     @Param('id') id: string,
     @CurrentUser('sub') userId: string,
-    @CurrentUser('role') userRole: UserRole
+    @CurrentUser('role') userRole: UserRole,
+    @CurrentUser('systemRole') systemRole: SystemRole | undefined
   ): Promise<ApiResponse<{ message: string }>> {
-    const result = await this.storesService.deleteStore(id, userId, userRole);
+    const result = await this.storesService.deleteStore(id, userId, userRole, systemRole);
+    return {
+      success: true,
+      data: result,
+      timestamp: new Date().toISOString()
+    };
+  }
+
+  // ==================== УЧАСТНИКИ МАГАЗИНА ====================
+
+  @Get(':id/members')
+  async getStoreMembers(
+    @Param('id') id: string,
+    @CurrentUser('sub') userId: string,
+    @CurrentUser('systemRole') systemRole?: SystemRole
+  ): Promise<ApiResponse<StoreMember[]>> {
+    const members = await this.storesService.getStoreMembers(id, userId, systemRole);
+    return {
+      success: true,
+      data: members,
+      timestamp: new Date().toISOString()
+    };
+  }
+
+  @Post(':id/members')
+  @UsePipes(new ZodValidationPipe(addStoreMemberDtoSchema))
+  async addStoreMember(
+    @Param('id') id: string,
+    @CurrentUser('sub') userId: string,
+    @CurrentUser('systemRole') systemRole: SystemRole | undefined,
+    @Body() dto: AddStoreMemberDto
+  ): Promise<ApiResponse<StoreMember>> {
+    const member = await this.storesService.addStoreMember(id, userId, dto, systemRole);
+    return {
+      success: true,
+      data: member,
+      timestamp: new Date().toISOString()
+    };
+  }
+
+  @Delete(':id/members/:memberId')
+  async removeStoreMember(
+    @Param('id') id: string,
+    @Param('memberId') memberId: string,
+    @CurrentUser('sub') userId: string,
+    @CurrentUser('systemRole') systemRole?: SystemRole
+  ): Promise<ApiResponse<{ message: string }>> {
+    const result = await this.storesService.removeStoreMember(id, userId, memberId, systemRole);
     return {
       success: true,
       data: result,

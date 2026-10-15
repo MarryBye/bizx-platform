@@ -18,7 +18,8 @@ import type {
   AnalyticsQuery,
   StoreAnalytics,
   PlatformAnalytics,
-  UserRole
+  UserRole,
+  SystemRole
 } from '@bizx/common-types';
 
 @Injectable()
@@ -60,10 +61,11 @@ export class AnalyticsService {
   async getStoreAnalytics(
     storeId: string,
     userId: string,
-    userRole: UserRole,
-    query: AnalyticsQuery
+    userRole?: UserRole,
+    query: AnalyticsQuery = { period: 'all' },
+    systemRole?: SystemRole
   ): Promise<StoreAnalytics> {
-    await this.storesService.assertStoreOwnership(storeId, userId, userRole);
+    await this.storesService.assertStoreAccess(storeId, userId, ['owner', 'manager'], systemRole);
 
     const { startDate, endDate } = this.getDateRange(query);
     const conditions = [eq(orders.storeId, storeId)];

@@ -8,6 +8,7 @@ import { DatabaseService } from '../database/database.service.js';
 import {
   stores,
   storeCategories,
+  storeMembers,
   users,
   eq,
   and,
@@ -24,6 +25,10 @@ import type {
   CreateStoreCategoryDto,
   UpdateStoreCategoryDto,
   UserRole,
+  SystemRole,
+  StoreMemberRole,
+  AddStoreMemberDto,
+  StoreMember,
   PaginatedResult
 } from '@bizx/common-types';
 
@@ -42,6 +47,7 @@ export interface StoreListItem {
   status: string;
   createdAt: Date;
   categoryName: string | null;
+  memberRole?: string;
 }
 
 export interface StoreDetailItem extends StoreListItem {
@@ -170,22 +176,32 @@ export class StoresService {
       }
     }
 
-    const [newStore] = await this.databaseService.db
-      .insert(stores)
-      .values({
-        ownerId,
-        categoryId: dto.categoryId,
-        name: dto.name,
-        slug: dto.slug.toLowerCase(),
-        description: dto.description,
-        logoUrl: dto.logoUrl,
-        bannerUrl: dto.bannerUrl,
-        address: dto.address,
-        phone: dto.phone,
-        email: dto.email,
-        status: 'active'
-      })
-      .returning();
+    const newStore = await this.databaseService.db.transaction(async (tx) => {
+      const [insertedStore] = await tx
+        .insert(stores)
+        .values({
+          ownerId,
+          categoryId: dto.categoryId,
+          name: dto.name,
+          slug: dto.slug.toLowerCase(),
+          description: dto.description,
+          logoUrl: dto.logoUrl,
+          bannerUrl: dto.bannerUrl,
+          address: dto.address,
+          phone: dto.phone,
+          email: dto.email,
+          status: 'active'
+        })
+        .returning();
+
+      await tx.insert(storeMembers).values({
+        storeId: insertedStore.id,
+        userId: ownerId,
+        role: 'owner'
+      });
+
+      return insertedStore;
+    });
 
     return newStore;
   }
@@ -286,8 +302,8 @@ export class StoresService {
     return store;
   }
 
-  async getMyStores(ownerId: string): Promise<StoreListItem[]> {
-    return await this.databaseService.db
+  async getMyStores(userId: string): Promise<StoreListItem[]> {
+    const rows = await this.databaseService.db
       .select({
         id: stores.id,
         ownerId: stores.ownerId,
@@ -302,44 +318,195 @@ export class StoresService {
         email: stores.email,
         status: stores.status,
         createdAt: stores.createdAt,
-        categoryName: storeCategories.name
+        categoryName: storeCategories.name,
+        memberRole: storeMembers.role
       })
-      .from(stores)
+      .from(storeMembers)
+      .innerJoin(stores, eq(storeMembers.storeId, stores.id))
       .leftJoin(storeCategories, eq(stores.categoryId, storeCategories.id))
-      .where(eq(stores.ownerId, ownerId))
+      .where(eq(storeMembers.userId, userId))
       .orderBy(desc(stores.createdAt));
+
+    return rows;
   }
 
-  async assertStoreOwnership(
+  async assertStoreAccess(
     storeId: string,
     userId: string,
-    userRole: UserRole
-  ): Promise<StoreRecord> {
+    allowedRoles?: StoreMemberRole[],
+    systemRole?: SystemRole
+  ): Promise<{ store: StoreRecord; memberRole?: StoreMemberRole }> {
     const [store] = await this.databaseService.db
       .select()
       .from(stores)
       .where(eq(stores.id, storeId));
 
     if (!store) {
-      throw new NotFoundException('Магазин не найден');
+      throw new NotFoundException('Магазин не знайдено');
     }
 
-    if (userRole !== 'admin' && store.ownerId !== userId) {
-      throw new ForbiddenException('У вас нет прав для управления этим магазином');
+    if (systemRole === 'platform_admin') {
+      return { store, memberRole: 'owner' };
     }
 
+    const [member] = await this.databaseService.db
+      .select()
+      .from(storeMembers)
+      .where(and(eq(storeMembers.storeId, storeId), eq(storeMembers.userId, userId)));
+
+    if (!member) {
+      // Сумісність для головного власника
+      if (store.ownerId === userId) {
+        return { store, memberRole: 'owner' };
+      }
+      throw new ForbiddenException('У вас немає доступу до керування цим магазином');
+    }
+
+    if (allowedRoles && allowedRoles.length > 0 && !allowedRoles.includes(member.role as StoreMemberRole)) {
+      throw new ForbiddenException('Недостатньо прав для виконання цієї операції в магазині');
+    }
+
+    return { store, memberRole: member.role as StoreMemberRole };
+  }
+
+  async assertStoreOwnership(
+    storeId: string,
+    userId: string,
+    userRole?: UserRole,
+    systemRole?: SystemRole
+  ): Promise<StoreRecord> {
+    const { store } = await this.assertStoreAccess(storeId, userId, ['owner'], systemRole);
     return store;
+  }
+
+  async getStoreMembers(
+    storeId: string,
+    userId: string,
+    systemRole?: SystemRole
+  ): Promise<StoreMember[]> {
+    await this.assertStoreAccess(storeId, userId, ['owner', 'manager'], systemRole);
+
+    const members = await this.databaseService.db
+      .select({
+        id: storeMembers.id,
+        storeId: storeMembers.storeId,
+        userId: storeMembers.userId,
+        role: storeMembers.role,
+        createdAt: storeMembers.createdAt,
+        updatedAt: storeMembers.updatedAt,
+        userName: users.name,
+        userEmail: users.email,
+        userAvatarUrl: users.avatarUrl
+      })
+      .from(storeMembers)
+      .innerJoin(users, eq(storeMembers.userId, users.id))
+      .where(eq(storeMembers.storeId, storeId))
+      .orderBy(desc(storeMembers.createdAt));
+
+    return members.map((m) => ({
+      ...m,
+      role: m.role as StoreMemberRole,
+      createdAt: m.createdAt.toISOString(),
+      updatedAt: m.updatedAt.toISOString()
+    }));
+  }
+
+  async addStoreMember(
+    storeId: string,
+    callerUserId: string,
+    dto: AddStoreMemberDto,
+    systemRole?: SystemRole
+  ): Promise<StoreMember> {
+    await this.assertStoreAccess(storeId, callerUserId, ['owner'], systemRole);
+
+    const [targetUser] = await this.databaseService.db
+      .select()
+      .from(users)
+      .where(eq(users.email, dto.email.toLowerCase()));
+
+    if (!targetUser) {
+      throw new NotFoundException('Користувача з такою електронною поштою не знайдено в BizX');
+    }
+
+    const [existingMember] = await this.databaseService.db
+      .select()
+      .from(storeMembers)
+      .where(
+        and(
+          eq(storeMembers.storeId, storeId),
+          eq(storeMembers.userId, targetUser.id)
+        )
+      );
+
+    if (existingMember) {
+      throw new ConflictException('Користувач вже є учасником цього магазину');
+    }
+
+    const [newMember] = await this.databaseService.db
+      .insert(storeMembers)
+      .values({
+        storeId,
+        userId: targetUser.id,
+        role: dto.role
+      })
+      .returning();
+
+    return {
+      id: newMember.id,
+      storeId: newMember.storeId,
+      userId: newMember.userId,
+      role: newMember.role as StoreMemberRole,
+      userName: targetUser.name,
+      userEmail: targetUser.email,
+      userAvatarUrl: targetUser.avatarUrl,
+      createdAt: newMember.createdAt.toISOString(),
+      updatedAt: newMember.updatedAt.toISOString()
+    };
+  }
+
+  async removeStoreMember(
+    storeId: string,
+    callerUserId: string,
+    memberId: string,
+    systemRole?: SystemRole
+  ): Promise<{ message: string }> {
+    await this.assertStoreAccess(storeId, callerUserId, ['owner'], systemRole);
+
+    const [member] = await this.databaseService.db
+      .select()
+      .from(storeMembers)
+      .where(
+        and(
+          eq(storeMembers.id, memberId),
+          eq(storeMembers.storeId, storeId)
+        )
+      );
+
+    if (!member) {
+      throw new NotFoundException('Учасника не знайдено в цьому магазині');
+    }
+
+    if (member.userId === callerUserId) {
+      throw new ConflictException('Ви не можете видалити самого себе з магазину');
+    }
+
+    await this.databaseService.db
+      .delete(storeMembers)
+      .where(eq(storeMembers.id, memberId));
+
+    return { message: 'Учасника успішно видалено з магазину' };
   }
 
   async updateStore(
     storeId: string,
     userId: string,
-    userRole: UserRole,
-    dto: UpdateStoreDto
+    userRole?: UserRole,
+    dto?: UpdateStoreDto,
+    systemRole?: SystemRole
   ): Promise<StoreRecord> {
-    const store = await this.assertStoreOwnership(storeId, userId, userRole);
+    const store = await this.assertStoreOwnership(storeId, userId, userRole, systemRole);
 
-    if (dto.slug && dto.slug.toLowerCase() !== store.slug) {
+    if (dto?.slug && dto.slug.toLowerCase() !== store.slug) {
       const [duplicate] = await this.databaseService.db
         .select({ id: stores.id })
         .from(stores)
@@ -350,7 +517,7 @@ export class StoresService {
       }
     }
 
-    if (dto.categoryId) {
+    if (dto?.categoryId) {
       const [category] = await this.databaseService.db
         .select({ id: storeCategories.id })
         .from(storeCategories)
@@ -365,7 +532,7 @@ export class StoresService {
       .update(stores)
       .set({
         ...dto,
-        slug: dto.slug ? dto.slug.toLowerCase() : undefined,
+        slug: dto?.slug ? dto.slug.toLowerCase() : undefined,
         updatedAt: new Date()
       })
       .where(eq(stores.id, storeId))
@@ -377,9 +544,10 @@ export class StoresService {
   async deleteStore(
     storeId: string,
     userId: string,
-    userRole: UserRole
+    userRole?: UserRole,
+    systemRole?: SystemRole
   ): Promise<{ message: string }> {
-    await this.assertStoreOwnership(storeId, userId, userRole);
+    await this.assertStoreOwnership(storeId, userId, userRole, systemRole);
 
     await this.databaseService.db.delete(stores).where(eq(stores.id, storeId));
 

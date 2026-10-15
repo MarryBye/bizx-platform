@@ -19,7 +19,7 @@ import {
   type OrderRecord,
   type OrderItemRecord
 } from '@bizx/database';
-import type { CreateOrderDto, UpdateOrderStatusDto, UserRole } from '@bizx/common-types';
+import type { CreateOrderDto, UpdateOrderStatusDto, UserRole, SystemRole } from '@bizx/common-types';
 
 export interface OrderWithItems extends OrderRecord {
   items: OrderItemRecord[];
@@ -228,9 +228,10 @@ export class OrdersService {
   async getStoreOrders(
     storeId: string,
     userId: string,
-    userRole: UserRole
+    userRole?: UserRole,
+    systemRole?: SystemRole
   ): Promise<OrderWithItems[]> {
-    await this.storesService.assertStoreOwnership(storeId, userId, userRole);
+    await this.storesService.assertStoreAccess(storeId, userId, ['owner', 'manager', 'staff'], systemRole);
 
     const storeOrders = await this.databaseService.db
       .select()
@@ -264,7 +265,8 @@ export class OrdersService {
   async getOrderById(
     orderId: string,
     userId: string,
-    userRole: UserRole
+    userRole?: UserRole,
+    systemRole?: SystemRole
   ): Promise<OrderDetailWithStore> {
     const [order] = await this.databaseService.db
       .select({
@@ -293,13 +295,10 @@ export class OrdersService {
       throw new NotFoundException('Заказ не найден');
     }
 
-    // Проверка прав доступа: покупатель, владелец магазина или админ
+    // Проверка прав доступа: покупатель, участник магазина (owner, manager, staff) или platform_admin
     const isCustomer = order.customerId === userId;
-    const isOwner = order.storeOwnerId === userId;
-    const isAdmin = userRole === 'admin';
-
-    if (!isCustomer && !isOwner && !isAdmin) {
-      throw new ForbiddenException('У вас нет доступа к этому заказу');
+    if (!isCustomer) {
+      await this.storesService.assertStoreAccess(order.storeId, userId, ['owner', 'manager', 'staff'], systemRole);
     }
 
     const items = await this.databaseService.db
@@ -316,8 +315,9 @@ export class OrdersService {
   async updateOrderStatus(
     orderId: string,
     userId: string,
-    userRole: UserRole,
-    dto: UpdateOrderStatusDto
+    userRole?: UserRole,
+    dto?: UpdateOrderStatusDto,
+    systemRole?: SystemRole
   ): Promise<OrderRecord> {
     const [order] = await this.databaseService.db
       .select({
@@ -333,13 +333,13 @@ export class OrdersService {
       throw new NotFoundException('Заказ не найден');
     }
 
-    await this.storesService.assertStoreOwnership(order.storeId, userId, userRole);
+    await this.storesService.assertStoreAccess(order.storeId, userId, ['owner', 'manager', 'staff'], systemRole);
 
     const [updated] = await this.databaseService.db
       .update(orders)
       .set({
-        status: dto.status ?? order.status,
-        paymentStatus: dto.paymentStatus ?? order.paymentStatus,
+        status: dto?.status ?? order.status,
+        paymentStatus: dto?.paymentStatus ?? order.paymentStatus,
         updatedAt: new Date()
       })
       .where(eq(orders.id, orderId))
