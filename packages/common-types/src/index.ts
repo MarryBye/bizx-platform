@@ -22,14 +22,47 @@ export const createUserDtoSchema = z.object({
 export type CreateUserDto = z.infer<typeof createUserDtoSchema>;
 
 export type UserRole = 'client' | 'business_owner' | 'admin';
-
 export const userRoleSchema = z.enum(['client', 'business_owner', 'admin']);
+
+export type SystemRole = 'user' | 'platform_admin';
+export const systemRoleSchema = z.enum(['user', 'platform_admin']);
+
+export type StoreMemberRole = 'owner' | 'manager' | 'staff';
+export const storeMemberRoleSchema = z.enum(['owner', 'manager', 'staff']);
+
+export const storeMemberSchema = z.object({
+  id: z.string().uuid(),
+  storeId: z.string().uuid(),
+  userId: z.string().uuid(),
+  role: storeMemberRoleSchema,
+  userName: z.string().optional(),
+  userEmail: z.string().optional(),
+  userAvatarUrl: z.string().nullable().optional(),
+  createdAt: z.string().datetime().optional(),
+  updatedAt: z.string().datetime().optional()
+});
+
+export type StoreMember = z.infer<typeof storeMemberSchema>;
+
+export const addStoreMemberDtoSchema = z.object({
+  email: z.string().email({ message: 'Некоректний email' }),
+  role: storeMemberRoleSchema.default('staff')
+});
+
+export type AddStoreMemberDto = z.infer<typeof addStoreMemberDtoSchema>;
+
+export const updateStoreMemberDtoSchema = z.object({
+  role: storeMemberRoleSchema
+});
+
+export type UpdateStoreMemberDto = z.infer<typeof updateStoreMemberDtoSchema>;
 
 export const userProfileSchema = z.object({
   id: z.string().uuid(),
   email: z.string().email({ message: 'Некорректный email адрес' }),
   name: z.string().min(2, { message: 'Имя должно содержать минимум 2 символа' }),
   role: userRoleSchema.default('client'),
+  systemRole: systemRoleSchema.default('user'),
   phone: z.string().nullable().optional(),
   avatarUrl: z.string().nullable().optional(),
   createdAt: z.string().datetime().optional()
@@ -126,6 +159,7 @@ export const storeSchema = z.object({
   phone: z.string().nullable().optional(),
   email: z.string().email().nullable().optional(),
   status: storeStatusSchema.default('active'),
+  memberRole: storeMemberRoleSchema.optional(),
   createdAt: z.string().datetime().optional(),
   updatedAt: z.string().datetime().optional()
 });
