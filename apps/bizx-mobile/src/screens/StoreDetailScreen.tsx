@@ -8,6 +8,7 @@ import {
   ActivityIndicator
 } from 'react-native';
 import { MaterialIcon } from '../components/MaterialIcon';
+import { SafeImage } from '../components/SafeImage';
 import { useMobileStoresStore } from '../store/useMobileStoresStore';
 import { useCartStore } from '../store/useCartStore';
 import type { Store } from '@bizx/common-types';
@@ -57,17 +58,16 @@ export const StoreDetailScreen: React.FC<StoreDetailScreenProps> = ({
       <ScrollView contentContainerStyle={{ paddingBottom: 120 }}>
         {/* Banner with Back Button */}
         <View className="w-full h-44 bg-slate-900 relative justify-between p-4">
-          {store.bannerUrl ? (
-            <Image
-              source={{ uri: store.bannerUrl }}
-              className="w-full h-full absolute inset-0"
-              resizeMode="cover"
-            />
-          ) : (
-            <View className="w-full h-full bg-slate-800 absolute inset-0 items-center justify-center">
-              <MaterialIcon name="storefront" size={48} color="#475569" />
-            </View>
-          )}
+          <SafeImage
+            sourceUrl={store.bannerUrl}
+            className="w-full h-full absolute inset-0"
+            resizeMode="cover"
+            fallback={
+              <View className="w-full h-full bg-slate-800 absolute inset-0 items-center justify-center">
+                <MaterialIcon name="storefront" size={48} color="#475569" />
+              </View>
+            }
+          />
           <View className="w-full h-full bg-black/40 absolute inset-0" />
 
           {/* Top Nav: Back button */}
@@ -96,11 +96,12 @@ export const StoreDetailScreen: React.FC<StoreDetailScreenProps> = ({
           <View className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-sm">
             <View className="flex-row items-center gap-3">
               <View className="w-14 h-14 rounded-2xl bg-slate-100 border border-slate-200 overflow-hidden items-center justify-center">
-                {store.logoUrl ? (
-                  <Image source={{ uri: store.logoUrl }} className="w-full h-full" resizeMode="cover" />
-                ) : (
-                  <MaterialIcon name="storefront" size={24} color="#2563eb" />
-                )}
+                <SafeImage
+                  sourceUrl={store.logoUrl}
+                  className="w-full h-full"
+                  resizeMode="cover"
+                  fallback={<MaterialIcon name="storefront" size={24} color="#2563eb" />}
+                />
               </View>
 
               <View className="flex-1">
@@ -193,15 +194,12 @@ export const StoreDetailScreen: React.FC<StoreDetailScreenProps> = ({
                 >
                   {/* Thumbnail */}
                   <View className="w-20 h-20 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden items-center justify-center mr-3 shrink-0">
-                    {product.imageUrl ? (
-                      <Image
-                        source={{ uri: product.imageUrl }}
-                        className="w-full h-full"
-                        resizeMode="contain"
-                      />
-                    ) : (
-                      <MaterialIcon name="inventory-2" size={24} color="#94a3b8" />
-                    )}
+                    <SafeImage
+                      sourceUrl={product.imageUrl}
+                      className="w-full h-full"
+                      resizeMode="contain"
+                      fallback={<MaterialIcon name="inventory-2" size={24} color="#94a3b8" />}
+                    />
                   </View>
 
                   {/* Details */}

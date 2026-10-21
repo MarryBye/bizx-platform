@@ -9,6 +9,7 @@ import {
   ActivityIndicator
 } from 'react-native';
 import { MaterialIcon } from '../components/MaterialIcon';
+import { SafeImage } from '../components/SafeImage';
 import { useMobileStoresStore } from '../store/useMobileStoresStore';
 import type { Store } from '@bizx/common-types';
 
@@ -130,17 +131,16 @@ export const StoresScreen: React.FC<StoresScreenProps> = ({ onSelectStore }) => 
             >
               {/* Store Banner */}
               <View className="w-full h-36 bg-slate-800 relative justify-end">
-                {store.bannerUrl ? (
-                  <Image
-                    source={{ uri: store.bannerUrl }}
-                    className="w-full h-full absolute inset-0"
-                    resizeMode="cover"
-                  />
-                ) : (
-                  <View className="w-full h-full bg-slate-800 absolute inset-0 items-center justify-center">
-                    <MaterialIcon name="storefront" size={48} color="#475569" />
-                  </View>
-                )}
+                <SafeImage
+                  sourceUrl={store.bannerUrl}
+                  className="w-full h-full absolute inset-0"
+                  resizeMode="cover"
+                  fallback={
+                    <View className="w-full h-full bg-slate-800 absolute inset-0 items-center justify-center">
+                      <MaterialIcon name="storefront" size={48} color="#475569" />
+                    </View>
+                  }
+                />
                 <View className="w-full h-full bg-black/25 absolute inset-0" />
 
                 {/* Status Badge */}
@@ -170,15 +170,12 @@ export const StoresScreen: React.FC<StoresScreenProps> = ({ onSelectStore }) => 
 
                   {/* Logo thumbnail */}
                   <View className="w-12 h-12 rounded-xl bg-white border border-slate-200 overflow-hidden items-center justify-center -mt-8 shadow-sm">
-                    {store.logoUrl ? (
-                      <Image
-                        source={{ uri: store.logoUrl }}
-                        className="w-full h-full"
-                        resizeMode="cover"
-                      />
-                    ) : (
-                      <MaterialIcon name="storefront" size={24} color="#2563eb" />
-                    )}
+                    <SafeImage
+                      sourceUrl={store.logoUrl}
+                      className="w-full h-full"
+                      resizeMode="cover"
+                      fallback={<MaterialIcon name="storefront" size={24} color="#2563eb" />}
+                    />
                   </View>
                 </View>
 

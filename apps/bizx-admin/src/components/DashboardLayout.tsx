@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAuthStore } from '../store/useAuthStore';
 import { useBusinessStore } from '../store/useBusinessStore';
-import { Button, AvatarPlaceholder, StorePlaceholder, Select } from '@bizx/ui';
+import { Button, Select } from '@bizx/ui';
 import {
   BarChart3,
   Package,
@@ -10,8 +10,7 @@ import {
   Users,
   CreditCard,
   LogOut,
-  Store,
-  ChevronDown,
+  User as UserIcon,
   Menu,
   X
 } from 'lucide-react';
@@ -19,13 +18,15 @@ import { AnalyticsView } from '../views/AnalyticsView';
 import { ProductsView } from '../views/ProductsView';
 import { OrdersView } from '../views/OrdersView';
 import { StoreSettingsView } from '../views/StoreSettingsView';
+import { ProfileView } from '../views/ProfileView';
 import { PlaceholderView } from '../views/PlaceholderView';
+import { resolveMediaUrl } from '../lib/media';
 
-type TabType = 'analytics' | 'products' | 'orders' | 'settings' | 'staff' | 'payouts';
+type TabType = 'analytics' | 'products' | 'orders' | 'settings' | 'profile' | 'staff' | 'payouts';
 
 export const DashboardLayout: React.FC = () => {
   const { user, logout } = useAuthStore();
-  const { stores, activeStore, activeStoreId, setActiveStore } = useBusinessStore();
+  const { stores, activeStoreId, setActiveStore } = useBusinessStore();
   const [currentTab, setCurrentTab] = useState<TabType>('analytics');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -34,19 +35,31 @@ export const DashboardLayout: React.FC = () => {
     { id: 'products' as const, label: 'Товари та склад', icon: Package },
     { id: 'orders' as const, label: 'Замовлення', icon: ShoppingBag },
     { id: 'settings' as const, label: 'Магазин та медіа', icon: Settings },
+    { id: 'profile' as const, label: 'Мій профіль', icon: UserIcon },
     { id: 'staff' as const, label: 'Персонал (Скоро)', icon: Users, isStub: true },
     { id: 'payouts' as const, label: 'Виплати (Скоро)', icon: CreditCard, isStub: true }
   ];
+
+  const getInitials = (userName: string) => {
+    return userName
+      .split(' ')
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((w) => w[0].toUpperCase())
+      .join('');
+  };
+
+  const avatarUrl = resolveMediaUrl(user?.avatarUrl);
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row text-slate-900">
       {/* Mobile Top Header */}
       <div className="md:hidden flex items-center justify-between p-4 bg-white border-b border-slate-200">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold">
+        <div className="flex items-center gap-2.5">
+          <div className="w-7 h-7 bg-slate-900 text-white rounded flex items-center justify-center font-bold text-xs tracking-wider">
             B
           </div>
-          <span className="font-bold text-sm">BizX Portal</span>
+          <span className="font-extrabold text-base tracking-tight text-slate-900">BizX</span>
         </div>
         <button
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -63,15 +76,12 @@ export const DashboardLayout: React.FC = () => {
         }`}
       >
         <div className="p-4 space-y-6">
-          {/* Logo / Title */}
+          {/* Minimalist Logo */}
           <div className="hidden md:flex items-center gap-2.5 px-2">
-            <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-md shadow-blue-500/20 font-black">
+            <div className="w-7 h-7 bg-slate-900 text-white rounded flex items-center justify-center font-bold text-xs tracking-wider">
               B
             </div>
-            <div>
-              <p className="font-bold text-sm tracking-tight text-slate-900">BizX Business</p>
-              <p className="text-[11px] text-slate-400">Кабінет партнера</p>
-            </div>
+            <span className="font-extrabold text-base tracking-tight text-slate-900">BizX</span>
           </div>
 
           {/* Active Store Switcher */}
@@ -93,7 +103,7 @@ export const DashboardLayout: React.FC = () => {
             )}
           </div>
 
-          {/* Navigation Links */}
+          {/* Navigation Links — Metro Active Style */}
           <nav className="space-y-1">
             {navItems.map((item) => {
               const Icon = item.icon;
@@ -105,9 +115,9 @@ export const DashboardLayout: React.FC = () => {
                     setCurrentTab(item.id);
                     setIsMobileMenuOpen(false);
                   }}
-                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-semibold transition-all ${
                     isActive
-                      ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/20'
+                      ? 'bg-slate-900 text-white shadow-sm'
                       : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                   }`}
                 >
@@ -116,9 +126,11 @@ export const DashboardLayout: React.FC = () => {
                     <span>{item.label}</span>
                   </div>
                   {item.isStub && (
-                    <span className={`text-[9px] px-1.5 py-0.5 rounded uppercase font-bold ${
-                      isActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-400'
-                    }`}>
+                    <span
+                      className={`text-[9px] px-1.5 py-0.5 rounded uppercase font-bold ${
+                        isActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-400'
+                      }`}
+                    >
                       Скоро
                     </span>
                   )}
@@ -130,19 +142,35 @@ export const DashboardLayout: React.FC = () => {
 
         {/* User Profile Badge & Logout */}
         <div className="p-4 border-t border-slate-100 bg-slate-50/50 space-y-3">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-slate-200 border overflow-hidden shrink-0 flex items-center justify-center">
-              {user?.avatarUrl ? (
-                <img src={user.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+          <button
+            type="button"
+            onClick={() => {
+              setCurrentTab('profile');
+              setIsMobileMenuOpen(false);
+            }}
+            className="w-full flex items-center gap-3 p-1.5 rounded-lg hover:bg-white text-left transition-colors group cursor-pointer"
+          >
+            <div className="w-9 h-9 rounded-full bg-slate-900 text-white border overflow-hidden shrink-0 flex items-center justify-center font-bold text-xs">
+              {avatarUrl ? (
+                <img
+                  src={avatarUrl}
+                  alt="Avatar"
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    (e.target as HTMLElement).style.display = 'none';
+                  }}
+                />
               ) : (
-                <AvatarPlaceholder className="w-full h-full" />
+                <span>{user ? getInitials(user.name) : 'U'}</span>
               )}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-bold text-slate-900 truncate">{user?.name || 'Партнер'}</p>
+              <p className="text-xs font-bold text-slate-900 truncate group-hover:text-blue-600 transition-colors">
+                {user?.name || 'Партнер'}
+              </p>
               <p className="text-[11px] text-slate-500 truncate">{user?.email}</p>
             </div>
-          </div>
+          </button>
 
           <Button
             variant="outline"
@@ -162,6 +190,7 @@ export const DashboardLayout: React.FC = () => {
           {currentTab === 'products' && <ProductsView />}
           {currentTab === 'orders' && <OrdersView />}
           {currentTab === 'settings' && <StoreSettingsView />}
+          {currentTab === 'profile' && <ProfileView />}
           {currentTab === 'staff' && (
             <PlaceholderView
               title="Персонал та ролі співробітників"

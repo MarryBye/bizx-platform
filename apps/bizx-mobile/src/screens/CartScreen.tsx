@@ -9,6 +9,7 @@ import {
   ActivityIndicator
 } from 'react-native';
 import { MaterialIcon } from '../components/MaterialIcon';
+import { SafeImage } from '../components/SafeImage';
 import { useCartStore } from '../store/useCartStore';
 import { useMobileAuthStore } from '../store/useMobileAuthStore';
 import { mobileApi } from '../lib/api';
@@ -169,15 +170,12 @@ export const CartScreen: React.FC<CartScreenProps> = ({
             className="bg-white border border-slate-200/90 rounded-2xl p-3 flex-row items-center shadow-sm mb-2"
           >
             <View className="w-14 h-14 rounded-xl bg-slate-100 border border-slate-200 items-center justify-center mr-3 overflow-hidden">
-              {item.product.imageUrl ? (
-                <Image
-                  source={{ uri: item.product.imageUrl }}
-                  className="w-full h-full"
-                  resizeMode="contain"
-                />
-              ) : (
-                <MaterialIcon name="inventory-2" size={22} color="#94a3b8" />
-              )}
+              <SafeImage
+                sourceUrl={item.product.imageUrl}
+                className="w-full h-full"
+                resizeMode="contain"
+                fallback={<MaterialIcon name="inventory-2" size={22} color="#94a3b8" />}
+              />
             </View>
 
             <View className="flex-1 pr-2">

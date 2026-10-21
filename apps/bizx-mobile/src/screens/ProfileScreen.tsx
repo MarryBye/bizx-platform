@@ -9,6 +9,7 @@ import {
   ActivityIndicator
 } from 'react-native';
 import { MaterialIcon } from '../components/MaterialIcon';
+import { SafeImage } from '../components/SafeImage';
 import { useMobileAuthStore } from '../store/useMobileAuthStore';
 
 export const ProfileScreen: React.FC = () => {
@@ -46,11 +47,12 @@ export const ProfileScreen: React.FC = () => {
         <View className="px-5 mt-3">
           <View className="bg-white rounded-3xl p-5 border border-slate-200/90 shadow-sm items-center">
             <View className="w-20 h-20 rounded-full bg-blue-50 border-2 border-white shadow-sm overflow-hidden items-center justify-center mb-3">
-              {user.avatarUrl ? (
-                <Image source={{ uri: user.avatarUrl }} className="w-full h-full" resizeMode="cover" />
-              ) : (
-                <MaterialIcon name="person" size={40} color="#2563eb" />
-              )}
+              <SafeImage
+                sourceUrl={user.avatarUrl}
+                className="w-full h-full"
+                resizeMode="cover"
+                fallback={<MaterialIcon name="person" size={40} color="#2563eb" />}
+              />
             </View>
 
             <Text className="text-lg font-black text-slate-900">{user.name}</Text>
