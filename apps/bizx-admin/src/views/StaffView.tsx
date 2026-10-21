@@ -7,7 +7,7 @@ import { Button, Input, Modal, Select } from '@bizx/ui';
 import {
   Users,
   UserPlus,
-  Trash2,
+  Archive,
   ShieldCheck,
   Briefcase,
   AlertCircle,
@@ -273,10 +273,10 @@ export const StaffView: React.FC = () => {
                         {!isOwner && !isCurrent ? (
                           <button
                             onClick={() => setDeletingMember(member)}
-                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                            title="Видалити співробітника"
+                            className="p-1.5 text-slate-400 hover:text-amber-700 hover:bg-amber-50 rounded-lg transition-colors"
+                            title="Архівувати співробітника"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Archive className="w-4 h-4" />
                           </button>
                         ) : (
                           <span className="text-[10px] text-slate-400 font-medium italic">
@@ -384,17 +384,17 @@ export const StaffView: React.FC = () => {
         </form>
       </Modal>
 
-      {/* Delete Confirmation Modal */}
+      {/* Archive Confirmation Modal */}
       <Modal
         isOpen={!!deletingMember}
         onClose={() => setDeletingMember(null)}
-        title="Вилучити співробітника з магазину"
+        title="Архівувати співробітника магазину"
       >
         <div className="space-y-4">
           <p className="text-xs text-slate-600 leading-relaxed">
-            Ви впевнені, що бажаєте вилучити{' '}
+            Ви впевнені, що бажаєте архівувати{' '}
             <strong className="text-slate-900">{deletingMember?.userName}</strong> (
-            {deletingMember?.userEmail}) з команди магазину? Користувач втратить доступ до панелі замовлень.
+            {deletingMember?.userEmail})? Доступ користувача до кабінету замовлень буде відкликано, але історія його дій та замовлень збережеться в базі даних.
           </p>
 
           <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
@@ -412,9 +412,9 @@ export const StaffView: React.FC = () => {
               size="sm"
               disabled={isDeleting}
               onClick={handleRemoveMember}
-              className="bg-red-600 hover:bg-red-700 text-white text-xs font-semibold"
+              className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold"
             >
-              {isDeleting ? 'Вилучення...' : 'Вилучити'}
+              {isDeleting ? 'Архівація...' : 'Архівувати'}
             </Button>
           </div>
         </div>

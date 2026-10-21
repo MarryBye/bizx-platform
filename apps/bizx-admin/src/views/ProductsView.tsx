@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useBusinessStore } from '../store/useBusinessStore';
 import { Button, Input, Textarea, Card, CardContent, Badge, Modal, ProductPlaceholder, Select } from '@bizx/ui';
-import { Plus, Search, Trash2, Image as ImageIcon, Upload, AlertCircle, Pencil } from 'lucide-react';
+import { Plus, Search, Archive, Image as ImageIcon, Upload, AlertCircle, Pencil } from 'lucide-react';
 import { resolveMediaUrl } from '../lib/media';
 import type { Product } from '@bizx/common-types';
 
@@ -265,15 +265,15 @@ export const ProductsView: React.FC = () => {
                       <Button
                         variant="outline"
                         size="sm"
-                        className="text-red-600 hover:bg-red-50 hover:border-red-200"
+                        className="text-slate-500 hover:text-amber-700 hover:bg-amber-50 hover:border-amber-200"
                         onClick={() => {
-                          if (confirm(`Видалити товар "${p.name}"?`)) {
+                          if (confirm(`Архівувати товар "${p.name}"? Товар буде сховано з каталогу, але збережено в системному архіві.`)) {
                             void deleteProduct(p.id);
                           }
                         }}
-                        title="Видалити товар"
+                        title="Архівувати товар"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Archive className="w-3.5 h-3.5" />
                       </Button>
                     </div>
                   </div>
