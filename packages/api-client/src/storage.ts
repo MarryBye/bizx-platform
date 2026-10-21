@@ -55,7 +55,12 @@ export class StorageClientModule {
    */
   resolveMediaUrl(urlOrPath: string | null | undefined): string | null {
     if (!urlOrPath) return null;
-    if (urlOrPath.startsWith('http://') || urlOrPath.startsWith('https://')) {
+    if (
+      urlOrPath.startsWith('http://') ||
+      urlOrPath.startsWith('https://') ||
+      urlOrPath.startsWith('blob:') ||
+      urlOrPath.startsWith('data:')
+    ) {
       return urlOrPath;
     }
     const cleanPath = urlOrPath.startsWith('/') ? urlOrPath : `/${urlOrPath}`;
