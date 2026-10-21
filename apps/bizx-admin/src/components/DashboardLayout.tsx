@@ -29,6 +29,7 @@ export const DashboardLayout: React.FC = () => {
   const { stores, activeStoreId, setActiveStore } = useBusinessStore();
   const [currentTab, setCurrentTab] = useState<TabType>('analytics');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [avatarError, setAvatarError] = useState(false);
 
   const merchantNavItems = [
     { id: 'analytics' as const, label: 'Аналітика', icon: BarChart3 },
@@ -155,14 +156,12 @@ export const DashboardLayout: React.FC = () => {
           >
             <div className="flex items-center gap-2.5 min-w-0">
               <div className="w-8 h-8 rounded-full bg-slate-900 text-white border overflow-hidden shrink-0 flex items-center justify-center font-bold text-xs">
-                {avatarUrl ? (
+                {avatarUrl && !avatarError ? (
                   <img
                     src={avatarUrl}
                     alt="Avatar"
                     className="w-full h-full object-cover"
-                    onError={(e) => {
-                      (e.target as HTMLElement).style.display = 'none';
-                    }}
+                    onError={() => setAvatarError(true)}
                   />
                 ) : (
                   <span>{user ? getInitials(user.name) : 'U'}</span>

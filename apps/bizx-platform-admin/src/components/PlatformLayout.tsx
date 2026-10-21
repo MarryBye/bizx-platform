@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { platformApi } from '../lib/api';
 import type { UserProfile } from '@bizx/common-types';
 import {
   BarChart3,
@@ -29,6 +30,11 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({
   children
 }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [avatarError, setAvatarError] = useState(false);
+
+  const resolvedAvatar = currentUser?.avatarUrl
+    ? platformApi.storage.resolveMediaUrl(currentUser.avatarUrl)
+    : null;
 
   const navItems = [
     { id: 'metrics' as const, label: 'Огляд та метрики', icon: BarChart3 },
@@ -150,8 +156,17 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({
         <div className="p-4 border-t border-slate-200 bg-slate-50/50">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-8 h-8 rounded-full bg-slate-900 text-white font-bold flex items-center justify-center text-xs shrink-0">
-                {getInitials(currentUser?.name)}
+              <div className="w-8 h-8 rounded-full bg-slate-900 text-white font-bold flex items-center justify-center text-xs shrink-0 overflow-hidden">
+                {resolvedAvatar && !avatarError ? (
+                  <img
+                    src={resolvedAvatar}
+                    alt={currentUser?.name || ''}
+                    className="w-full h-full object-cover"
+                    onError={() => setAvatarError(true)}
+                  />
+                ) : (
+                  getInitials(currentUser?.name)
+                )}
               </div>
               <div className="min-w-0">
                 <div className="text-xs font-bold text-slate-900 truncate">
