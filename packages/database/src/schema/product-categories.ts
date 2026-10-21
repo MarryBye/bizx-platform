@@ -9,6 +9,7 @@ export const productCategories = pgTable('product_categories', {
     .notNull(),
   name: varchar('name', { length: 100 }).notNull(),
   sortOrder: integer('sort_order').default(0).notNull(),
+  archivedAt: timestamp('archived_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull()
 });
 

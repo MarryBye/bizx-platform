@@ -15,5 +15,7 @@ export {
   ilike,
   count,
   sum,
-  inArray
+  inArray,
+  isNull,
+  isNotNull
 } from 'drizzle-orm';
