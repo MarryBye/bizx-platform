@@ -3,19 +3,19 @@ import {
   View,
   Text,
   ScrollView,
-  TouchableOpacity,
-  Image,
-  ActivityIndicator
+  TouchableOpacity
 } from 'react-native';
+import { MaterialIcon } from '../components/MaterialIcon';
 import { useMobileStoresStore } from '../store/useMobileStoresStore';
 import { useMobileAuthStore } from '../store/useMobileAuthStore';
 
 interface OrdersScreenProps {
-  onGoToProfile: () => void;
+  onGoToProfile?: () => void;
+  onExploreStores?: () => void;
 }
 
-export const OrdersScreen: React.FC<OrdersScreenProps> = ({ onGoToProfile }) => {
-  const { myOrders, fetchMyOrders, isLoading } = useMobileStoresStore();
+export const OrdersScreen: React.FC<OrdersScreenProps> = ({ onGoToProfile, onExploreStores }) => {
+  const { myOrders, fetchMyOrders } = useMobileStoresStore();
   const { user } = useMobileAuthStore();
 
   useEffect(() => {
@@ -33,30 +33,29 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({ onGoToProfile }) => 
 
   const getStatusText = (status: string) => {
     switch (status) {
-      case 'paid':
-        return 'Оплачено';
       case 'confirmed':
         return 'Підтверджено';
+      case 'processing':
+        return 'Комплектується';
       case 'shipped':
-        return 'Відправлено';
+        return 'В дорозі';
       case 'delivered':
-        return 'Доставлено';
+        return 'Виконано';
       case 'cancelled':
         return 'Скасовано';
       case 'pending':
       default:
-        return 'В обробці';
+        return 'Очікує підтвердження';
     }
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'paid':
       case 'delivered':
-        return 'bg-emerald-100 text-emerald-700';
-      case 'confirmed':
+        return 'bg-emerald-100 text-emerald-800';
       case 'shipped':
-        return 'bg-blue-100 text-blue-700';
+      case 'confirmed':
+        return 'bg-blue-100 text-blue-800';
       case 'cancelled':
         return 'bg-red-100 text-red-700';
       case 'pending':
@@ -69,7 +68,9 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({ onGoToProfile }) => 
     return (
       <View className="flex-1 bg-slate-50 items-center justify-center p-6">
         <View className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm items-center w-full max-w-sm">
-          <Text className="text-4xl mb-3">📋</Text>
+          <View className="w-16 h-16 rounded-2xl bg-slate-100 items-center justify-center mb-4">
+            <MaterialIcon name="receipt-long" size={32} color="#94a3b8" />
+          </View>
           <Text className="text-lg font-black text-slate-900 mb-1">Історія покупок</Text>
           <Text className="text-xs text-slate-500 text-center mb-6 leading-5">
             Увійдіть у свій обліковий запис, щоб переглядати історію замовлень та відстежувати їхній статус
@@ -103,12 +104,12 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({ onGoToProfile }) => 
               className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-sm mb-3"
             >
               <View className="flex-row items-center justify-between border-b border-slate-100 pb-2.5">
-                <div>
+                <View>
                   <Text className="font-black text-slate-900 text-sm">{order.orderNumber}</Text>
                   <Text className="text-[11px] text-slate-400 mt-0.5">
                     {new Date(order.createdAt).toLocaleDateString('uk-UA')}
                   </Text>
-                </div>
+                </View>
 
                 <View className={`px-2.5 py-1 rounded-full ${getStatusColor(order.status)}`}>
                   <Text className="text-[10px] font-bold uppercase">{getStatusText(order.status)}</Text>
@@ -116,14 +117,14 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({ onGoToProfile }) => 
               </View>
 
               <View className="pt-3 flex-row items-center justify-between">
-                <div>
+                <View>
                   <Text className="text-xs font-semibold text-slate-700">
                     {order.storeName || 'Магазин BizX'}
                   </Text>
                   <Text className="text-[11px] text-slate-400">
                     {order.itemsCount} {order.itemsCount === 1 ? 'товар' : 'товари'}
                   </Text>
-                </div>
+                </View>
 
                 <Text className="text-base font-black text-slate-900">
                   {formatPrice(order.totalAmount)} ₴
@@ -133,11 +134,21 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({ onGoToProfile }) => 
           ))
         ) : (
           <View className="bg-white border border-dashed border-slate-300 rounded-2xl p-8 items-center justify-center">
-            <Text className="text-3xl mb-2">🛍️</Text>
+            <View className="w-12 h-12 rounded-xl bg-slate-100 items-center justify-center mb-2">
+              <MaterialIcon name="shopping-bag" size={24} color="#94a3b8" />
+            </View>
             <Text className="text-sm font-bold text-slate-700">Замовлень ще немає</Text>
-            <Text className="text-xs text-slate-400 mt-1 text-center">
+            <Text className="text-xs text-slate-400 mt-1 text-center mb-4">
               Зробіть першу покупку в каталозі закладів
             </Text>
+            {onExploreStores && (
+              <TouchableOpacity
+                onPress={onExploreStores}
+                className="bg-blue-600 px-4 py-2 rounded-xl items-center"
+              >
+                <Text className="text-white text-xs font-bold">Перейти до магазинів</Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
       </View>

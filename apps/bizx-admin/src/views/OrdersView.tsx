@@ -1,6 +1,6 @@
 import React from 'react';
 import { useBusinessStore } from '../store/useBusinessStore';
-import { Card, CardHeader, CardTitle, CardContent, Badge, Button } from '@bizx/ui';
+import { Card, CardContent, Badge, Select } from '@bizx/ui';
 import { ShoppingBag, Phone, MapPin, CheckCircle, Clock, Truck, XCircle, ChevronDown } from 'lucide-react';
 import type { OrderStatus, PaymentStatus } from '@bizx/common-types';
 
@@ -74,20 +74,21 @@ export const OrdersView: React.FC = () => {
                     </span>
                   </div>
 
-                  {/* Quick Action Selector */}
-                  <select
-                    value={order.status}
-                    onChange={(e) => {
-                      void updateOrderStatus(order.id, e.target.value as OrderStatus);
-                    }}
-                    className="h-9 px-3 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-                  >
-                    <option value="pending">Очікує</option>
-                    <option value="confirmed">Підтвердити</option>
-                    <option value="shipped">Відправити</option>
-                    <option value="delivered">Доставлено</option>
-                    <option value="cancelled">Скасувати</option>
-                  </select>
+                  <div className="w-36">
+                    <Select
+                      value={order.status}
+                      onChange={(val) => {
+                        void updateOrderStatus(order.id, val as OrderStatus);
+                      }}
+                      options={[
+                        { value: 'pending', label: 'Очікує' },
+                        { value: 'confirmed', label: 'Підтвердити' },
+                        { value: 'shipped', label: 'Відправити' },
+                        { value: 'delivered', label: 'Доставлено' },
+                        { value: 'cancelled', label: 'Скасувати' }
+                      ]}
+                    />
+                  </div>
                 </div>
               </div>
 

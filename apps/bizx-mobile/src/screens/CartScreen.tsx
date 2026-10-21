@@ -8,17 +8,28 @@ import {
   Image,
   ActivityIndicator
 } from 'react-native';
+import { MaterialIcon } from '../components/MaterialIcon';
 import { useCartStore } from '../store/useCartStore';
 import { useMobileAuthStore } from '../store/useMobileAuthStore';
 import { mobileApi } from '../lib/api';
 
 interface CartScreenProps {
-  onGoToStores: () => void;
-  onGoToOrders: () => void;
+  onGoToStores?: () => void;
+  onGoToOrders?: () => void;
+  onContinueShopping?: () => void;
+  onOrderSuccess?: () => void;
 }
 
-export const CartScreen: React.FC<CartScreenProps> = ({ onGoToStores, onGoToOrders }) => {
-  const { items, storeId, updateQuantity, removeFromCart, clearCart, getTotalAmount } =
+export const CartScreen: React.FC<CartScreenProps> = ({
+  onGoToStores,
+  onGoToOrders,
+  onContinueShopping,
+  onOrderSuccess
+}) => {
+  const handleStores = onGoToStores || onContinueShopping || (() => {});
+  const handleOrders = onGoToOrders || onOrderSuccess || (() => {});
+
+  const { items, storeId, updateQuantity, clearCart, getTotalAmount } =
     useCartStore();
   const { user } = useMobileAuthStore();
 
@@ -28,8 +39,8 @@ export const CartScreen: React.FC<CartScreenProps> = ({ onGoToStores, onGoToOrde
   const [notes, setNotes] = useState('');
 
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [createdOrderNumber, setCreatedOrderNumber] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [createdOrderNumber, setCreatedOrderNumber] = useState<string | null>(null);
 
   const formatPrice = (kopecks: number) => {
     return (kopecks / 100).toLocaleString('uk-UA', {
@@ -40,28 +51,29 @@ export const CartScreen: React.FC<CartScreenProps> = ({ onGoToStores, onGoToOrde
 
   const handleCheckout = async () => {
     if (!storeId || items.length === 0) return;
-    setErrorMessage(null);
-
-    if (!contactName.trim() || contactPhone.length < 5) {
-      setErrorMessage("Будь ласка, вкажіть контактне ім'я та телефон");
+    if (!contactName.trim() || !contactPhone.trim()) {
+      setErrorMessage('Вкажіть контактне ім’я та номер телефону');
       return;
     }
 
     setIsSubmitting(true);
+    setErrorMessage(null);
+
     try {
-      const res = await mobileApi.orders.createOrder({
+      const payload = {
         storeId,
         contactName,
         contactPhone,
-        deliveryAddress: deliveryAddress || undefined,
+        paymentMethod: 'card' as const,
+        deliveryAddress: deliveryAddress || 'Самовивіз',
         notes: notes || undefined,
-        paymentMethod: 'card',
-        items: items.map((i) => ({
-          productId: i.product.id,
-          quantity: i.quantity
+        items: items.map((item) => ({
+          productId: item.product.id,
+          quantity: item.quantity
         }))
-      });
+      };
 
+      const res = await mobileApi.orders.createOrder(payload);
       if (res.success && res.data) {
         setCreatedOrderNumber(res.data.orderNumber);
         clearCart();
@@ -81,8 +93,8 @@ export const CartScreen: React.FC<CartScreenProps> = ({ onGoToStores, onGoToOrde
     return (
       <View className="flex-1 bg-slate-50 items-center justify-center p-6">
         <View className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm items-center w-full max-w-sm">
-          <View className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 items-center justify-center mb-4">
-            <Text className="text-3xl">✓</Text>
+          <View className="w-16 h-16 rounded-full bg-emerald-50 items-center justify-center mb-4 border border-emerald-200">
+            <MaterialIcon name="check-circle-outline" size={38} color="#059669" />
           </View>
           <Text className="text-xl font-black text-slate-900 mb-1">Замовлення прийнято!</Text>
           <Text className="text-sm font-bold text-blue-600 mb-2">{createdOrderNumber}</Text>
@@ -93,7 +105,7 @@ export const CartScreen: React.FC<CartScreenProps> = ({ onGoToStores, onGoToOrde
           <TouchableOpacity
             onPress={() => {
               setCreatedOrderNumber(null);
-              onGoToOrders();
+              handleOrders();
             }}
             className="w-full bg-blue-600 py-3.5 rounded-2xl items-center shadow-md mb-2"
           >
@@ -103,7 +115,7 @@ export const CartScreen: React.FC<CartScreenProps> = ({ onGoToStores, onGoToOrde
           <TouchableOpacity
             onPress={() => {
               setCreatedOrderNumber(null);
-              onGoToStores();
+              handleStores();
             }}
             className="w-full bg-slate-100 py-3 rounded-2xl items-center"
           >
@@ -119,13 +131,15 @@ export const CartScreen: React.FC<CartScreenProps> = ({ onGoToStores, onGoToOrde
     return (
       <View className="flex-1 bg-slate-50 items-center justify-center p-6">
         <View className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm items-center w-full max-w-sm">
-          <Text className="text-4xl mb-3">🛒</Text>
+          <View className="w-16 h-16 rounded-2xl bg-slate-100 items-center justify-center mb-4">
+            <MaterialIcon name="remove-shopping-cart" size={32} color="#94a3b8" />
+          </View>
           <Text className="text-lg font-black text-slate-900 mb-1">Кошик порожній</Text>
           <Text className="text-xs text-slate-500 text-center mb-6 leading-5">
             Перейдіть до каталогу та оберіть потрібні товари для оформлення замовлення
           </Text>
           <TouchableOpacity
-            onPress={onGoToStores}
+            onPress={handleStores}
             className="bg-blue-600 px-6 py-3.5 rounded-2xl items-center shadow-md"
           >
             <Text className="text-white text-xs font-bold">Перейти до магазинів</Text>
@@ -162,7 +176,7 @@ export const CartScreen: React.FC<CartScreenProps> = ({ onGoToStores, onGoToOrde
                   resizeMode="contain"
                 />
               ) : (
-                <Text className="text-xl">📦</Text>
+                <MaterialIcon name="inventory-2" size={22} color="#94a3b8" />
               )}
             </View>
 
@@ -209,7 +223,7 @@ export const CartScreen: React.FC<CartScreenProps> = ({ onGoToStores, onGoToOrde
           )}
 
           <View className="space-y-1">
-            <Text className="text-[11px] font-semibold text-slate-600">Ім'я одержувача *</Text>
+            <Text className="text-[11px] font-semibold text-slate-600">Ім&apos;я одержувача *</Text>
             <TextInput
               value={contactName}
               onChangeText={setContactName}

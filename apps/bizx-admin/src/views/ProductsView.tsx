@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useBusinessStore } from '../store/useBusinessStore';
-import { Button, Input, Textarea, Card, CardHeader, CardTitle, CardContent, Badge, Modal, ProductPlaceholder } from '@bizx/ui';
+import { Button, Input, Textarea, Card, CardContent, Badge, Modal, ProductPlaceholder, Select } from '@bizx/ui';
 import { Plus, Search, Trash2, Image as ImageIcon, Upload, AlertCircle, Check } from 'lucide-react';
 
 export const ProductsView: React.FC = () => {
@@ -114,18 +114,17 @@ export const ProductsView: React.FC = () => {
             />
           </div>
 
-          <select
-            value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
-            className="h-10 px-3 rounded-md border border-input bg-background text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/20"
-          >
-            <option value="all">Усі категорії</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
+          <div className="w-full sm:w-56">
+            <Select
+              value={selectedCategory}
+              onChange={(val) => setSelectedCategory(val)}
+              options={[
+                { value: 'all', label: 'Усі категорії' },
+                ...categories.map((c) => ({ value: c.id, label: c.name }))
+              ]}
+              placeholder="Усі категорії"
+            />
+          </div>
         </div>
       </Card>
 
@@ -244,18 +243,15 @@ export const ProductsView: React.FC = () => {
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <label className="text-xs font-semibold text-slate-700">Категорія</label>
-              <select
+              <Select
                 value={categoryId}
-                onChange={(e) => setCategoryId(e.target.value)}
-                className="h-10 w-full px-3 rounded-md border border-input bg-background text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/20"
-              >
-                <option value="">Без категорії</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
+                onChange={(val) => setCategoryId(val)}
+                options={[
+                  { value: '', label: 'Без категорії' },
+                  ...categories.map((c) => ({ value: c.id, label: c.name }))
+                ]}
+                placeholder="Без категорії"
+              />
             </div>
 
             <div className="space-y-1">

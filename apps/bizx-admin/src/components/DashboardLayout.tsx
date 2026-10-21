@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAuthStore } from '../store/useAuthStore';
 import { useBusinessStore } from '../store/useBusinessStore';
-import { Button, AvatarPlaceholder, StorePlaceholder } from '@bizx/ui';
+import { Button, AvatarPlaceholder, StorePlaceholder, Select } from '@bizx/ui';
 import {
   BarChart3,
   Package,
@@ -80,20 +80,12 @@ export const DashboardLayout: React.FC = () => {
               Магазин
             </label>
             {stores.length > 0 ? (
-              <div className="relative">
-                <select
-                  value={activeStoreId || ''}
-                  onChange={(e) => setActiveStore(e.target.value)}
-                  className="w-full h-10 pl-3 pr-8 rounded-xl border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-800 appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500/20 cursor-pointer"
-                >
-                  {stores.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="w-4 h-4 text-slate-400 absolute right-2.5 top-3 pointer-events-none" />
-              </div>
+              <Select
+                value={activeStoreId || ''}
+                onChange={(val) => setActiveStore(val)}
+                options={stores.map((s) => ({ value: s.id, label: s.name }))}
+                placeholder="Оберіть магазин"
+              />
             ) : (
               <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-500">
                 Немає магазинів

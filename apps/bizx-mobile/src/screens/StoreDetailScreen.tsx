@@ -7,9 +7,10 @@ import {
   Image,
   ActivityIndicator
 } from 'react-native';
+import { MaterialIcon } from '../components/MaterialIcon';
 import { useMobileStoresStore } from '../store/useMobileStoresStore';
 import { useCartStore } from '../store/useCartStore';
-import type { Store, Product } from '@bizx/common-types';
+import type { Store } from '@bizx/common-types';
 
 interface StoreDetailScreenProps {
   store: Store;
@@ -64,7 +65,7 @@ export const StoreDetailScreen: React.FC<StoreDetailScreenProps> = ({
             />
           ) : (
             <View className="w-full h-full bg-slate-800 absolute inset-0 items-center justify-center">
-              <Text className="text-4xl">🏬</Text>
+              <MaterialIcon name="storefront" size={48} color="#475569" />
             </View>
           )}
           <View className="w-full h-full bg-black/40 absolute inset-0" />
@@ -73,9 +74,9 @@ export const StoreDetailScreen: React.FC<StoreDetailScreenProps> = ({
           <View className="flex-row items-center justify-between z-10">
             <TouchableOpacity
               onPress={onBack}
-              className="w-10 h-10 rounded-full bg-white/90 items-center justify-center shadow-md"
+              className="w-10 h-10 rounded-full bg-white/95 items-center justify-center shadow-md"
             >
-              <Text className="text-base font-black text-slate-800">←</Text>
+              <MaterialIcon name="arrow-back" size={20} color="#1e293b" />
             </TouchableOpacity>
 
             {totalCartCount > 0 && (
@@ -83,6 +84,7 @@ export const StoreDetailScreen: React.FC<StoreDetailScreenProps> = ({
                 onPress={onGoToCart}
                 className="bg-blue-600 px-3.5 py-2 rounded-full flex-row items-center gap-1.5 shadow-md"
               >
+                <MaterialIcon name="shopping-cart" size={14} color="#ffffff" />
                 <Text className="text-xs font-bold text-white">Кошик ({totalCartCount})</Text>
               </TouchableOpacity>
             )}
@@ -97,13 +99,16 @@ export const StoreDetailScreen: React.FC<StoreDetailScreenProps> = ({
                 {store.logoUrl ? (
                   <Image source={{ uri: store.logoUrl }} className="w-full h-full" resizeMode="cover" />
                 ) : (
-                  <Text className="text-xl">🏪</Text>
+                  <MaterialIcon name="storefront" size={24} color="#2563eb" />
                 )}
               </View>
 
               <View className="flex-1">
                 <Text className="text-xl font-black text-slate-900">{store.name}</Text>
-                <Text className="text-xs text-slate-500 font-medium">📍 {store.address || 'Україна'}</Text>
+                <View className="flex-row items-center gap-1 mt-0.5">
+                  <MaterialIcon name="place" size={13} color="#64748b" />
+                  <Text className="text-xs text-slate-500 font-medium">{store.address || 'Україна'}</Text>
+                </View>
               </View>
             </View>
 
@@ -114,9 +119,10 @@ export const StoreDetailScreen: React.FC<StoreDetailScreenProps> = ({
             )}
 
             {store.phone && (
-              <Text className="text-xs text-slate-400 mt-2 font-medium">
-                📞 Телефон для замовлень: {store.phone}
-              </Text>
+              <View className="flex-row items-center gap-1 mt-2.5">
+                <MaterialIcon name="phone" size={13} color="#64748b" />
+                <Text className="text-xs text-slate-500 font-medium">Телефон: {store.phone}</Text>
+              </View>
             )}
           </View>
         </View>
@@ -142,48 +148,39 @@ export const StoreDetailScreen: React.FC<StoreDetailScreenProps> = ({
                     selectedProductCategoryId === null ? 'text-white' : 'text-slate-700'
                   }`}
                 >
-                  Усі позиції
+                  Всі товари
                 </Text>
               </TouchableOpacity>
 
-              {storeCategories.map((c) => {
-                const isSelected = selectedProductCategoryId === c.id;
-                return (
-                  <TouchableOpacity
-                    key={c.id}
-                    onPress={() =>
-                      setSelectedProductCategoryId(isSelected ? null : c.id)
-                    }
-                    className={`px-3.5 py-1.5 rounded-xl border ${
-                      isSelected
-                        ? 'bg-blue-600 border-blue-600'
-                        : 'bg-white border-slate-200'
+              {storeCategories.map((c) => (
+                <TouchableOpacity
+                  key={c.id}
+                  onPress={() => setSelectedProductCategoryId(c.id)}
+                  className={`px-3.5 py-1.5 rounded-xl border ${
+                    selectedProductCategoryId === c.id
+                      ? 'bg-blue-600 border-blue-600'
+                      : 'bg-white border-slate-200'
+                  }`}
+                >
+                  <Text
+                    className={`text-xs font-bold ${
+                      selectedProductCategoryId === c.id ? 'text-white' : 'text-slate-700'
                     }`}
                   >
-                    <Text
-                      className={`text-xs font-bold ${
-                        isSelected ? 'text-white' : 'text-slate-700'
-                      }`}
-                    >
-                      {c.name}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
+                    {c.name}
+                  </Text>
+                </TouchableOpacity>
+              ))}
             </ScrollView>
           </View>
         )}
 
         {/* Products List */}
-        <View className="px-5 mt-2 space-y-3">
-          <Text className="text-base font-black text-slate-900 mb-2">
-            Асортимент товарів ({filteredProducts.length})
-          </Text>
-
-          {isLoading ? (
+        <View className="px-5 mt-2">
+          {isLoading && storeProducts.length === 0 ? (
             <View className="py-8 items-center justify-center">
               <ActivityIndicator size="small" color="#2563eb" />
-              <Text className="text-xs text-slate-400 mt-2 font-medium">Завантаження каталогу...</Text>
+              <Text className="text-xs text-slate-400 mt-2">Завантаження товарів...</Text>
             </View>
           ) : filteredProducts.length > 0 ? (
             filteredProducts.map((product) => {
@@ -203,7 +200,7 @@ export const StoreDetailScreen: React.FC<StoreDetailScreenProps> = ({
                         resizeMode="contain"
                       />
                     ) : (
-                      <Text className="text-2xl">📦</Text>
+                      <MaterialIcon name="inventory-2" size={24} color="#94a3b8" />
                     )}
                   </View>
 

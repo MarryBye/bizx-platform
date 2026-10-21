@@ -8,6 +8,7 @@ import {
   Image,
   ActivityIndicator
 } from 'react-native';
+import { MaterialIcon } from '../components/MaterialIcon';
 import { useMobileAuthStore } from '../store/useMobileAuthStore';
 
 export const ProfileScreen: React.FC = () => {
@@ -44,11 +45,11 @@ export const ProfileScreen: React.FC = () => {
         {/* User Card */}
         <View className="px-5 mt-3">
           <View className="bg-white rounded-3xl p-5 border border-slate-200/90 shadow-sm items-center">
-            <View className="w-20 h-20 rounded-full bg-blue-100 border-2 border-white shadow-sm overflow-hidden items-center justify-center mb-3">
+            <View className="w-20 h-20 rounded-full bg-blue-50 border-2 border-white shadow-sm overflow-hidden items-center justify-center mb-3">
               {user.avatarUrl ? (
                 <Image source={{ uri: user.avatarUrl }} className="w-full h-full" resizeMode="cover" />
               ) : (
-                <Text className="text-3xl">👤</Text>
+                <MaterialIcon name="person" size={40} color="#2563eb" />
               )}
             </View>
 
@@ -75,11 +76,13 @@ export const ProfileScreen: React.FC = () => {
             className="bg-white p-4 rounded-2xl border border-slate-200/80 flex-row items-center justify-between shadow-sm mb-2"
           >
             <View className="flex-row items-center gap-3">
-              <Text className="text-xl">❤️</Text>
-              <div>
+              <View className="w-9 h-9 rounded-xl bg-rose-50 items-center justify-center">
+                <MaterialIcon name="favorite-border" size={20} color="#e11d48" />
+              </View>
+              <View>
                 <Text className="text-sm font-bold text-slate-800">Обрані магазини</Text>
                 <Text className="text-[11px] text-slate-400">Список улюблених партнерів</Text>
-              </div>
+              </View>
             </View>
             <Text className="text-xs font-bold text-slate-400">Скоро →</Text>
           </TouchableOpacity>
@@ -89,11 +92,13 @@ export const ProfileScreen: React.FC = () => {
             className="bg-white p-4 rounded-2xl border border-slate-200/80 flex-row items-center justify-between shadow-sm mb-2"
           >
             <View className="flex-row items-center gap-3">
-              <Text className="text-xl">🔔</Text>
-              <div>
+              <View className="w-9 h-9 rounded-xl bg-blue-50 items-center justify-center">
+                <MaterialIcon name="notifications-none" size={20} color="#2563eb" />
+              </View>
+              <View>
                 <Text className="text-sm font-bold text-slate-800">Сповіщення</Text>
                 <Text className="text-[11px] text-slate-400">Акції, знижки та статус замовлень</Text>
-              </div>
+              </View>
             </View>
             <Text className="text-xs font-bold text-slate-400">Скоро →</Text>
           </TouchableOpacity>
@@ -103,11 +108,13 @@ export const ProfileScreen: React.FC = () => {
             className="bg-white p-4 rounded-2xl border border-slate-200/80 flex-row items-center justify-between shadow-sm mb-2"
           >
             <View className="flex-row items-center gap-3">
-              <Text className="text-xl">💳</Text>
-              <div>
+              <View className="w-9 h-9 rounded-xl bg-emerald-50 items-center justify-center">
+                <MaterialIcon name="credit-card" size={20} color="#059669" />
+              </View>
+              <View>
                 <Text className="text-sm font-bold text-slate-800">Збережені картки</Text>
                 <Text className="text-[11px] text-slate-400">Безпечна оплата в 1 клік</Text>
-              </div>
+              </View>
             </View>
             <Text className="text-xs font-bold text-slate-400">Скоро →</Text>
           </TouchableOpacity>
@@ -179,7 +186,7 @@ export const ProfileScreen: React.FC = () => {
 
           {isRegisterMode && (
             <View className="space-y-1">
-              <Text className="text-[11px] font-semibold text-slate-600">Ваше ім'я *</Text>
+              <Text className="text-[11px] font-semibold text-slate-600">Ваше ім&apos;я *</Text>
               <TextInput
                 value={name}
                 onChangeText={setName}

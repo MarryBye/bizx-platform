@@ -7,6 +7,7 @@ import {
   StatusBar,
   StyleSheet
 } from 'react-native';
+import { MaterialIcon } from './src/components/MaterialIcon';
 import './global.css';
 
 import { useMobileAuthStore } from './src/store/useMobileAuthStore';
@@ -28,42 +29,36 @@ export default function App() {
 
   const { init } = useMobileAuthStore();
   const { fetchInitialData, selectStore } = useMobileStoresStore();
-  const { getTotalCount } = useCartStore();
+  const { items } = useCartStore();
+
+  const cartItemCount = items.reduce((sum, item) => sum + item.quantity, 0);
 
   useEffect(() => {
-    void init();
-    void fetchInitialData();
-  }, [init, fetchInitialData]);
+    init();
+    fetchInitialData();
+  }, []);
 
   const handleSelectStore = (store: Store) => {
     setSelectedStore(store);
-    void selectStore(store);
+    selectStore(store);
   };
 
-  const handleBackFromStore = () => {
+  const handleBackToStores = () => {
     setSelectedStore(null);
-    void selectStore(null);
   };
-
-  const handleGoToCart = () => {
-    setSelectedStore(null);
-    setActiveTab('cart');
-  };
-
-  const cartItemCount = getTotalCount();
 
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
 
-      {/* Main Content Area */}
+      {/* Main Content View */}
       <View style={styles.content}>
         {activeTab === 'stores' && (
           selectedStore ? (
             <StoreDetailScreen
               store={selectedStore}
-              onBack={handleBackFromStore}
-              onGoToCart={handleGoToCart}
+              onBack={handleBackToStores}
+              onGoToCart={() => setActiveTab('cart')}
             />
           ) : (
             <StoresScreen onSelectStore={handleSelectStore} />
@@ -72,13 +67,21 @@ export default function App() {
 
         {activeTab === 'cart' && (
           <CartScreen
-            onGoToStores={() => setActiveTab('stores')}
-            onGoToOrders={() => setActiveTab('orders')}
+            onContinueShopping={() => {
+              setActiveTab('stores');
+              setSelectedStore(null);
+            }}
+            onOrderSuccess={() => setActiveTab('orders')}
           />
         )}
 
         {activeTab === 'orders' && (
-          <OrdersScreen onGoToProfile={() => setActiveTab('profile')} />
+          <OrdersScreen
+            onExploreStores={() => {
+              setActiveTab('stores');
+              setSelectedStore(null);
+            }}
+          />
         )}
 
         {activeTab === 'profile' && (
@@ -96,7 +99,11 @@ export default function App() {
             setActiveTab('stores');
           }}
         >
-          <Text style={styles.tabIcon}>🏪</Text>
+          <MaterialIcon
+            name="storefront"
+            size={22}
+            color={activeTab === 'stores' ? '#2563eb' : '#64748b'}
+          />
           <Text
             style={[
               styles.tabLabel,
@@ -113,7 +120,11 @@ export default function App() {
           onPress={() => setActiveTab('cart')}
         >
           <View style={styles.cartIconWrapper}>
-            <Text style={styles.tabIcon}>🛒</Text>
+            <MaterialIcon
+              name="shopping-cart"
+              size={22}
+              color={activeTab === 'cart' ? '#2563eb' : '#64748b'}
+            />
             {cartItemCount > 0 && (
               <View style={styles.badge}>
                 <Text style={styles.badgeText}>
@@ -137,7 +148,11 @@ export default function App() {
           activeOpacity={0.7}
           onPress={() => setActiveTab('orders')}
         >
-          <Text style={styles.tabIcon}>📦</Text>
+          <MaterialIcon
+            name="receipt-long"
+            size={22}
+            color={activeTab === 'orders' ? '#2563eb' : '#64748b'}
+          />
           <Text
             style={[
               styles.tabLabel,
@@ -153,7 +168,11 @@ export default function App() {
           activeOpacity={0.7}
           onPress={() => setActiveTab('profile')}
         >
-          <Text style={styles.tabIcon}>👤</Text>
+          <MaterialIcon
+            name="person-outline"
+            size={22}
+            color={activeTab === 'profile' ? '#2563eb' : '#64748b'}
+          />
           <Text
             style={[
               styles.tabLabel,
@@ -199,9 +218,6 @@ const styles = StyleSheet.create({
   },
   cartIconWrapper: {
     position: 'relative'
-  },
-  tabIcon: {
-    fontSize: 20
   },
   tabLabel: {
     fontSize: 11,
