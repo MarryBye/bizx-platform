@@ -1,4 +1,5 @@
 import React from 'react';
+import Link from 'next/link';
 import StorefrontOutlinedIcon from '@mui/icons-material/StorefrontOutlined';
 import ShoppingBagOutlinedIcon from '@mui/icons-material/ShoppingBagOutlined';
 import PhoneIphoneOutlinedIcon from '@mui/icons-material/PhoneIphoneOutlined';
@@ -38,8 +39,14 @@ export default function HomePage(): React.JSX.Element {
             </a>
           </nav>
 
-          {/* Single Clear Action */}
-          <div>
+          {/* Header Actions */}
+          <div className="flex items-center gap-3">
+            <Link
+              href="/account"
+              className="text-xs font-semibold text-slate-700 hover:text-slate-900 transition-colors"
+            >
+              Обліковий запис
+            </Link>
             <a
               href="http://localhost:3102"
               className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-md bg-slate-900 text-white hover:bg-slate-800 transition-colors shadow-sm"
