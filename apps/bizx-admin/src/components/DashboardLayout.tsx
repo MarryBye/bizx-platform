@@ -10,19 +10,21 @@ import {
   Users,
   CreditCard,
   LogOut,
-  User as UserIcon,
   Menu,
-  X
+  X,
+  ShieldAlert,
+  ExternalLink
 } from 'lucide-react';
 import { AnalyticsView } from '../views/AnalyticsView';
 import { ProductsView } from '../views/ProductsView';
 import { OrdersView } from '../views/OrdersView';
 import { StoreSettingsView } from '../views/StoreSettingsView';
-import { ProfileView } from '../views/ProfileView';
+import { StaffView } from '../views/StaffView';
+import { PlatformAdminView } from '../views/PlatformAdminView';
 import { PlaceholderView } from '../views/PlaceholderView';
 import { resolveMediaUrl } from '../lib/media';
 
-type TabType = 'analytics' | 'products' | 'orders' | 'settings' | 'profile' | 'staff' | 'payouts';
+type TabType = 'analytics' | 'products' | 'orders' | 'settings' | 'staff' | 'payouts' | 'platform';
 
 export const DashboardLayout: React.FC = () => {
   const { user, logout } = useAuthStore();
@@ -30,13 +32,12 @@ export const DashboardLayout: React.FC = () => {
   const [currentTab, setCurrentTab] = useState<TabType>('analytics');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  const navItems = [
+  const merchantNavItems = [
     { id: 'analytics' as const, label: 'Аналітика', icon: BarChart3 },
     { id: 'products' as const, label: 'Товари та склад', icon: Package },
     { id: 'orders' as const, label: 'Замовлення', icon: ShoppingBag },
     { id: 'settings' as const, label: 'Магазин та медіа', icon: Settings },
-    { id: 'profile' as const, label: 'Мій профіль', icon: UserIcon },
-    { id: 'staff' as const, label: 'Персонал (Скоро)', icon: Users, isStub: true },
+    { id: 'staff' as const, label: 'Персонал та ролі', icon: Users },
     { id: 'payouts' as const, label: 'Виплати (Скоро)', icon: CreditCard, isStub: true }
   ];
 
@@ -104,73 +105,114 @@ export const DashboardLayout: React.FC = () => {
           </div>
 
           {/* Navigation Links — Metro Active Style */}
-          <nav className="space-y-1">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = currentTab === item.id;
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => {
-                    setCurrentTab(item.id);
-                    setIsMobileMenuOpen(false);
-                  }}
-                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-semibold transition-all ${
-                    isActive
-                      ? 'bg-slate-900 text-white shadow-sm'
-                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+          <div className="space-y-1">
+            <div className="px-2 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+              Панель закладу
+            </div>
+            <nav className="space-y-0.5">
+              {merchantNavItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = currentTab === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => {
+                      setCurrentTab(item.id);
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-semibold transition-all ${
+                      isActive
+                        ? 'bg-slate-900 text-white shadow-sm'
+                        : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+                      <span>{item.label}</span>
+                    </div>
+                    {item.isStub && (
+                      <span
+                        className={`text-[9px] px-1.5 py-0.5 rounded uppercase font-bold ${
+                          isActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-400'
+                        }`}
+                      >
+                        Скоро
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </nav>
+
+            {/* Platform Operator Section */}
+            <div className="pt-4">
+              <div className="px-2 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                Штат BizX
+              </div>
+              <button
+                onClick={() => {
+                  setCurrentTab('platform');
+                  setIsMobileMenuOpen(false);
+                }}
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-semibold transition-all ${
+                  currentTab === 'platform'
+                    ? 'bg-slate-900 text-white shadow-sm'
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <ShieldAlert
+                    className={`w-4 h-4 ${currentTab === 'platform' ? 'text-emerald-400' : 'text-slate-400'}`}
+                  />
+                  <span>Оператор платформи</span>
+                </div>
+                <span
+                  className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase ${
+                    currentTab === 'platform'
+                      ? 'bg-emerald-500/20 text-emerald-300'
+                      : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                   }`}
                 >
-                  <div className="flex items-center gap-2.5">
-                    <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-slate-400'}`} />
-                    <span>{item.label}</span>
-                  </div>
-                  {item.isStub && (
-                    <span
-                      className={`text-[9px] px-1.5 py-0.5 rounded uppercase font-bold ${
-                        isActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-400'
-                      }`}
-                    >
-                      Скоро
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </nav>
+                  Live
+                </span>
+              </button>
+            </div>
+          </div>
         </div>
 
-        {/* User Profile Badge & Logout */}
+        {/* User Profile Badge & Central Account Link */}
         <div className="p-4 border-t border-slate-100 bg-slate-50/50 space-y-3">
-          <button
-            type="button"
-            onClick={() => {
-              setCurrentTab('profile');
-              setIsMobileMenuOpen(false);
-            }}
-            className="w-full flex items-center gap-3 p-1.5 rounded-lg hover:bg-white text-left transition-colors group cursor-pointer"
+          <a
+            href="http://localhost:3100/account"
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Керувати акаунтом у BizX Portal"
+            className="w-full flex items-center justify-between p-2 rounded-lg hover:bg-white border border-transparent hover:border-slate-200 text-left transition-colors group cursor-pointer"
           >
-            <div className="w-9 h-9 rounded-full bg-slate-900 text-white border overflow-hidden shrink-0 flex items-center justify-center font-bold text-xs">
-              {avatarUrl ? (
-                <img
-                  src={avatarUrl}
-                  alt="Avatar"
-                  className="w-full h-full object-cover"
-                  onError={(e) => {
-                    (e.target as HTMLElement).style.display = 'none';
-                  }}
-                />
-              ) : (
-                <span>{user ? getInitials(user.name) : 'U'}</span>
-              )}
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-full bg-slate-900 text-white border overflow-hidden shrink-0 flex items-center justify-center font-bold text-xs">
+                {avatarUrl ? (
+                  <img
+                    src={avatarUrl}
+                    alt="Avatar"
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      (e.target as HTMLElement).style.display = 'none';
+                    }}
+                  />
+                ) : (
+                  <span>{user ? getInitials(user.name) : 'U'}</span>
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-bold text-slate-900 truncate group-hover:text-slate-900">
+                  {user?.name || 'Партнер'}
+                </p>
+                <p className="text-[10px] text-slate-400 truncate">Профіль у BizX</p>
+              </div>
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-bold text-slate-900 truncate group-hover:text-blue-600 transition-colors">
-                {user?.name || 'Партнер'}
-              </p>
-              <p className="text-[11px] text-slate-500 truncate">{user?.email}</p>
-            </div>
-          </button>
+            <ExternalLink className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-700 shrink-0 ml-1" />
+          </a>
 
           <Button
             variant="outline"
@@ -190,14 +232,8 @@ export const DashboardLayout: React.FC = () => {
           {currentTab === 'products' && <ProductsView />}
           {currentTab === 'orders' && <OrdersView />}
           {currentTab === 'settings' && <StoreSettingsView />}
-          {currentTab === 'profile' && <ProfileView />}
-          {currentTab === 'staff' && (
-            <PlaceholderView
-              title="Персонал та ролі співробітників"
-              description="Керуйте доступом касирів, кур'єрів та менеджерів вашого магазину"
-              icon={Users}
-            />
-          )}
+          {currentTab === 'staff' && <StaffView />}
+          {currentTab === 'platform' && <PlatformAdminView />}
           {currentTab === 'payouts' && (
             <PlaceholderView
               title="Фінанси та виплати"
