@@ -10,6 +10,7 @@ export const ProfileView: React.FC = () => {
   const [name, setName] = useState(user?.name || '');
   const [phone, setPhone] = useState(user?.phone || '');
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [avatarError, setAvatarError] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ text: string; isError?: boolean } | null>(null);
 
@@ -124,14 +125,12 @@ export const ProfileView: React.FC = () => {
         <CardContent>
           <div className="flex items-center gap-5">
             <div className="w-20 h-20 rounded-full bg-slate-900 text-white border-2 border-white shadow-sm flex items-center justify-center text-xl font-bold overflow-hidden shrink-0">
-              {currentAvatarUrl ? (
+              {currentAvatarUrl && !avatarError ? (
                 <img
                   src={currentAvatarUrl}
                   alt={user.name}
                   className="w-full h-full object-cover"
-                  onError={(e) => {
-                    (e.target as HTMLElement).style.display = 'none';
-                  }}
+                  onError={() => setAvatarError(true)}
                 />
               ) : (
                 <span>{getInitials(user.name) || 'U'}</span>

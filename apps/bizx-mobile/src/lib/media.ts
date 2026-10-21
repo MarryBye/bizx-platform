@@ -12,11 +12,6 @@ export function resolveMobileMediaUrl(urlOrPath: string | null | undefined): str
   const trimmed = urlOrPath.trim();
   if (!trimmed) return null;
 
-  // React Native Image не рендерить SVG
-  if (trimmed.toLowerCase().endsWith('.svg') || trimmed.includes('/storage/defaults/')) {
-    return null;
-  }
-
   // Якщо це вже абсолютний URL
   if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
     return trimmed;

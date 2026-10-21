@@ -1,5 +1,5 @@
 import React from 'react';
-import Link from 'next/link';
+import { SiteHeader } from './components/SiteHeader';
 import StorefrontOutlinedIcon from '@mui/icons-material/StorefrontOutlined';
 import ShoppingBagOutlinedIcon from '@mui/icons-material/ShoppingBagOutlined';
 import PhoneIphoneOutlinedIcon from '@mui/icons-material/PhoneIphoneOutlined';
@@ -13,50 +13,7 @@ export default function HomePage(): React.JSX.Element {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 selection:bg-slate-900 selection:text-white">
       {/* Top Clean Minimalist Header */}
-      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-sm border-b border-slate-200">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
-          {/* Minimalist Logo */}
-          <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 bg-slate-900 text-white rounded flex items-center justify-center font-bold text-xs tracking-wider">
-              B
-            </div>
-            <span className="font-extrabold text-base tracking-tight text-slate-900">BizX</span>
-          </div>
-
-          {/* Business-oriented Navigation */}
-          <nav className="hidden md:flex items-center gap-7 text-xs font-semibold text-slate-600">
-            <a href="#features" className="hover:text-slate-900 transition-colors">
-              Можливості
-            </a>
-            <a href="#benefits" className="hover:text-slate-900 transition-colors">
-              Для бізнесу
-            </a>
-            <a href="#process" className="hover:text-slate-900 transition-colors">
-              Як це працює
-            </a>
-            <a href="#contacts" className="hover:text-slate-900 transition-colors">
-              Контакти
-            </a>
-          </nav>
-
-          {/* Header Actions */}
-          <div className="flex items-center gap-3">
-            <Link
-              href="/account"
-              className="text-xs font-semibold text-slate-700 hover:text-slate-900 transition-colors"
-            >
-              Обліковий запис
-            </Link>
-            <a
-              href="http://localhost:3102"
-              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-md bg-slate-900 text-white hover:bg-slate-800 transition-colors shadow-sm"
-            >
-              <span>Увійти в кабінет</span>
-              <ArrowForwardOutlinedIcon className="w-3.5 h-3.5" />
-            </a>
-          </div>
-        </div>
-      </header>
+      <SiteHeader />
 
       {/* Hero Section — Product Focus */}
       <section className="pt-16 pb-14 border-b border-slate-200 bg-white">
