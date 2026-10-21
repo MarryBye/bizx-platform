@@ -8,6 +8,7 @@ interface MobileAuthState {
   error: string | null;
   login: (dto: LoginDto) => Promise<boolean>;
   register: (dto: RegisterDto) => Promise<boolean>;
+  updateProfile: (dto: { name?: string; phone?: string }) => Promise<boolean>;
   logout: () => Promise<void>;
   init: () => Promise<void>;
 }
@@ -62,6 +63,23 @@ export const useMobileAuthStore = create<MobileAuthState>((set) => ({
       return false;
     } catch (err: any) {
       const message = err.data?.message || err.message || 'Помилка реєстрації';
+      set({ error: message, isLoading: false });
+      return false;
+    }
+  },
+
+  updateProfile: async (dto: { name?: string; phone?: string }) => {
+    set({ isLoading: true, error: null });
+    try {
+      const res = await mobileApi.auth.updateProfile(dto);
+      if (res.success && res.data) {
+        set({ user: res.data, isLoading: false });
+        return true;
+      }
+      set({ error: 'Не вдалося оновити профіль', isLoading: false });
+      return false;
+    } catch (err: any) {
+      const message = err.data?.message || err.message || 'Помилка оновлення профілю';
       set({ error: message, isLoading: false });
       return false;
     }

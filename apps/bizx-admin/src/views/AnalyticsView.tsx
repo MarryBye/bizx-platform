@@ -3,6 +3,15 @@ import { useBusinessStore } from '../store/useBusinessStore';
 import { Card, CardHeader, CardTitle, CardContent, Badge } from '@bizx/ui';
 import { DollarSign, ShoppingBag, TrendingUp, PackageCheck, Calendar } from 'lucide-react';
 
+const STATUS_LABELS: Record<string, string> = {
+  pending: 'Очікує',
+  confirmed: 'Підтверджено',
+  processing: 'Комплектується',
+  shipped: 'В дорозі',
+  delivered: 'Доставлено',
+  cancelled: 'Скасовано'
+};
+
 export const AnalyticsView: React.FC = () => {
   const { analytics, activeStore, products, isLoading } = useBusinessStore();
 
@@ -113,7 +122,7 @@ export const AnalyticsView: React.FC = () => {
                   <div key={status} className="flex items-center justify-between p-2.5 bg-slate-50 rounded-xl">
                     <div className="flex items-center gap-2">
                       <Badge variant={status === 'delivered' ? 'success' : status === 'paid' ? 'default' : 'secondary'}>
-                        {status}
+                        {STATUS_LABELS[status] || status}
                       </Badge>
                     </div>
                     <span className="text-sm font-bold text-slate-700">{count} зам.</span>

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAuthStore } from '../store/useAuthStore';
 import { useBusinessStore } from '../store/useBusinessStore';
-import { Button, AvatarPlaceholder, StorePlaceholder } from '@bizx/ui';
+import { Button, Select } from '@bizx/ui';
 import {
   BarChart3,
   Package,
@@ -10,43 +10,55 @@ import {
   Users,
   CreditCard,
   LogOut,
-  Store,
-  ChevronDown,
   Menu,
-  X
+  X,
+  ExternalLink
 } from 'lucide-react';
 import { AnalyticsView } from '../views/AnalyticsView';
 import { ProductsView } from '../views/ProductsView';
 import { OrdersView } from '../views/OrdersView';
 import { StoreSettingsView } from '../views/StoreSettingsView';
+import { StaffView } from '../views/StaffView';
 import { PlaceholderView } from '../views/PlaceholderView';
+import { resolveMediaUrl } from '../lib/media';
 
 type TabType = 'analytics' | 'products' | 'orders' | 'settings' | 'staff' | 'payouts';
 
 export const DashboardLayout: React.FC = () => {
   const { user, logout } = useAuthStore();
-  const { stores, activeStore, activeStoreId, setActiveStore } = useBusinessStore();
+  const { stores, activeStoreId, setActiveStore } = useBusinessStore();
   const [currentTab, setCurrentTab] = useState<TabType>('analytics');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  const navItems = [
+  const merchantNavItems = [
     { id: 'analytics' as const, label: 'Аналітика', icon: BarChart3 },
     { id: 'products' as const, label: 'Товари та склад', icon: Package },
     { id: 'orders' as const, label: 'Замовлення', icon: ShoppingBag },
     { id: 'settings' as const, label: 'Магазин та медіа', icon: Settings },
-    { id: 'staff' as const, label: 'Персонал (Скоро)', icon: Users, isStub: true },
+    { id: 'staff' as const, label: 'Персонал та ролі', icon: Users },
     { id: 'payouts' as const, label: 'Виплати (Скоро)', icon: CreditCard, isStub: true }
   ];
+
+  const getInitials = (userName: string) => {
+    return userName
+      .split(' ')
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((w) => w[0].toUpperCase())
+      .join('');
+  };
+
+  const avatarUrl = resolveMediaUrl(user?.avatarUrl);
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row text-slate-900">
       {/* Mobile Top Header */}
       <div className="md:hidden flex items-center justify-between p-4 bg-white border-b border-slate-200">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold">
+        <div className="flex items-center gap-2.5">
+          <div className="w-7 h-7 bg-slate-900 text-white rounded flex items-center justify-center font-bold text-xs tracking-wider">
             B
           </div>
-          <span className="font-bold text-sm">BizX Portal</span>
+          <span className="font-extrabold text-base tracking-tight text-slate-900">BizX</span>
         </div>
         <button
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -63,15 +75,12 @@ export const DashboardLayout: React.FC = () => {
         }`}
       >
         <div className="p-4 space-y-6">
-          {/* Logo / Title */}
+          {/* Minimalist Logo */}
           <div className="hidden md:flex items-center gap-2.5 px-2">
-            <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-md shadow-blue-500/20 font-black">
+            <div className="w-7 h-7 bg-slate-900 text-white rounded flex items-center justify-center font-bold text-xs tracking-wider">
               B
             </div>
-            <div>
-              <p className="font-bold text-sm tracking-tight text-slate-900">BizX Business</p>
-              <p className="text-[11px] text-slate-400">Кабінет партнера</p>
-            </div>
+            <span className="font-extrabold text-base tracking-tight text-slate-900">BizX</span>
           </div>
 
           {/* Active Store Switcher */}
@@ -80,20 +89,12 @@ export const DashboardLayout: React.FC = () => {
               Магазин
             </label>
             {stores.length > 0 ? (
-              <div className="relative">
-                <select
-                  value={activeStoreId || ''}
-                  onChange={(e) => setActiveStore(e.target.value)}
-                  className="w-full h-10 pl-3 pr-8 rounded-xl border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-800 appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500/20 cursor-pointer"
-                >
-                  {stores.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="w-4 h-4 text-slate-400 absolute right-2.5 top-3 pointer-events-none" />
-              </div>
+              <Select
+                value={activeStoreId || ''}
+                onChange={(val) => setActiveStore(val)}
+                options={stores.map((s) => ({ value: s.id, label: s.name }))}
+                placeholder="Оберіть магазин"
+              />
             ) : (
               <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-500">
                 Немає магазинів
@@ -101,56 +102,81 @@ export const DashboardLayout: React.FC = () => {
             )}
           </div>
 
-          {/* Navigation Links */}
-          <nav className="space-y-1">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = currentTab === item.id;
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => {
-                    setCurrentTab(item.id);
-                    setIsMobileMenuOpen(false);
-                  }}
-                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${
-                    isActive
-                      ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/20'
-                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-slate-400'}`} />
-                    <span>{item.label}</span>
-                  </div>
-                  {item.isStub && (
-                    <span className={`text-[9px] px-1.5 py-0.5 rounded uppercase font-bold ${
-                      isActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-400'
-                    }`}>
-                      Скоро
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </nav>
+          {/* Navigation Links — Metro Active Style */}
+          <div className="space-y-1">
+            <div className="px-2 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+              Панель закладу
+            </div>
+            <nav className="space-y-0.5">
+              {merchantNavItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = currentTab === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => {
+                      setCurrentTab(item.id);
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-semibold transition-all ${
+                      isActive
+                        ? 'bg-slate-900 text-white shadow-sm'
+                        : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+                      <span>{item.label}</span>
+                    </div>
+                    {item.isStub && (
+                      <span
+                        className={`text-[9px] px-1.5 py-0.5 rounded uppercase font-bold ${
+                          isActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-400'
+                        }`}
+                      >
+                        Скоро
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </nav>
+          </div>
         </div>
 
-        {/* User Profile Badge & Logout */}
+        {/* User Profile Badge & Central Account Link */}
         <div className="p-4 border-t border-slate-100 bg-slate-50/50 space-y-3">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-slate-200 border overflow-hidden shrink-0 flex items-center justify-center">
-              {user?.avatarUrl ? (
-                <img src={user.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
-              ) : (
-                <AvatarPlaceholder className="w-full h-full" />
-              )}
+          <a
+            href="http://localhost:3100/account"
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Керувати акаунтом у BizX Portal"
+            className="w-full flex items-center justify-between p-2 rounded-lg hover:bg-white border border-transparent hover:border-slate-200 text-left transition-colors group cursor-pointer"
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-full bg-slate-900 text-white border overflow-hidden shrink-0 flex items-center justify-center font-bold text-xs">
+                {avatarUrl ? (
+                  <img
+                    src={avatarUrl}
+                    alt="Avatar"
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      (e.target as HTMLElement).style.display = 'none';
+                    }}
+                  />
+                ) : (
+                  <span>{user ? getInitials(user.name) : 'U'}</span>
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-bold text-slate-900 truncate group-hover:text-slate-900">
+                  {user?.name || 'Партнер'}
+                </p>
+                <p className="text-[10px] text-slate-400 truncate">Профіль у BizX</p>
+              </div>
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-bold text-slate-900 truncate">{user?.name || 'Партнер'}</p>
-              <p className="text-[11px] text-slate-500 truncate">{user?.email}</p>
-            </div>
-          </div>
+            <ExternalLink className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-700 shrink-0 ml-1" />
+          </a>
 
           <Button
             variant="outline"
@@ -170,13 +196,7 @@ export const DashboardLayout: React.FC = () => {
           {currentTab === 'products' && <ProductsView />}
           {currentTab === 'orders' && <OrdersView />}
           {currentTab === 'settings' && <StoreSettingsView />}
-          {currentTab === 'staff' && (
-            <PlaceholderView
-              title="Персонал та ролі співробітників"
-              description="Керуйте доступом касирів, кур'єрів та менеджерів вашого магазину"
-              icon={Users}
-            />
-          )}
+          {currentTab === 'staff' && <StaffView />}
           {currentTab === 'payouts' && (
             <PlaceholderView
               title="Фінанси та виплати"
