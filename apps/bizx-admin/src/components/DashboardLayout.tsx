@@ -12,7 +12,6 @@ import {
   LogOut,
   Menu,
   X,
-  ShieldAlert,
   ExternalLink
 } from 'lucide-react';
 import { AnalyticsView } from '../views/AnalyticsView';
@@ -20,11 +19,10 @@ import { ProductsView } from '../views/ProductsView';
 import { OrdersView } from '../views/OrdersView';
 import { StoreSettingsView } from '../views/StoreSettingsView';
 import { StaffView } from '../views/StaffView';
-import { PlatformAdminView } from '../views/PlatformAdminView';
 import { PlaceholderView } from '../views/PlaceholderView';
 import { resolveMediaUrl } from '../lib/media';
 
-type TabType = 'analytics' | 'products' | 'orders' | 'settings' | 'staff' | 'payouts' | 'platform';
+type TabType = 'analytics' | 'products' | 'orders' | 'settings' | 'staff' | 'payouts';
 
 export const DashboardLayout: React.FC = () => {
   const { user, logout } = useAuthStore();
@@ -143,40 +141,6 @@ export const DashboardLayout: React.FC = () => {
                 );
               })}
             </nav>
-
-            {/* Platform Operator Section */}
-            <div className="pt-4">
-              <div className="px-2 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                Штат BizX
-              </div>
-              <button
-                onClick={() => {
-                  setCurrentTab('platform');
-                  setIsMobileMenuOpen(false);
-                }}
-                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-semibold transition-all ${
-                  currentTab === 'platform'
-                    ? 'bg-slate-900 text-white shadow-sm'
-                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <ShieldAlert
-                    className={`w-4 h-4 ${currentTab === 'platform' ? 'text-emerald-400' : 'text-slate-400'}`}
-                  />
-                  <span>Оператор платформи</span>
-                </div>
-                <span
-                  className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase ${
-                    currentTab === 'platform'
-                      ? 'bg-emerald-500/20 text-emerald-300'
-                      : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                  }`}
-                >
-                  Live
-                </span>
-              </button>
-            </div>
           </div>
         </div>
 
@@ -233,7 +197,6 @@ export const DashboardLayout: React.FC = () => {
           {currentTab === 'orders' && <OrdersView />}
           {currentTab === 'settings' && <StoreSettingsView />}
           {currentTab === 'staff' && <StaffView />}
-          {currentTab === 'platform' && <PlatformAdminView />}
           {currentTab === 'payouts' && (
             <PlaceholderView
               title="Фінанси та виплати"
