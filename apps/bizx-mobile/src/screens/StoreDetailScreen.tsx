@@ -4,7 +4,6 @@ import {
   Text,
   ScrollView,
   TouchableOpacity,
-  Image,
   ActivityIndicator
 } from 'react-native';
 import { MaterialIcon } from '../components/MaterialIcon';
@@ -64,7 +63,7 @@ export const StoreDetailScreen: React.FC<StoreDetailScreenProps> = ({
             resizeMode="cover"
             fallback={
               <View className="w-full h-full bg-slate-800 absolute inset-0 items-center justify-center">
-                <MaterialIcon name="storefront" size={48} color="#475569" />
+                <MaterialIcon name="storefront" size={44} color="#64748b" />
               </View>
             }
           />
@@ -74,15 +73,17 @@ export const StoreDetailScreen: React.FC<StoreDetailScreenProps> = ({
           <View className="flex-row items-center justify-between z-10">
             <TouchableOpacity
               onPress={onBack}
-              className="w-10 h-10 rounded-full bg-white/95 items-center justify-center shadow-md"
+              activeOpacity={0.8}
+              className="w-9 h-9 rounded-lg bg-white/95 items-center justify-center shadow-md border border-slate-200"
             >
-              <MaterialIcon name="arrow-back" size={20} color="#1e293b" />
+              <MaterialIcon name="arrow-back" size={18} color="#0f172a" />
             </TouchableOpacity>
 
             {totalCartCount > 0 && (
               <TouchableOpacity
                 onPress={onGoToCart}
-                className="bg-blue-600 px-3.5 py-2 rounded-full flex-row items-center gap-1.5 shadow-md"
+                activeOpacity={0.8}
+                className="bg-slate-900 px-3 py-1.5 rounded-lg flex-row items-center gap-1.5 shadow-md border border-slate-800"
               >
                 <MaterialIcon name="shopping-cart" size={14} color="#ffffff" />
                 <Text className="text-xs font-bold text-white">Кошик ({totalCartCount})</Text>
@@ -93,19 +94,19 @@ export const StoreDetailScreen: React.FC<StoreDetailScreenProps> = ({
 
         {/* Store Profile Card */}
         <View className="px-5 -mt-6">
-          <View className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-sm">
+          <View className="bg-white rounded-xl p-4 border border-slate-200 shadow-sm">
             <View className="flex-row items-center gap-3">
-              <View className="w-14 h-14 rounded-2xl bg-slate-100 border border-slate-200 overflow-hidden items-center justify-center">
+              <View className="w-14 h-14 rounded-lg bg-slate-100 border border-slate-200 overflow-hidden items-center justify-center">
                 <SafeImage
                   sourceUrl={store.logoUrl}
                   className="w-full h-full"
                   resizeMode="cover"
-                  fallback={<MaterialIcon name="storefront" size={24} color="#2563eb" />}
+                  fallback={<MaterialIcon name="storefront" size={24} color="#0f172a" />}
                 />
               </View>
 
               <View className="flex-1">
-                <Text className="text-xl font-black text-slate-900">{store.name}</Text>
+                <Text className="text-lg font-black text-slate-900">{store.name}</Text>
                 <View className="flex-row items-center gap-1 mt-0.5">
                   <MaterialIcon name="place" size={13} color="#64748b" />
                   <Text className="text-xs text-slate-500 font-medium">{store.address || 'Україна'}</Text>
@@ -130,17 +131,17 @@ export const StoreDetailScreen: React.FC<StoreDetailScreenProps> = ({
 
         {/* Product Category Filter Chips */}
         {storeCategories.length > 0 && (
-          <View className="my-4">
+          <View className="my-3.5">
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ paddingHorizontal: 20, gap: 8 }}
+              contentContainerStyle={{ paddingHorizontal: 20, gap: 6 }}
             >
               <TouchableOpacity
                 onPress={() => setSelectedProductCategoryId(null)}
-                className={`px-3.5 py-1.5 rounded-xl border ${
+                className={`px-3 py-1.5 rounded-lg border ${
                   selectedProductCategoryId === null
-                    ? 'bg-blue-600 border-blue-600'
+                    ? 'bg-slate-900 border-slate-900'
                     : 'bg-white border-slate-200'
                 }`}
               >
@@ -157,9 +158,9 @@ export const StoreDetailScreen: React.FC<StoreDetailScreenProps> = ({
                 <TouchableOpacity
                   key={c.id}
                   onPress={() => setSelectedProductCategoryId(c.id)}
-                  className={`px-3.5 py-1.5 rounded-xl border ${
+                  className={`px-3 py-1.5 rounded-lg border ${
                     selectedProductCategoryId === c.id
-                      ? 'bg-blue-600 border-blue-600'
+                      ? 'bg-slate-900 border-slate-900'
                       : 'bg-white border-slate-200'
                   }`}
                 >
@@ -180,7 +181,7 @@ export const StoreDetailScreen: React.FC<StoreDetailScreenProps> = ({
         <View className="px-5 mt-2">
           {isLoading && storeProducts.length === 0 ? (
             <View className="py-8 items-center justify-center">
-              <ActivityIndicator size="small" color="#2563eb" />
+              <ActivityIndicator size="small" color="#0f172a" />
               <Text className="text-xs text-slate-400 mt-2">Завантаження товарів...</Text>
             </View>
           ) : filteredProducts.length > 0 ? (
@@ -190,10 +191,10 @@ export const StoreDetailScreen: React.FC<StoreDetailScreenProps> = ({
               return (
                 <View
                   key={product.id}
-                  className="bg-white border border-slate-200/90 rounded-2xl p-3.5 flex-row items-center shadow-sm mb-3"
+                  className="bg-white border border-slate-200 rounded-xl p-3 flex-row items-center shadow-sm mb-3"
                 >
                   {/* Thumbnail */}
-                  <View className="w-20 h-20 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden items-center justify-center mr-3 shrink-0">
+                  <View className="w-18 h-18 rounded-lg bg-slate-100 border border-slate-200 overflow-hidden items-center justify-center mr-3 shrink-0">
                     <SafeImage
                       sourceUrl={product.imageUrl}
                       className="w-full h-full"
@@ -203,24 +204,24 @@ export const StoreDetailScreen: React.FC<StoreDetailScreenProps> = ({
                   </View>
 
                   {/* Details */}
-                  <View className="flex-1 pr-2 justify-between h-20">
-                    <div>
-                      <Text className="font-bold text-slate-900 text-sm" numberOfLines={1}>
+                  <View className="flex-1 pr-2 justify-between min-h-[4.5rem]">
+                    <View>
+                      <Text className="font-bold text-slate-900 text-xs" numberOfLines={1}>
                         {product.name}
                       </Text>
                       {product.description && (
-                        <Text className="text-xs text-slate-400 mt-0.5" numberOfLines={2}>
+                        <Text className="text-[11px] text-slate-400 mt-0.5" numberOfLines={2}>
                           {product.description}
                         </Text>
                       )}
-                    </div>
+                    </View>
 
-                    <View className="flex-row items-baseline gap-2">
-                      <Text className="text-base font-black text-slate-900">
+                    <View className="flex-row items-baseline gap-2 mt-1">
+                      <Text className="text-sm font-black text-slate-900">
                         {formatPrice(product.price)} ₴
                       </Text>
                       {product.oldPrice && (
-                        <Text className="text-xs text-slate-400 line-through">
+                        <Text className="text-[10px] text-slate-400 line-through">
                           {formatPrice(product.oldPrice)} ₴
                         </Text>
                       )}
@@ -230,8 +231,11 @@ export const StoreDetailScreen: React.FC<StoreDetailScreenProps> = ({
                   {/* Add to Cart Button */}
                   <TouchableOpacity
                     onPress={() => addToCart(product)}
-                    className={`px-3 py-2 rounded-xl flex-row items-center gap-1 ${
-                      inCartCount > 0 ? 'bg-emerald-600' : 'bg-blue-600'
+                    activeOpacity={0.8}
+                    className={`px-3 py-1.5 rounded-lg flex-row items-center gap-1 ${
+                      inCartCount > 0
+                        ? 'bg-emerald-600'
+                        : 'bg-slate-900'
                     }`}
                   >
                     <Text className="text-white text-xs font-bold">
@@ -242,7 +246,7 @@ export const StoreDetailScreen: React.FC<StoreDetailScreenProps> = ({
               );
             })
           ) : (
-            <View className="bg-white border border-dashed border-slate-300 rounded-2xl p-8 items-center justify-center">
+            <View className="bg-white border border-dashed border-slate-300 rounded-xl p-8 items-center justify-center">
               <Text className="text-sm font-bold text-slate-700">Товари відсутні</Text>
               <Text className="text-xs text-slate-400 mt-1">
                 У цій категорії ще немає доданих позицій

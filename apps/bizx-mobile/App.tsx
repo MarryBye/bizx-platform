@@ -102,7 +102,7 @@ export default function App() {
           <MaterialIcon
             name="storefront"
             size={22}
-            color={activeTab === 'stores' ? '#2563eb' : '#64748b'}
+            color={activeTab === 'stores' ? '#0f172a' : '#64748b'}
           />
           <Text
             style={[
@@ -123,7 +123,7 @@ export default function App() {
             <MaterialIcon
               name="shopping-cart"
               size={22}
-              color={activeTab === 'cart' ? '#2563eb' : '#64748b'}
+              color={activeTab === 'cart' ? '#0f172a' : '#64748b'}
             />
             {cartItemCount > 0 && (
               <View style={styles.badge}>
@@ -151,7 +151,7 @@ export default function App() {
           <MaterialIcon
             name="receipt-long"
             size={22}
-            color={activeTab === 'orders' ? '#2563eb' : '#64748b'}
+            color={activeTab === 'orders' ? '#0f172a' : '#64748b'}
           />
           <Text
             style={[
@@ -171,7 +171,7 @@ export default function App() {
           <MaterialIcon
             name="person-outline"
             size={22}
-            color={activeTab === 'profile' ? '#2563eb' : '#64748b'}
+            color={activeTab === 'profile' ? '#0f172a' : '#64748b'}
           />
           <Text
             style={[
@@ -226,7 +226,7 @@ const styles = StyleSheet.create({
     fontWeight: '500'
   },
   tabLabelActive: {
-    color: '#2563eb',
+    color: '#0f172a',
     fontWeight: '700'
   },
   badge: {

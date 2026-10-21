@@ -93,14 +93,14 @@ export const CartScreen: React.FC<CartScreenProps> = ({
   if (createdOrderNumber) {
     return (
       <View className="flex-1 bg-slate-50 items-center justify-center p-6">
-        <View className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm items-center w-full max-w-sm">
-          <View className="w-16 h-16 rounded-full bg-emerald-50 items-center justify-center mb-4 border border-emerald-200">
-            <MaterialIcon name="check-circle-outline" size={38} color="#059669" />
+        <View className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm items-center w-full max-w-sm">
+          <View className="w-14 h-14 rounded-full bg-emerald-50 items-center justify-center mb-4 border border-emerald-200">
+            <MaterialIcon name="check-circle-outline" size={32} color="#059669" />
           </View>
-          <Text className="text-xl font-black text-slate-900 mb-1">Замовлення прийнято!</Text>
-          <Text className="text-sm font-bold text-blue-600 mb-2">{createdOrderNumber}</Text>
+          <Text className="text-lg font-black text-slate-900 mb-1">Замовлення прийнято!</Text>
+          <Text className="text-xs font-bold text-slate-900 mb-2 font-mono">{createdOrderNumber}</Text>
           <Text className="text-xs text-slate-500 text-center mb-6 leading-5">
-            Дякуємо за покупку! Партнер отримав ваше замовлення та незабаром розпочне його збирання.
+            Дякуємо за покупку! Партнер отримав ваше замовлення та розпочав його обробку.
           </Text>
 
           <TouchableOpacity
@@ -108,9 +108,9 @@ export const CartScreen: React.FC<CartScreenProps> = ({
               setCreatedOrderNumber(null);
               handleOrders();
             }}
-            className="w-full bg-blue-600 py-3.5 rounded-2xl items-center shadow-md mb-2"
+            className="w-full bg-slate-900 py-3 rounded-lg items-center shadow-sm mb-2"
           >
-            <Text className="text-white text-sm font-bold">Переглянути замовлення</Text>
+            <Text className="text-white text-xs font-bold">Переглянути замовлення</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -118,7 +118,7 @@ export const CartScreen: React.FC<CartScreenProps> = ({
               setCreatedOrderNumber(null);
               handleStores();
             }}
-            className="w-full bg-slate-100 py-3 rounded-2xl items-center"
+            className="w-full bg-slate-100 py-2.5 rounded-lg items-center border border-slate-200"
           >
             <Text className="text-slate-600 text-xs font-semibold">Продовжити покупки</Text>
           </TouchableOpacity>
@@ -131,17 +131,17 @@ export const CartScreen: React.FC<CartScreenProps> = ({
   if (items.length === 0) {
     return (
       <View className="flex-1 bg-slate-50 items-center justify-center p-6">
-        <View className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm items-center w-full max-w-sm">
-          <View className="w-16 h-16 rounded-2xl bg-slate-100 items-center justify-center mb-4">
-            <MaterialIcon name="remove-shopping-cart" size={32} color="#94a3b8" />
+        <View className="bg-white p-8 rounded-xl border border-slate-200 shadow-sm items-center w-full max-w-sm">
+          <View className="w-14 h-14 rounded-xl bg-slate-100 items-center justify-center mb-4">
+            <MaterialIcon name="remove-shopping-cart" size={28} color="#94a3b8" />
           </View>
-          <Text className="text-lg font-black text-slate-900 mb-1">Кошик порожній</Text>
+          <Text className="text-base font-black text-slate-900 mb-1">Кошик порожній</Text>
           <Text className="text-xs text-slate-500 text-center mb-6 leading-5">
-            Перейдіть до каталогу та оберіть потрібні товари для оформлення замовлення
+            Перейдіть до каталогу та оберіть потрібні товари для замовлення
           </Text>
           <TouchableOpacity
             onPress={handleStores}
-            className="bg-blue-600 px-6 py-3.5 rounded-2xl items-center shadow-md"
+            className="bg-slate-900 px-5 py-2.5 rounded-lg items-center shadow-sm"
           >
             <Text className="text-white text-xs font-bold">Перейти до магазинів</Text>
           </TouchableOpacity>
@@ -156,7 +156,7 @@ export const CartScreen: React.FC<CartScreenProps> = ({
     <ScrollView className="flex-1 bg-slate-50" contentContainerStyle={{ paddingBottom: 120 }}>
       {/* Header */}
       <View className="px-5 pt-4 pb-2">
-        <Text className="text-xs font-bold text-blue-600 uppercase tracking-wider">
+        <Text className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
           Оформлення покупки
         </Text>
         <Text className="text-2xl font-black text-slate-900 mt-0.5">Мій кошик</Text>
@@ -167,9 +167,9 @@ export const CartScreen: React.FC<CartScreenProps> = ({
         {items.map((item) => (
           <View
             key={item.product.id}
-            className="bg-white border border-slate-200/90 rounded-2xl p-3 flex-row items-center shadow-sm mb-2"
+            className="bg-white border border-slate-200 rounded-xl p-3 flex-row items-center shadow-sm mb-2"
           >
-            <View className="w-14 h-14 rounded-xl bg-slate-100 border border-slate-200 items-center justify-center mr-3 overflow-hidden">
+            <View className="w-14 h-14 rounded-lg bg-slate-100 border border-slate-200 items-center justify-center mr-3 overflow-hidden">
               <SafeImage
                 sourceUrl={item.product.imageUrl}
                 className="w-full h-full"
@@ -188,17 +188,17 @@ export const CartScreen: React.FC<CartScreenProps> = ({
             </View>
 
             {/* Quantity Controls */}
-            <View className="flex-row items-center gap-2 bg-slate-100 rounded-xl p-1">
+            <View className="flex-row items-center gap-1.5 bg-slate-100 rounded-lg p-1 border border-slate-200">
               <TouchableOpacity
                 onPress={() => updateQuantity(item.product.id, -1)}
-                className="w-7 h-7 bg-white rounded-lg items-center justify-center border border-slate-200"
+                className="w-6 h-6 bg-white rounded items-center justify-center border border-slate-200"
               >
                 <Text className="text-slate-700 font-black text-xs">-</Text>
               </TouchableOpacity>
               <Text className="text-xs font-bold text-slate-900 px-1">{item.quantity}</Text>
               <TouchableOpacity
                 onPress={() => updateQuantity(item.product.id, 1)}
-                className="w-7 h-7 bg-white rounded-lg items-center justify-center border border-slate-200"
+                className="w-6 h-6 bg-white rounded items-center justify-center border border-slate-200"
               >
                 <Text className="text-slate-700 font-black text-xs">+</Text>
               </TouchableOpacity>
@@ -208,14 +208,14 @@ export const CartScreen: React.FC<CartScreenProps> = ({
       </View>
 
       {/* Checkout Form */}
-      <View className="px-5 mt-4">
-        <View className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-3">
-          <Text className="text-sm font-bold text-slate-900 uppercase tracking-wider text-[11px]">
+      <View className="px-5 mt-3">
+        <View className="bg-white rounded-xl p-4 border border-slate-200 shadow-sm space-y-3">
+          <Text className="text-xs font-bold text-slate-900 uppercase tracking-wider">
             Контактні дані покупця
           </Text>
 
           {errorMessage && (
-            <View className="p-3 bg-red-50 rounded-xl border border-red-200">
+            <View className="p-3 bg-red-50 rounded-lg border border-red-200">
               <Text className="text-xs text-red-600 font-medium">{errorMessage}</Text>
             </View>
           )}
@@ -227,7 +227,7 @@ export const CartScreen: React.FC<CartScreenProps> = ({
               onChangeText={setContactName}
               placeholder="Марія Бондаренко"
               placeholderTextColor="#94a3b8"
-              className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900"
+              className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900"
             />
           </View>
 
@@ -239,7 +239,7 @@ export const CartScreen: React.FC<CartScreenProps> = ({
               placeholder="+380..."
               placeholderTextColor="#94a3b8"
               keyboardType="phone-pad"
-              className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900"
+              className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900"
             />
           </View>
 
@@ -250,7 +250,7 @@ export const CartScreen: React.FC<CartScreenProps> = ({
               onChangeText={setDeliveryAddress}
               placeholder="м. Київ, Відділення Нової Пошти №..."
               placeholderTextColor="#94a3b8"
-              className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900"
+              className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900"
             />
           </View>
 
@@ -261,7 +261,7 @@ export const CartScreen: React.FC<CartScreenProps> = ({
               onChangeText={setNotes}
               placeholder="Коментар кур'єру або побажання..."
               placeholderTextColor="#94a3b8"
-              className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900"
+              className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900"
             />
           </View>
 
@@ -277,12 +277,12 @@ export const CartScreen: React.FC<CartScreenProps> = ({
             <TouchableOpacity
               onPress={handleCheckout}
               disabled={isSubmitting}
-              className="w-full bg-blue-600 py-3.5 rounded-2xl items-center shadow-md flex-row justify-center gap-2"
+              className="w-full bg-slate-900 py-3 rounded-lg items-center shadow-sm flex-row justify-center gap-2"
             >
               {isSubmitting ? (
                 <ActivityIndicator size="small" color="#ffffff" />
               ) : (
-                <Text className="text-white text-sm font-bold">Підтвердити замовлення</Text>
+                <Text className="text-white text-xs font-bold">Підтвердити замовлення</Text>
               )}
             </TouchableOpacity>
           </View>
