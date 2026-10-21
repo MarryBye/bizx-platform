@@ -9,6 +9,8 @@ export const userSchema = z.object({
   name: z.string().min(2, { message: 'Имя должно содержать минимум 2 символа' }),
   phone: z.string().nullable().optional(),
   avatarUrl: z.string().nullable().optional(),
+  status: z.enum(['active', 'suspended', 'archived']).default('active').optional(),
+  archivedAt: z.string().datetime().nullable().optional(),
   createdAt: z.string().datetime().optional()
 });
 
@@ -38,6 +40,7 @@ export const storeMemberSchema = z.object({
   userName: z.string().optional(),
   userEmail: z.string().optional(),
   userAvatarUrl: z.string().nullable().optional(),
+  archivedAt: z.string().datetime().nullable().optional(),
   createdAt: z.string().datetime().optional(),
   updatedAt: z.string().datetime().optional()
 });
@@ -65,6 +68,8 @@ export const userProfileSchema = z.object({
   systemRole: systemRoleSchema.default('user'),
   phone: z.string().nullable().optional(),
   avatarUrl: z.string().nullable().optional(),
+  status: z.enum(['active', 'suspended', 'archived']).default('active').optional(),
+  archivedAt: z.string().datetime().nullable().optional(),
   createdAt: z.string().datetime().optional()
 });
 
@@ -119,6 +124,7 @@ export const storeCategorySchema = z.object({
   icon: z.string().nullable().optional(),
   sortOrder: z.number().int().default(0),
   isActive: z.boolean().default(true),
+  archivedAt: z.string().datetime().nullable().optional(),
   createdAt: z.string().datetime().optional(),
   updatedAt: z.string().datetime().optional()
 });
@@ -143,7 +149,7 @@ export type UpdateStoreCategoryDto = z.infer<typeof updateStoreCategoryDtoSchema
 /**
  * Магазины (бизнесы-партнеры)
  */
-export const storeStatusSchema = z.enum(['active', 'pending', 'suspended', 'closed']);
+export const storeStatusSchema = z.enum(['active', 'pending', 'suspended', 'closed', 'archived']);
 export type StoreStatus = z.infer<typeof storeStatusSchema>;
 
 export const storeSchema = z.object({
@@ -160,6 +166,7 @@ export const storeSchema = z.object({
   email: z.string().email().nullable().optional(),
   status: storeStatusSchema.default('active'),
   memberRole: storeMemberRoleSchema.optional(),
+  archivedAt: z.string().datetime().nullable().optional(),
   createdAt: z.string().datetime().optional(),
   updatedAt: z.string().datetime().optional()
 });
@@ -203,6 +210,7 @@ export const productCategorySchema = z.object({
   storeId: z.string().uuid(),
   name: z.string().min(1, 'Название категории обязательно'),
   sortOrder: z.number().int().default(0),
+  archivedAt: z.string().datetime().nullable().optional(),
   createdAt: z.string().datetime().optional()
 });
 export type ProductCategory = z.infer<typeof productCategorySchema>;
@@ -228,6 +236,7 @@ export const productSchema = z.object({
   imageUrl: z.string().nullable().optional(),
   inventoryCount: z.number().int().nonnegative().default(0),
   isActive: z.boolean().default(true),
+  archivedAt: z.string().datetime().nullable().optional(),
   createdAt: z.string().datetime().optional(),
   updatedAt: z.string().datetime().optional()
 });

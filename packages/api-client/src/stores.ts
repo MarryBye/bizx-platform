@@ -95,6 +95,13 @@ export class StoresModule {
   }
 
   /**
+   * Архівація магазину (DELETE /stores/:id)
+   */
+  async archiveStore(id: string): Promise<ApiResponse<{ message: string }>> {
+    return this.deleteStore(id);
+  }
+
+  /**
    * Видалення магазину (DELETE /stores/:id)
    */
   async deleteStore(id: string): Promise<ApiResponse<{ message: string }>> {
@@ -113,6 +120,16 @@ export class StoresModule {
    */
   async addMember(storeId: string, dto: AddStoreMemberDto): Promise<ApiResponse<StoreMember>> {
     return this.client.post<ApiResponse<StoreMember>>(`/stores/${storeId}/members`, dto);
+  }
+
+  /**
+   * Архівація учасника магазину (DELETE /stores/:id/members/:memberId)
+   */
+  async archiveMember(
+    storeId: string,
+    memberId: string
+  ): Promise<ApiResponse<{ message: string }>> {
+    return this.removeMember(storeId, memberId);
   }
 
   /**
