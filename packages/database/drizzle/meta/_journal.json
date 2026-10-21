@@ -15,6 +15,13 @@
       "when": 1792059286904,
       "tag": "0001_smooth_luke_cage",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792619473920,
+      "tag": "0002_melted_warbird",
+      "breakpoints": true
     }
   ]
 }

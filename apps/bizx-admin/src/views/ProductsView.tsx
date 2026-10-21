@@ -1,13 +1,17 @@
 import React, { useState } from 'react';
 import { useBusinessStore } from '../store/useBusinessStore';
-import { Button, Input, Textarea, Card, CardHeader, CardTitle, CardContent, Badge, Modal, ProductPlaceholder } from '@bizx/ui';
-import { Plus, Search, Trash2, Image as ImageIcon, Upload, AlertCircle, Check } from 'lucide-react';
+import { Button, Input, Textarea, Card, CardContent, Badge, Modal, ProductPlaceholder, Select } from '@bizx/ui';
+import { Plus, Search, Archive, Image as ImageIcon, Upload, AlertCircle, Pencil } from 'lucide-react';
+import { resolveMediaUrl } from '../lib/media';
+import type { Product } from '@bizx/common-types';
 
 export const ProductsView: React.FC = () => {
-  const { products, categories, activeStore, createProduct, deleteProduct, isLoading } = useBusinessStore();
+  const { products, categories, activeStore, createProduct, updateProduct, deleteProduct, isLoading } =
+    useBusinessStore();
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
 
   // Form State
   const [name, setName] = useState('');
@@ -17,6 +21,7 @@ export const ProductsView: React.FC = () => {
   const [oldPriceUah, setOldPriceUah] = useState('');
   const [inventoryCount, setInventoryCount] = useState('10');
   const [description, setDescription] = useState('');
+  const [isActive, setIsActive] = useState(true);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -28,6 +33,38 @@ export const ProductsView: React.FC = () => {
     });
   };
 
+  const openCreateModal = () => {
+    setEditingProduct(null);
+    setName('');
+    setCategoryId('');
+    setSku('');
+    setPriceUah('');
+    setOldPriceUah('');
+    setInventoryCount('10');
+    setDescription('');
+    setIsActive(true);
+    setImageFile(null);
+    setImagePreview(null);
+    setFormError(null);
+    setIsModalOpen(true);
+  };
+
+  const openEditModal = (product: Product) => {
+    setEditingProduct(product);
+    setName(product.name);
+    setCategoryId(product.categoryId || '');
+    setSku(product.sku || '');
+    setPriceUah((product.price / 100).toString());
+    setOldPriceUah(product.oldPrice ? (product.oldPrice / 100).toString() : '');
+    setInventoryCount(product.inventoryCount.toString());
+    setDescription(product.description || '');
+    setIsActive(product.isActive);
+    setImageFile(null);
+    setImagePreview(resolveMediaUrl(product.imageUrl) || product.imageUrl || null);
+    setFormError(null);
+    setIsModalOpen(true);
+  };
+
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -36,7 +73,7 @@ export const ProductsView: React.FC = () => {
     }
   };
 
-  const handleCreate = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
 
@@ -47,25 +84,46 @@ export const ProductsView: React.FC = () => {
     }
 
     const priceKopecks = Math.round(priceNum * 100);
-    const oldPriceKopecks = oldPriceUah ? Math.round(parseFloat(oldPriceUah.replace(',', '.')) * 100) : undefined;
+    const oldPriceKopecks = oldPriceUah
+      ? Math.round(parseFloat(oldPriceUah.replace(',', '.')) * 100)
+      : undefined;
     const invCount = parseInt(inventoryCount, 10) || 0;
 
-    const success = await createProduct(
-      {
-        name,
-        categoryId: categoryId || undefined,
-        sku: sku || undefined,
-        price: priceKopecks,
-        oldPrice: oldPriceKopecks,
-        inventoryCount: invCount,
-        description: description || undefined,
-        isActive: true
-      },
-      imageFile || undefined
-    );
+    let success = false;
+    if (editingProduct) {
+      success = await updateProduct(
+        editingProduct.id,
+        {
+          name,
+          categoryId: categoryId || undefined,
+          sku: sku || undefined,
+          price: priceKopecks,
+          oldPrice: oldPriceKopecks,
+          inventoryCount: invCount,
+          description: description || undefined,
+          isActive
+        },
+        imageFile || undefined
+      );
+    } else {
+      success = await createProduct(
+        {
+          name,
+          categoryId: categoryId || undefined,
+          sku: sku || undefined,
+          price: priceKopecks,
+          oldPrice: oldPriceKopecks,
+          inventoryCount: invCount,
+          description: description || undefined,
+          isActive
+        },
+        imageFile || undefined
+      );
+    }
 
     if (success) {
       setIsModalOpen(false);
+      setEditingProduct(null);
       setName('');
       setCategoryId('');
       setSku('');
@@ -80,7 +138,9 @@ export const ProductsView: React.FC = () => {
   };
 
   const filteredProducts = products.filter((p) => {
-    const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) || (p.sku && p.sku.toLowerCase().includes(search.toLowerCase()));
+    const matchesSearch =
+      p.name.toLowerCase().includes(search.toLowerCase()) ||
+      (p.sku && p.sku.toLowerCase().includes(search.toLowerCase()));
     const matchesCat = selectedCategory === 'all' || p.categoryId === selectedCategory;
     return matchesSearch && matchesCat;
   });
@@ -96,12 +156,12 @@ export const ProductsView: React.FC = () => {
           </p>
         </div>
 
-        <Button onClick={() => setIsModalOpen(true)} className="flex items-center gap-1.5 shrink-0">
+        <Button onClick={openCreateModal} className="flex items-center gap-1.5 shrink-0">
           <Plus className="w-4 h-4" /> Додати товар
         </Button>
       </div>
 
-      {/* Filters & Search */}
+      {/* Filter and Search Bar */}
       <Card className="border-slate-200 shadow-sm p-4">
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
@@ -114,95 +174,113 @@ export const ProductsView: React.FC = () => {
             />
           </div>
 
-          <select
-            value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
-            className="h-10 px-3 rounded-md border border-input bg-background text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/20"
-          >
-            <option value="all">Усі категорії</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
+          <div className="w-full sm:w-56">
+            <Select
+              value={selectedCategory}
+              onChange={(val) => setSelectedCategory(val)}
+              options={[
+                { value: 'all', label: 'Усі категорії' },
+                ...categories.map((c) => ({ value: c.id, label: c.name }))
+              ]}
+              placeholder="Усі категорії"
+            />
+          </div>
         </div>
       </Card>
 
       {/* Products Grid */}
       {filteredProducts.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredProducts.map((p) => (
-            <Card key={p.id} className="border-slate-200 shadow-sm overflow-hidden flex flex-col group hover:border-slate-300 transition-all">
-              {/* Product Image */}
-              <div className="w-full h-44 bg-slate-100 relative overflow-hidden flex items-center justify-center border-b">
-                {p.imageUrl ? (
-                  <img
-                    src={p.imageUrl}
-                    alt={p.name}
-                    className="w-full h-full object-contain p-2 group-hover:scale-105 transition-transform duration-300"
-                    onError={(e) => {
-                      (e.target as HTMLElement).style.display = 'none';
-                    }}
-                  />
-                ) : (
-                  <ProductPlaceholder className="w-16 h-16 opacity-75" />
-                )}
+          {filteredProducts.map((p) => {
+            const resolvedImg = resolveMediaUrl(p.imageUrl);
 
-                {p.oldPrice && (
-                  <Badge variant="destructive" className="absolute top-2 left-2 text-[10px]">
-                    Знижка
-                  </Badge>
-                )}
-                <Badge
-                  variant={p.inventoryCount > 0 ? 'secondary' : 'outline'}
-                  className="absolute top-2 right-2 text-[10px] bg-white/90 backdrop-blur-sm"
-                >
-                  {p.inventoryCount > 0 ? `${p.inventoryCount} в наявності` : 'Немає на складі'}
-                </Badge>
-              </div>
-
-              {/* Product Info */}
-              <CardContent className="p-4 flex-1 flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
-                    <span>{p.sku || 'Без артикулу'}</span>
-                    <Badge variant={p.isActive ? 'success' : 'outline'} className="text-[10px]">
-                      {p.isActive ? 'Активний' : 'Чернетка'}
-                    </Badge>
-                  </div>
-                  <h3 className="font-semibold text-slate-900 line-clamp-2 text-sm">{p.name}</h3>
-                  {p.description && (
-                    <p className="text-xs text-slate-500 mt-1 line-clamp-2">{p.description}</p>
+            return (
+              <Card
+                key={p.id}
+                className="border-slate-200 shadow-sm overflow-hidden flex flex-col group hover:border-slate-300 transition-all"
+              >
+                {/* Product Image */}
+                <div className="w-full h-44 bg-slate-100 relative overflow-hidden flex items-center justify-center border-b">
+                  {resolvedImg ? (
+                    <img
+                      src={resolvedImg}
+                      alt={p.name}
+                      className="w-full h-full object-contain p-2 group-hover:scale-105 transition-transform duration-300"
+                      onError={(e) => {
+                        (e.target as HTMLElement).style.display = 'none';
+                      }}
+                    />
+                  ) : (
+                    <ProductPlaceholder className="w-16 h-16 opacity-75" />
                   )}
+
+                  {p.oldPrice && (
+                    <Badge variant="destructive" className="absolute top-2 left-2 text-[10px]">
+                      Знижка
+                    </Badge>
+                  )}
+                  <Badge
+                    variant={p.inventoryCount > 0 ? 'secondary' : 'outline'}
+                    className="absolute top-2 right-2 text-[10px] bg-white/90 backdrop-blur-sm"
+                  >
+                    {p.inventoryCount > 0 ? `${p.inventoryCount} в наявності` : 'Немає на складі'}
+                  </Badge>
                 </div>
 
-                <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+                {/* Product Info */}
+                <CardContent className="p-4 flex-1 flex flex-col justify-between">
                   <div>
-                    <span className="text-lg font-bold text-slate-900">{formatPrice(p.price)} ₴</span>
-                    {p.oldPrice && (
-                      <span className="text-xs text-slate-400 line-through ml-2">
-                        {formatPrice(p.oldPrice)} ₴
-                      </span>
+                    <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
+                      <span>{p.sku || 'Без артикулу'}</span>
+                      <Badge variant={p.isActive ? 'success' : 'outline'} className="text-[10px]">
+                        {p.isActive ? 'Активний' : 'Чернетка'}
+                      </Badge>
+                    </div>
+                    <h3 className="font-semibold text-slate-900 line-clamp-2 text-sm">{p.name}</h3>
+                    {p.description && (
+                      <p className="text-xs text-slate-500 mt-1 line-clamp-2">{p.description}</p>
                     )}
                   </div>
 
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="text-red-600 hover:bg-red-50 hover:border-red-200"
-                    onClick={() => {
-                      if (confirm(`Видалити товар "${p.name}"?`)) {
-                        void deleteProduct(p.id);
-                      }
-                    }}
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                  <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+                    <div>
+                      <span className="text-lg font-bold text-slate-900">{formatPrice(p.price)} ₴</span>
+                      {p.oldPrice && (
+                        <span className="text-xs text-slate-400 line-through ml-2">
+                          {formatPrice(p.oldPrice)} ₴
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-slate-700 hover:bg-slate-50"
+                        onClick={() => openEditModal(p)}
+                        title="Редагувати товар"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-slate-500 hover:text-amber-700 hover:bg-amber-50 hover:border-amber-200"
+                        onClick={() => {
+                          if (confirm(`Архівувати товар "${p.name}"? Товар буде сховано з каталогу, але збережено в системному архіві.`)) {
+                            void deleteProduct(p.id);
+                          }
+                        }}
+                        title="Архівувати товар"
+                      >
+                        <Archive className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       ) : (
         <Card className="border-dashed border-slate-300 p-12 text-center">
@@ -211,20 +289,27 @@ export const ProductsView: React.FC = () => {
           <p className="text-xs text-slate-400 mt-1 mb-4">
             Додайте свій перший товар або змініть критерії пошуку
           </p>
-          <Button onClick={() => setIsModalOpen(true)} size="sm">
+          <Button onClick={openCreateModal} size="sm">
             <Plus className="w-4 h-4 mr-1" /> Створити товар
           </Button>
         </Card>
       )}
 
-      {/* Modal for Creating Product */}
+      {/* Modal for Creating / Editing Product */}
       <Modal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        title="Новий товар"
-        description="Заповніть інформацію про товар та додайте фотографію для бакету R2"
+        onClose={() => {
+          setIsModalOpen(false);
+          setEditingProduct(null);
+        }}
+        title={editingProduct ? 'Редагування товару' : 'Новий товар'}
+        description={
+          editingProduct
+            ? `Оновіть інформацію та параметри товару «${editingProduct.name}»`
+            : 'Заповніть інформацію про товар та додайте фотографію для бакету R2'
+        }
       >
-        <form onSubmit={handleCreate} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
           {formError && (
             <div className="p-3 text-xs bg-red-50 text-red-600 rounded-xl flex items-center gap-2">
               <AlertCircle className="w-4 h-4 shrink-0" /> {formError}
@@ -244,18 +329,15 @@ export const ProductsView: React.FC = () => {
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <label className="text-xs font-semibold text-slate-700">Категорія</label>
-              <select
+              <Select
                 value={categoryId}
-                onChange={(e) => setCategoryId(e.target.value)}
-                className="h-10 w-full px-3 rounded-md border border-input bg-background text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/20"
-              >
-                <option value="">Без категорії</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
+                onChange={(val) => setCategoryId(val)}
+                options={[
+                  { value: '', label: 'Без категорії' },
+                  ...categories.map((c) => ({ value: c.id, label: c.name }))
+                ]}
+                placeholder="Без категорії"
+              />
             </div>
 
             <div className="space-y-1">
@@ -309,6 +391,19 @@ export const ProductsView: React.FC = () => {
             />
           </div>
 
+          <div className="flex items-center gap-2 pt-1">
+            <input
+              type="checkbox"
+              id="isActiveCheckbox"
+              checked={isActive}
+              onChange={(e) => setIsActive(e.target.checked)}
+              className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+            />
+            <label htmlFor="isActiveCheckbox" className="text-xs font-semibold text-slate-700 cursor-pointer">
+              Товар активний (відображається покупцям у додатку)
+            </label>
+          </div>
+
           {/* Image Upload Input */}
           <div className="space-y-1">
             <label className="text-xs font-semibold text-slate-700">Зображення товару</label>
@@ -343,11 +438,18 @@ export const ProductsView: React.FC = () => {
           </div>
 
           <div className="flex justify-end gap-2 pt-4 border-t">
-            <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setIsModalOpen(false);
+                setEditingProduct(null);
+              }}
+            >
               Скасувати
             </Button>
             <Button type="submit" disabled={isLoading}>
-              {isLoading ? 'Збереження...' : 'Створити товар'}
+              {isLoading ? 'Збереження...' : editingProduct ? 'Зберегти зміни' : 'Створити товар'}
             </Button>
           </div>
         </form>

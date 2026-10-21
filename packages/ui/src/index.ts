@@ -4,6 +4,7 @@ export * from './components/badge';
 export * from './components/input';
 export * from './components/textarea';
 export * from './components/modal';
+export * from './components/select';
 export * from './components/placeholders';
+export * from './components/store-media-image';
 export * from './lib/utils';
-

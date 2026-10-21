@@ -11,6 +11,7 @@ interface AuthState {
   register: (dto: RegisterDto) => Promise<boolean>;
   logout: () => Promise<void>;
   updateAvatar: (file: File) => Promise<boolean>;
+  updateProfile: (dto: { name?: string; phone?: string }) => Promise<boolean>;
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -46,7 +47,7 @@ export const useAuthStore = create<AuthState>((set) => ({
           api.client.setAccessToken(null);
           set({
             user: null,
-            error: 'Доступ заборонено: портал призначений виключно для бізнес-партнерів. Клієнти та адміністратори платформи не мають доступу до цієї панелі.',
+            error: 'Доступ обмежено: портал призначений виключно для бізнес-партнерів [AUTH_1002].',
             isLoading: false
           });
           return false;
@@ -54,10 +55,10 @@ export const useAuthStore = create<AuthState>((set) => ({
         set({ user: res.data.user, isLoading: false });
         return true;
       }
-      set({ error: 'Не вдалося увійти в систему', isLoading: false });
+      set({ error: 'Невірний логін або пароль [AUTH_1001]', isLoading: false });
       return false;
     } catch (err: any) {
-      const message = err.data?.message || err.message || 'Помилка авторизації';
+      const message = err.data?.message || err.message || 'Помилка авторизації [AUTH_1000]';
       set({ error: message, isLoading: false });
       return false;
     }
@@ -74,10 +75,10 @@ export const useAuthStore = create<AuthState>((set) => ({
         set({ user: res.data.user, isLoading: false });
         return true;
       }
-      set({ error: 'Не вдалося зареєструватися', isLoading: false });
+      set({ error: 'Не вдалося зареєструватися [AUTH_1003]', isLoading: false });
       return false;
     } catch (err: any) {
-      const message = err.data?.message || err.message || 'Помилка реєстрації';
+      const message = err.data?.message || err.message || 'Помилка реєстрації [AUTH_1000]';
       set({ error: message, isLoading: false });
       return false;
     }
@@ -102,6 +103,22 @@ export const useAuthStore = create<AuthState>((set) => ({
       return false;
     } catch (err: any) {
       set({ error: err.message || 'Не вдалося оновити аватар' });
+      return false;
+    }
+  },
+
+  updateProfile: async (dto: { name?: string; phone?: string }) => {
+    set({ isLoading: true, error: null });
+    try {
+      const res = await api.auth.updateProfile(dto);
+      if (res.success && res.data) {
+        set({ user: res.data, isLoading: false });
+        return true;
+      }
+      set({ error: 'Не вдалося оновити профіль', isLoading: false });
+      return false;
+    } catch (err: any) {
+      set({ error: err.message || 'Помилка оновлення профілю', isLoading: false });
       return false;
     }
   }

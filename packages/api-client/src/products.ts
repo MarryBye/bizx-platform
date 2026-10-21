@@ -92,6 +92,13 @@ export class ProductsModule {
   }
 
   /**
+   * Архівація товару (DELETE /products/:id)
+   */
+  async archiveProduct(id: string): Promise<ApiResponse<{ message: string }>> {
+    return this.deleteProduct(id);
+  }
+
+  /**
    * Видалення товару (DELETE /products/:id)
    */
   async deleteProduct(id: string): Promise<ApiResponse<{ message: string }>> {

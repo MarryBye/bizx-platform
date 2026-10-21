@@ -17,6 +17,7 @@ export const products = pgTable('products', {
   imageUrl: varchar('image_url', { length: 500 }),
   inventoryCount: integer('inventory_count').default(0).notNull(),
   isActive: boolean('is_active').default(true).notNull(),
+  archivedAt: timestamp('archived_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull()
 });

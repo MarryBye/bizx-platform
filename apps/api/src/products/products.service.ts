@@ -10,6 +10,7 @@ import {
   ilike,
   desc,
   count,
+  isNull,
   type ProductRecord,
   type ProductCategoryRecord
 } from '@bizx/database';
@@ -59,7 +60,7 @@ export class ProductsService {
     return await this.databaseService.db
       .select()
       .from(productCategories)
-      .where(eq(productCategories.storeId, storeId))
+      .where(and(eq(productCategories.storeId, storeId), isNull(productCategories.archivedAt)))
       .orderBy(productCategories.sortOrder, productCategories.name);
   }
 
@@ -102,10 +103,13 @@ export class ProductsService {
     await this.storesService.assertStoreAccess(category.storeId, userId, ['owner', 'manager'], systemRole);
 
     await this.databaseService.db
-      .delete(productCategories)
+      .update(productCategories)
+      .set({
+        archivedAt: new Date()
+      })
       .where(eq(productCategories.id, categoryId));
 
-    return { message: 'Категория товаров успешно удалена' };
+    return { message: 'Категорія товарів успішно архівована' };
   }
 
   // ==================== ТОВАРЫ ====================
@@ -159,7 +163,10 @@ export class ProductsService {
     const pageSize = query.pageSize || 20;
     const offset = (page - 1) * pageSize;
 
-    const conditions = [eq(products.storeId, storeId)];
+    const conditions = [
+      eq(products.storeId, storeId),
+      isNull(products.archivedAt)
+    ];
 
     if (query.categoryId) {
       conditions.push(eq(products.categoryId, query.categoryId));
@@ -308,8 +315,15 @@ export class ProductsService {
   ): Promise<{ message: string }> {
     await this.assertProductOwnership(id, userId, userRole, systemRole);
 
-    await this.databaseService.db.delete(products).where(eq(products.id, id));
+    await this.databaseService.db
+      .update(products)
+      .set({
+        isActive: false,
+        archivedAt: new Date(),
+        updatedAt: new Date()
+      })
+      .where(eq(products.id, id));
 
-    return { message: 'Товар успешно удален' };
+    return { message: 'Товар успішно архівовано' };
   }
 }
