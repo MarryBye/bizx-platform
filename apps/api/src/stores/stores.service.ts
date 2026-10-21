@@ -15,6 +15,7 @@ import {
   ilike,
   desc,
   count,
+  isNull,
   type StoreRecord,
   type StoreCategoryRecord
 } from '@bizx/database';
@@ -68,7 +69,7 @@ export class StoresService {
     return await this.databaseService.db
       .select()
       .from(storeCategories)
-      .where(eq(storeCategories.isActive, true))
+      .where(and(eq(storeCategories.isActive, true), isNull(storeCategories.archivedAt)))
       .orderBy(storeCategories.sortOrder, storeCategories.name);
   }
 
@@ -148,9 +149,15 @@ export class StoresService {
       throw new NotFoundException('Категория не найдена');
     }
 
-    await this.databaseService.db.delete(storeCategories).where(eq(storeCategories.id, id));
+    await this.databaseService.db
+      .update(storeCategories)
+      .set({
+        archivedAt: new Date(),
+        updatedAt: new Date()
+      })
+      .where(eq(storeCategories.id, id));
 
-    return { message: 'Категория успешно удалена' };
+    return { message: 'Категорію успішно архівовано' };
   }
 
   // ==================== МАГАЗИНЫ ====================
@@ -211,7 +218,7 @@ export class StoresService {
     const pageSize = query.pageSize || 20;
     const offset = (page - 1) * pageSize;
 
-    const conditions = [];
+    const conditions = [isNull(stores.archivedAt)];
 
     if (query.categoryId) {
       conditions.push(eq(stores.categoryId, query.categoryId));
@@ -324,7 +331,13 @@ export class StoresService {
       .from(storeMembers)
       .innerJoin(stores, eq(storeMembers.storeId, stores.id))
       .leftJoin(storeCategories, eq(stores.categoryId, storeCategories.id))
-      .where(eq(storeMembers.userId, userId))
+      .where(
+        and(
+          eq(storeMembers.userId, userId),
+          isNull(stores.archivedAt),
+          isNull(storeMembers.archivedAt)
+        )
+      )
       .orderBy(desc(stores.createdAt));
 
     return rows;
@@ -400,7 +413,12 @@ export class StoresService {
       })
       .from(storeMembers)
       .innerJoin(users, eq(storeMembers.userId, users.id))
-      .where(eq(storeMembers.storeId, storeId))
+      .where(
+        and(
+          eq(storeMembers.storeId, storeId),
+          isNull(storeMembers.archivedAt)
+        )
+      )
       .orderBy(desc(storeMembers.createdAt));
 
     return members.map((m) => ({
@@ -491,10 +509,14 @@ export class StoresService {
     }
 
     await this.databaseService.db
-      .delete(storeMembers)
+      .update(storeMembers)
+      .set({
+        archivedAt: new Date(),
+        updatedAt: new Date()
+      })
       .where(eq(storeMembers.id, memberId));
 
-    return { message: 'Учасника успішно видалено з магазину' };
+    return { message: 'Учасника успішно архівовано' };
   }
 
   async updateStore(
@@ -549,8 +571,15 @@ export class StoresService {
   ): Promise<{ message: string }> {
     await this.assertStoreOwnership(storeId, userId, userRole, systemRole);
 
-    await this.databaseService.db.delete(stores).where(eq(stores.id, storeId));
+    await this.databaseService.db
+      .update(stores)
+      .set({
+        status: 'archived',
+        archivedAt: new Date(),
+        updatedAt: new Date()
+      })
+      .where(eq(stores.id, storeId));
 
-    return { message: 'Магазин успешно удален' };
+    return { message: 'Магазин успішно архівовано' };
   }
 }
