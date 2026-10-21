@@ -36,6 +36,8 @@ export default function AccountPage() {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
+  const [avatarError, setAvatarError] = useState(false);
+  const [avatarUploading, setAvatarUploading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
@@ -110,6 +112,24 @@ export default function AccountPage() {
       window.removeEventListener('bizx:unauthorized', handleUnauthorized);
     };
   }, []);
+
+  const handleAvatarFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setAvatarUploading(true);
+    try {
+      const res = await api.auth.uploadAvatar(file);
+      if (res.success && res.data) {
+        setUser(res.data);
+        setAvatarUrl(res.data.avatarUrl || '');
+        setAvatarError(false);
+      }
+    } catch {
+      // Ignore
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
 
   const handleProfileSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -395,9 +415,14 @@ export default function AccountPage() {
             <aside className="md:col-span-4 bg-white border border-slate-200 rounded-xl p-3 shadow-sm space-y-1">
               <div className="p-3 border-b border-slate-100 flex items-center gap-3 mb-2">
                 <div className="w-10 h-10 rounded-full bg-slate-900 text-white font-bold flex items-center justify-center text-sm shrink-0 overflow-hidden">
-                  {avatarUrl ? (
+                  {avatarUrl && !avatarError ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={avatarUrl} alt={user.name || ''} className="w-full h-full object-cover" />
+                    <img
+                      src={api.storage.resolveMediaUrl(avatarUrl) || ''}
+                      alt={user.name || ''}
+                      className="w-full h-full object-cover"
+                      onError={() => setAvatarError(true)}
+                    />
                   ) : (
                     getInitials(user.name)
                   )}
@@ -523,6 +548,38 @@ export default function AccountPage() {
                   )}
 
                   <form onSubmit={handleProfileSubmit} className="space-y-4">
+                    {/* Avatar Upload Card */}
+                    <div className="flex items-center gap-4 p-4 border border-slate-200 rounded-xl bg-slate-50/50">
+                      <div className="w-16 h-16 rounded-full bg-slate-900 text-white font-bold flex items-center justify-center text-lg shrink-0 overflow-hidden border border-slate-200 shadow-sm">
+                        {avatarUrl && !avatarError ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={api.storage.resolveMediaUrl(avatarUrl) || ''}
+                            alt={name || ''}
+                            className="w-full h-full object-cover"
+                            onError={() => setAvatarError(true)}
+                          />
+                        ) : (
+                          getInitials(name)
+                        )}
+                      </div>
+                      <div>
+                        <label className="cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 hover:bg-slate-50 transition-colors shadow-sm">
+                          <span>{avatarUploading ? 'Завантаження...' : 'Змінити фотографію'}</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            disabled={avatarUploading}
+                            onChange={handleAvatarFile}
+                            className="hidden"
+                          />
+                        </label>
+                        <div className="text-[11px] text-slate-400 mt-1">
+                          Підтримуються формати JPG, PNG, WebP та SVG
+                        </div>
+                      </div>
+                    </div>
+
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-slate-700">Повне імʼя</label>
                       <input

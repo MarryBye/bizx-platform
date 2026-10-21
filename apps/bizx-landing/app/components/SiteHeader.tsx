@@ -18,6 +18,7 @@ export const SiteHeader: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [avatarError, setAvatarError] = useState(false);
 
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -105,7 +106,8 @@ export const SiteHeader: React.FC = () => {
   // Determine user permissions
   const isBusinessUser = user?.role === 'business_owner' || stores.length > 0;
 
-  const isPlatformStaff = user?.role === 'admin' || user?.systemRole === 'platform_admin';
+  // Platform admin is strictly staff members with systemRole === 'platform_admin'
+  const isPlatformStaff = user?.systemRole === 'platform_admin';
 
   // Compute initials
   const getInitials = (name?: string) => {
@@ -157,8 +159,18 @@ export const SiteHeader: React.FC = () => {
                   onClick={() => setIsDropdownOpen((prev) => !prev)}
                   className="flex items-center gap-2 py-1.5 px-2.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 transition-colors shadow-sm text-left"
                 >
-                  <div className="w-6 h-6 rounded-full bg-slate-900 text-white flex items-center justify-center text-[10px] font-bold">
-                    {getInitials(user.name)}
+                  <div className="w-6 h-6 rounded-full bg-slate-900 text-white flex items-center justify-center text-[10px] font-bold overflow-hidden shrink-0">
+                    {user.avatarUrl && !avatarError ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={api.storage.resolveMediaUrl(user.avatarUrl) || ''}
+                        alt={user.name || ''}
+                        className="w-full h-full object-cover"
+                        onError={() => setAvatarError(true)}
+                      />
+                    ) : (
+                      getInitials(user.name)
+                    )}
                   </div>
                   <span className="text-xs font-bold text-slate-900 max-w-[140px] truncate">
                     {user.name || user.email}
@@ -174,26 +186,41 @@ export const SiteHeader: React.FC = () => {
                 {isDropdownOpen && (
                   <div className="absolute right-0 mt-2 w-64 bg-white border border-slate-200 rounded-xl shadow-xl py-2 z-50 animate-fade-in text-xs">
                     {/* User Profile Summary */}
-                    <div className="px-4 py-2 border-b border-slate-100 bg-slate-50/50">
-                      <div className="font-bold text-slate-900 truncate">
-                        {user.name || 'Користувач'}
-                      </div>
-                      <div className="text-[11px] text-slate-500 truncate">{user.email}</div>
-                      <div className="mt-1.5">
-                        {isPlatformStaff ? (
-                          <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800">
-                            BizX Staff
-                          </span>
-                        ) : isBusinessUser ? (
-                          <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                            Бізнес-партнер
-                          </span>
+                    <div className="px-4 py-2.5 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center text-xs font-bold overflow-hidden shrink-0">
+                        {user.avatarUrl && !avatarError ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={api.storage.resolveMediaUrl(user.avatarUrl) || ''}
+                            alt={user.name || ''}
+                            className="w-full h-full object-cover"
+                            onError={() => setAvatarError(true)}
+                          />
                         ) : (
-                          <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700">
-                            Клієнт
-                          </span>
+                          getInitials(user.name)
                         )}
                       </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="font-bold text-slate-900 truncate">
+                          {user.name || 'Користувач'}
+                        </div>
+                        <div className="text-[11px] text-slate-500 truncate">{user.email}</div>
+                      </div>
+                    </div>
+                    <div className="px-4 py-1.5">
+                      {isPlatformStaff ? (
+                        <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800">
+                          BizX Staff
+                        </span>
+                      ) : isBusinessUser ? (
+                        <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                          Бізнес-партнер
+                        </span>
+                      ) : (
+                        <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700">
+                          Клієнт
+                        </span>
+                      )}
                     </div>
 
                     {/* Links */}

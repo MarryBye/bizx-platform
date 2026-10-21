@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { platformApi } from './lib/api';
 import type { UserProfile, PlatformAnalytics, StoreCategory } from '@bizx/common-types';
+import { ShieldAlert } from 'lucide-react';
 import { PlatformLayout, type PlatformTab } from './components/PlatformLayout';
 import { MetricsView } from './views/MetricsView';
 import { BusinessesView, type ExtendedBusiness } from './views/BusinessesView';
@@ -302,26 +303,10 @@ export const App: React.FC = () => {
         if (res.success && res.data) {
           setCurrentUser(res.data);
         } else {
-          // If no token, check if we have a default operator session or prompt login
-          setCurrentUser({
-            id: 'admin-1',
-            email: 'admin@bizx.ua',
-            name: 'Олександр Коваленко',
-            role: 'admin',
-            systemRole: 'platform_admin',
-            createdAt: new Date().toISOString()
-          });
+          setCurrentUser(null);
         }
       } catch {
-        // Fallback default admin session for dev ease
-        setCurrentUser({
-          id: 'admin-1',
-          email: 'admin@bizx.ua',
-          name: 'Олександр Коваленко',
-          role: 'admin',
-          systemRole: 'platform_admin',
-          createdAt: new Date().toISOString()
-        });
+        setCurrentUser(null);
       } finally {
         setIsLoadingAuth(false);
       }
@@ -423,6 +408,41 @@ export const App: React.FC = () => {
 
   if (!currentUser) {
     return <LoginView onSuccess={(user) => setCurrentUser(user)} />;
+  }
+
+  const isStaff = currentUser.systemRole === 'platform_admin' || currentUser.role === 'admin';
+
+  if (!isStaff) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+        <div className="w-full max-w-md bg-white border border-slate-200 rounded-2xl p-6 shadow-xl text-center space-y-4">
+          <div className="w-12 h-12 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center mx-auto">
+            <ShieldAlert className="w-6 h-6" />
+          </div>
+          <div>
+            <h2 className="text-base font-black text-slate-900">Доступ заборонено</h2>
+            <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+              Консоль BizX Core призначена виключно для співробітників компанії BizX.
+              Ваш поточний обліковий запис <strong>{currentUser.email}</strong> ({currentUser.name}) не має привілеїв адміністратора платформи.
+            </p>
+          </div>
+          <div className="pt-2 flex flex-col gap-2">
+            <button
+              onClick={handleLogout}
+              className="w-full py-2.5 px-4 rounded-lg bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 transition-colors"
+            >
+              Увійти під службовим акаунтом BizX
+            </button>
+            <a
+              href="http://localhost:3102"
+              className="w-full py-2 px-4 rounded-lg border border-slate-200 text-slate-700 text-xs font-semibold hover:bg-slate-50 transition-colors text-center"
+            >
+              Перейти в кабінет мерчанта (:3102)
+            </a>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   // Count businesses by status
