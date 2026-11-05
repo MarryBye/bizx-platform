@@ -10,9 +10,11 @@ import {
 import { MaterialIcon } from '../components/MaterialIcon';
 import { SafeImage } from '../components/SafeImage';
 import { useMobileAuthStore } from '../store/useMobileAuthStore';
+import { useMobileTranslation } from '../hooks/useMobileTranslation';
 
 export const ProfileScreen: React.FC = () => {
   const { user, login, register, updateProfile, logout, isLoading, error } = useMobileAuthStore();
+  const { t, locale, mode, setMode } = useMobileTranslation();
 
   const [isRegisterMode, setIsRegisterMode] = useState(false);
   const [email, setEmail] = useState('');
@@ -157,17 +159,105 @@ export const ProfileScreen: React.FC = () => {
           </View>
         </View>
 
+        {/* Language Selection Card */}
+        <View className="px-5 mt-4">
+          <View className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs">
+            <View className="flex-row items-center gap-2 mb-2">
+              <MaterialIcon name="language" size={16} color="#0f172a" />
+              <Text className="text-xs font-bold text-slate-900">
+                {t('mobile.languagePreference')}
+              </Text>
+            </View>
+            <Text className="text-[11px] text-slate-500 mb-3">
+              {t('account.languageDesc')}
+            </Text>
+
+            <View className="space-y-2">
+              <TouchableOpacity
+                onPress={() => setMode('auto')}
+                activeOpacity={0.7}
+                className={`flex-row items-center justify-between p-2.5 rounded-lg border ${
+                  mode === 'auto'
+                    ? 'bg-slate-900 border-slate-900'
+                    : 'bg-slate-50 border-slate-200'
+                }`}
+              >
+                <Text
+                  className={`text-xs font-bold ${
+                    mode === 'auto' ? 'text-white' : 'text-slate-800'
+                  }`}
+                >
+                  {t('mobile.systemLanguage')}
+                </Text>
+                {mode === 'auto' && (
+                  <MaterialIcon name="check" size={14} color="#ffffff" />
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => {
+                  setMode('uk');
+                  updateProfile({ preferredLanguage: 'uk' } as any).catch(() => {});
+                }}
+                activeOpacity={0.7}
+                className={`flex-row items-center justify-between p-2.5 rounded-lg border ${
+                  mode === 'uk'
+                    ? 'bg-slate-900 border-slate-900'
+                    : 'bg-slate-50 border-slate-200'
+                }`}
+              >
+                <Text
+                  className={`text-xs font-bold ${
+                    mode === 'uk' ? 'text-white' : 'text-slate-800'
+                  }`}
+                >
+                  🇺🇦 {t('account.ukrainian')}
+                </Text>
+                {mode === 'uk' && (
+                  <MaterialIcon name="check" size={14} color="#ffffff" />
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => {
+                  setMode('en');
+                  updateProfile({ preferredLanguage: 'en' } as any).catch(() => {});
+                }}
+                activeOpacity={0.7}
+                className={`flex-row items-center justify-between p-2.5 rounded-lg border ${
+                  mode === 'en'
+                    ? 'bg-slate-900 border-slate-900'
+                    : 'bg-slate-50 border-slate-200'
+                }`}
+              >
+                <Text
+                  className={`text-xs font-bold ${
+                    mode === 'en' ? 'text-white' : 'text-slate-800'
+                  }`}
+                >
+                  🇬🇧 {t('account.english')}
+                </Text>
+                {mode === 'en' && (
+                  <MaterialIcon name="check" size={14} color="#ffffff" />
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+
         {/* Portal Referral Note */}
         <View className="px-5 mt-4">
           <View className="bg-slate-100/80 border border-slate-200 rounded-xl p-4">
             <View className="flex-row items-center gap-2 mb-1.5">
               <MaterialIcon name="shield" size={16} color="#0f172a" />
               <Text className="text-xs font-bold text-slate-900">
-                Центр безпеки та бізнесів
+                {locale === 'en' ? 'Security & Business Center' : 'Центр безпеки та бізнесів'}
               </Text>
             </View>
             <Text className="text-[11px] text-slate-600 leading-relaxed">
-              Зміна пароля, двофакторна автентифікація (2FA), керування вашими магазинами та інтеграціями доступні через веб-портал:
+              {locale === 'en'
+                ? 'Password change, two-factor authentication (2FA), store and integration management are available via the web portal:'
+                : 'Зміна пароля, двофакторна автентифікація (2FA), керування вашими магазинами та інтеграціями доступні через веб-портал:'}
             </Text>
             <Text className="text-xs font-bold text-slate-900 font-mono mt-1">
               bizx.ua/account
@@ -183,7 +273,7 @@ export const ProfileScreen: React.FC = () => {
             className="bg-white border border-slate-200 py-3 rounded-xl items-center flex-row justify-center gap-1.5"
           >
             <MaterialIcon name="logout" size={16} color="#dc2626" />
-            <Text className="text-xs font-bold text-red-600">Вийти з облікового запису</Text>
+            <Text className="text-xs font-bold text-red-600">{t('common.logout')}</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
