@@ -1,3 +1,4 @@
+import { getSubscriptionDaysLeft, getMaxAllowedStores } from '../subscriptions/subscriptions.constants.js';
 import {
   Injectable,
   ConflictException,
@@ -28,6 +29,25 @@ export class AuthService {
 
   private hashToken(token: string): string {
     return crypto.createHash('sha256').update(token).digest('hex');
+  }
+
+  private mapToProfile(user: any): UserProfile {
+    return {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role as UserProfile['role'],
+      systemRole: (user.systemRole || 'user') as UserProfile['systemRole'],
+      phone: user.phone || null,
+      avatarUrl: user.avatarUrl || null,
+      status: (user.status || 'active') as UserProfile['status'],
+      subscriptionTier: (user.subscriptionTier || 'free') as any,
+      subscriptionStatus: (user.subscriptionStatus || 'none') as any,
+      subscriptionExpiresAt: user.subscriptionExpiresAt ? (user.subscriptionExpiresAt instanceof Date ? user.subscriptionExpiresAt.toISOString() : user.subscriptionExpiresAt) : null,
+      subscriptionDaysLeft: getSubscriptionDaysLeft(user.subscriptionExpiresAt),
+      maxAllowedStores: getMaxAllowedStores(user.subscriptionTier),
+      createdAt: user.createdAt instanceof Date ? user.createdAt.toISOString() : user.createdAt
+    };
   }
 
   private async generateTokens(user: { id: string; email: string; role: string; systemRole?: string; name: string }) {
@@ -100,14 +120,7 @@ export class AuthService {
         createdAt: users.createdAt
       });
 
-    const userProfile: UserProfile = {
-      id: newUser.id,
-      email: newUser.email,
-      name: newUser.name,
-      role: newUser.role as UserProfile['role'],
-      systemRole: (newUser.systemRole || 'user') as UserProfile['systemRole'],
-      createdAt: newUser.createdAt.toISOString()
-    };
+    const userProfile = this.mapToProfile(newUser);
 
     const tokens = await this.generateTokens(newUser);
     await this.storeRefreshToken(newUser.id, tokens.refreshToken, metadata);
@@ -137,14 +150,7 @@ export class AuthService {
       throw new UnauthorizedException('Неверный email или пароль');
     }
 
-    const userProfile: UserProfile = {
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      role: user.role as UserProfile['role'],
-      systemRole: (user.systemRole || 'user') as UserProfile['systemRole'],
-      createdAt: user.createdAt.toISOString()
-    };
+    const userProfile = this.mapToProfile(user);
 
     const tokens = await this.generateTokens(user);
     await this.storeRefreshToken(user.id, tokens.refreshToken, metadata);
@@ -218,16 +224,7 @@ export class AuthService {
       throw new NotFoundException('Пользователь не найден');
     }
 
-    return {
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      role: user.role as UserProfile['role'],
-      systemRole: (user.systemRole || 'user') as UserProfile['systemRole'],
-      phone: user.phone,
-      avatarUrl: user.avatarUrl,
-      createdAt: user.createdAt.toISOString()
-    };
+    return this.mapToProfile(user);
   }
 
   async updateProfile(userId: string, dto: UpdateUserProfileDto): Promise<UserProfile> {

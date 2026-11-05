@@ -1,3 +1,4 @@
+import { isSubscriptionActive, getMaxAllowedStores, isBusinessSubscriptionTier } from '../subscriptions/subscriptions.constants.js';
 import {
   Injectable,
   NotFoundException,
@@ -170,6 +171,35 @@ export class StoresService {
 
     if (existing) {
       throw new ConflictException('Магазин с таким slug уже существует');
+    }
+
+    const [owner] = await this.databaseService.db
+      .select()
+      .from(users)
+      .where(eq(users.id, ownerId));
+
+    if (!owner) {
+      throw new NotFoundException('Власника не знайдено');
+    }
+
+    const isStaff = owner.systemRole === 'platform_admin' || owner.role === 'admin';
+    const activeSub = isSubscriptionActive(owner);
+    const isBizTier = isBusinessSubscriptionTier(owner.subscriptionTier);
+
+    if (!isStaff && (!activeSub || !isBizTier)) {
+      throw new ForbiddenException(
+        'Для створення закладу необхідна активна бізнес-підписка. Будь ласка, оформіть підписку в особистому кабінеті.'
+      );
+    }
+
+    const maxStores = getMaxAllowedStores(owner.subscriptionTier);
+    const userStores = await this.getMyStores(ownerId);
+    const activeStoresCount = userStores.filter((s) => s.status !== 'archived').length;
+
+    if (!isStaff && activeStoresCount >= maxStores) {
+      throw new ForbiddenException(
+        `Ви досягли максимального ліміту закладів для вашого тарифу (${maxStores}). Оновіть тарифний план для відкриття нових бізнесів.`
+      );
     }
 
     if (dto.categoryId) {
@@ -375,6 +405,31 @@ export class StoresService {
         return { store, memberRole: 'owner' };
       }
       throw new ForbiddenException('У вас немає доступу до керування цим магазином');
+    }
+
+    {
+      const [storeOwner] = await this.databaseService.db
+        .select()
+        .from(users)
+        .where(eq(users.id, store.ownerId));
+
+      if (storeOwner) {
+        const isOwnerStaff = storeOwner.systemRole === 'platform_admin' || storeOwner.role === 'admin';
+        if (!isOwnerStaff) {
+          const isSubActive = isSubscriptionActive(storeOwner);
+          if (!isSubActive) {
+            if (store.status === 'active') {
+              await this.databaseService.db
+                .update(stores)
+                .set({ status: 'suspended', updatedAt: new Date() })
+                .where(eq(stores.id, store.id));
+            }
+            throw new ForbiddenException(
+              'Термін дії бізнес-підписки власника закладу завершився. Заклад призупинено, доступ до керування заблоковано.'
+            );
+          }
+        }
+      }
     }
 
     if (allowedRoles && allowedRoles.length > 0 && !allowedRoles.includes(member.role as StoreMemberRole)) {
