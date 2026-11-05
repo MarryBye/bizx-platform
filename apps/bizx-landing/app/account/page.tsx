@@ -6,7 +6,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { api } from '../lib/api';
 import { SiteHeader } from '../components/SiteHeader';
-import type { UserProfile, Store } from '@bizx/common-types';
+import type { UserProfile, Store, SubscriptionPlan, UserSubscriptionDetails, SubscriptionTier } from '@bizx/common-types';
 import {
   User,
   Shield,
@@ -19,12 +19,13 @@ import {
   Save,
   Key,
   LogOut,
-  AlertCircle
+  AlertCircle,
+  CreditCard
 } from 'lucide-react';
 import StorefrontOutlinedIcon from '@mui/icons-material/StorefrontOutlined';
 import ShieldOutlinedIcon from '@mui/icons-material/ShieldOutlined';
 
-type AccountTab = 'profile' | 'businesses' | 'security' | 'privacy' | 'integrations';
+type AccountTab = 'profile' | 'businesses' | 'subscriptions' | 'security' | 'privacy' | 'integrations';
 
 export default function AccountPage() {
   const [user, setUser] = useState<UserProfile | null>(null);
@@ -61,6 +62,13 @@ export default function AccountPage() {
   // Stores
   const [myStores, setMyStores] = useState<Store[]>([]);
 
+  // Subscription State
+  const [subDetails, setSubDetails] = useState<UserSubscriptionDetails | null>(null);
+  const [allPlans, setAllPlans] = useState<SubscriptionPlan[]>([]);
+  const [selectedPlanForUpgrade, setSelectedPlanForUpgrade] = useState<SubscriptionPlan | null>(null);
+  const [isActivatingSub, setIsActivatingSub] = useState(false);
+  const [subNotice, setSubNotice] = useState<string | null>(null);
+
   // Create Business State
   const [showCreateStoreModal, setShowCreateStoreModal] = useState(false);
   const [newStoreName, setNewStoreName] = useState('');
@@ -86,6 +94,24 @@ export default function AccountPage() {
         setEmail(res.data.email || '');
         setPhone(res.data.phone || '');
         setAvatarUrl(res.data.avatarUrl || '');
+
+        try {
+          const subRes = await api.subscriptions.getMySubscription();
+          if (subRes.success && subRes.data) {
+            setSubDetails(subRes.data);
+          }
+        } catch {
+          // ignore
+        }
+
+        try {
+          const plansRes = await api.subscriptions.getPlans();
+          if (plansRes.success && plansRes.data) {
+            setAllPlans(plansRes.data);
+          }
+        } catch {
+          // ignore
+        }
 
         try {
           const storesRes = await api.stores.getMyStores();
@@ -225,6 +251,47 @@ export default function AccountPage() {
     }
   };
 
+  const handleToggleStoreStatus = async (storeId: string, currentStatus: string) => {
+    try {
+      const nextStatus = currentStatus === 'suspended' ? 'pending' : 'suspended';
+      const res = await api.stores.updateStore(storeId, { status: nextStatus });
+      if (res.success) {
+        setModerationNotice(
+          nextStatus === 'suspended'
+            ? 'Заклад успішно призупинено'
+            : 'Заклад відправлено на перевірку'
+        );
+        await loadData();
+        setTimeout(() => setModerationNotice(null), 4000);
+      }
+    } catch (err: unknown) {
+      const errObj = err as { data?: { message?: string }; message?: string };
+      alert(errObj.data?.message || errObj.message || 'Помилка зміни статусу закладу');
+    }
+  };
+
+  const handleConfirmSubscriptionChange = async () => {
+    if (!selectedPlanForUpgrade) return;
+    setIsActivatingSub(true);
+    try {
+      const res = await api.subscriptions.subscribe({
+        tier: selectedPlanForUpgrade.id as SubscriptionTier,
+        periodDays: 30
+      });
+      if (res.success) {
+        setSubNotice(`Тариф «${selectedPlanForUpgrade.name}» успішно активовано на 30 днів!`);
+        setSelectedPlanForUpgrade(null);
+        await loadData();
+        setTimeout(() => setSubNotice(null), 5000);
+      }
+    } catch (err: unknown) {
+      const errObj = err as { data?: { message?: string }; message?: string };
+      alert(errObj.data?.message || errObj.message || 'Помилка активації підписки');
+    } finally {
+      setIsActivatingSub(false);
+    }
+  };
+
   const handleSubmitForModeration = async (storeId: string) => {
     try {
       const res = await api.stores.updateStore(storeId, { status: 'pending' });
@@ -255,6 +322,7 @@ export default function AccountPage() {
   const menuItems = [
     { id: 'profile' as const, label: 'Особисті дані', desc: 'Імʼя, контакти та аватар', icon: User },
     { id: 'businesses' as const, label: 'Мої бізнеси та ролі', desc: 'Заклади та права доступу', icon: Building2 },
+    { id: 'subscriptions' as const, label: 'Підписка та тарифи', desc: 'Статус, дні дії та плани', icon: CreditCard },
     { id: 'security' as const, label: 'Безпека та пароль', desc: 'Пароль, 2FA та сесії', icon: Shield },
     { id: 'privacy' as const, label: 'Сповіщення та приватність', desc: 'Email, SMS та маркетинг', icon: Bell },
     { id: 'integrations' as const, label: 'Інтеграції та API', desc: 'CRM вебхуки та ключі', icon: Plug }
@@ -662,23 +730,190 @@ export default function AccountPage() {
                               </div>
                             )}
 
-                            <div className="pt-2 border-t border-slate-200 flex items-center justify-between">
+                            <div className="pt-2 border-t border-slate-200 flex items-center justify-between gap-2">
                               <span className="text-[11px] font-semibold text-slate-700">
                                 Власник
                               </span>
-                              <a
-                                href="http://localhost:3102"
-                                className="text-xs font-bold text-slate-900 hover:underline inline-flex items-center gap-1"
-                              >
-                                <span>Панель керування</span>
-                                <ExternalLink className="w-3 h-3" />
-                              </a>
+                              <div className="flex items-center gap-2">
+                                {st.status === 'active' && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleToggleStoreStatus(st.id, st.status)}
+                                    className="text-[11px] font-bold text-slate-600 hover:text-red-600 transition-colors"
+                                  >
+                                    Призупинити
+                                  </button>
+                                )}
+                                {st.status === 'suspended' && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleToggleStoreStatus(st.id, st.status)}
+                                    className="text-[11px] font-bold text-emerald-700 hover:underline transition-colors"
+                                  >
+                                    Увімкнути
+                                  </button>
+                                )}
+                                <a
+                                  href="http://localhost:3102"
+                                  className="text-xs font-bold text-slate-900 hover:underline inline-flex items-center gap-1"
+                                >
+                                  <span>Панель</span>
+                                  <ExternalLink className="w-3 h-3" />
+                                </a>
+                              </div>
                             </div>
                           </div>
                         );
                       })}
                     </div>
                   )}
+                </div>
+              )}
+
+                            {/* Tab: Subscriptions */}
+              {activeTab === 'subscriptions' && (
+                <div className="space-y-6">
+                  <div className="border-b border-slate-100 pb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                    <div>
+                      <h2 className="text-lg font-black text-slate-900">Підписка та тарифні плани</h2>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Керуйте вашим тарифом BizX, контролюйте залишок днів та ліміти закладів
+                      </p>
+                    </div>
+                    <Link
+                      href="/pricing"
+                      className="text-xs font-bold text-slate-900 hover:underline inline-flex items-center gap-1 self-start sm:self-auto"
+                    >
+                      <span>Повна таблиця тарифів</span>
+                      <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
+                    </Link>
+                  </div>
+
+                  {subNotice && (
+                    <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-800 flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span>{subNotice}</span>
+                    </div>
+                  )}
+
+                  {/* Current Active Plan Card */}
+                  <div className="p-5 bg-slate-900 text-white rounded-2xl shadow-sm space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                      <div>
+                        <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                          Поточний статус облікового запису
+                        </div>
+                        <div className="text-2xl font-black mt-0.5">
+                          {user?.subscriptionTier === 'free' && 'Базовий клієнт (Free)'}
+                          {user?.subscriptionTier === 'client_premium' && 'BizX Premium'}
+                          {user?.subscriptionTier === 'business_starter' && 'BizX Business Starter'}
+                          {user?.subscriptionTier === 'business_pro' && 'BizX Business Pro'}
+                          {user?.subscriptionTier === 'business_enterprise' && 'BizX Business Enterprise'}
+                          {!user?.subscriptionTier && 'Базовий'}
+                        </div>
+                      </div>
+
+                      <div className="self-start sm:self-auto px-3 py-1.5 rounded-full text-xs font-bold bg-white/10 text-white border border-white/20">
+                        {user?.subscriptionStatus === 'active' && '🟢 Активна підписка'}
+                        {user?.subscriptionStatus === 'expired' && '🔴 Термін дії минув'}
+                        {user?.subscriptionStatus === 'cancelled' && '🟡 Скасована'}
+                        {(!user?.subscriptionStatus || user?.subscriptionStatus === 'none') && '⚪️ Безкоштовний план'}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3 border-t border-slate-800 text-xs">
+                      <div className="p-3 rounded-xl bg-slate-800/60 border border-slate-700/60">
+                        <div className="text-[10px] font-bold text-slate-400 uppercase">Днів активності</div>
+                        <div className="text-base font-black mt-0.5 text-white">
+                          {user?.subscriptionDaysLeft ?? 0} днів
+                        </div>
+                      </div>
+
+                      <div className="p-3 rounded-xl bg-slate-800/60 border border-slate-700/60">
+                        <div className="text-[10px] font-bold text-slate-400 uppercase">Діє до</div>
+                        <div className="text-xs font-bold mt-1 text-slate-200">
+                          {user?.subscriptionExpiresAt
+                            ? new Date(user.subscriptionExpiresAt).toLocaleDateString('uk-UA')
+                            : 'Не обмежено'}
+                        </div>
+                      </div>
+
+                      <div className="p-3 rounded-xl bg-slate-800/60 border border-slate-700/60">
+                        <div className="text-[10px] font-bold text-slate-400 uppercase">Ліміт закладів</div>
+                        <div className="text-base font-black mt-0.5 text-white">
+                          {subDetails?.activeStoresCount ?? 0} з {user?.maxAllowedStores ?? 0} бізнесів
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Warning: Exceeded Store Limit */}
+                  {subDetails?.hasExceededStoreLimit && (
+                    <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl space-y-2 text-xs text-amber-900">
+                      <div className="flex items-center gap-2 font-bold text-amber-950">
+                        <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                        <span>Увага: перевищено ліміт активних закладів для вашого тарифу</span>
+                      </div>
+                      <p className="leading-relaxed">
+                        Ви маєте <strong>{subDetails.activeStoresCount}</strong> активних закладів, тоді як поточний тариф дозволяє максимум <strong>{subDetails.maxAllowedStores}</strong>. Будь ласка, перейдіть у вкладку <strong>«Мої бізнеси та ролі»</strong> та призупиніть зайві заклади, або підвищіть тарифний план нижче.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Upgrade / Change Plan Cards */}
+                  <div className="space-y-3 pt-2">
+                    <h3 className="text-sm font-bold text-slate-900">Змінити тарифний план</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      {allPlans
+                        .filter((p) => p.target === 'business')
+                        .map((plan) => {
+                          const isCurrent = user?.subscriptionTier === plan.id;
+                          return (
+                            <div
+                              key={plan.id}
+                              className={`p-4 border rounded-xl flex flex-col justify-between space-y-3 ${
+                                isCurrent
+                                  ? 'border-slate-900 bg-slate-50/70 ring-1 ring-slate-900'
+                                  : 'border-slate-200 bg-white hover:border-slate-300'
+                              }`}
+                            >
+                              <div>
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs font-bold text-slate-900">{plan.name}</span>
+                                  {plan.badge && (
+                                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-900 text-white uppercase">
+                                      {plan.badge}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-lg font-black text-slate-900 mt-2">
+                                  {plan.priceUah} ₴ <span className="text-[10px] text-slate-400 font-normal">/ міс</span>
+                                </div>
+                                <div className="text-[11px] font-semibold text-slate-600 mt-1">
+                                  Ліміт: {plan.maxStores} {plan.maxStores === 1 ? 'заклад' : 'заклади'}
+                                </div>
+                              </div>
+
+                              <div>
+                                {isCurrent ? (
+                                  <div className="w-full py-1.5 text-center text-xs font-bold text-slate-500 bg-slate-200/60 rounded-lg">
+                                    Поточний план
+                                  </div>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => setSelectedPlanForUpgrade(plan)}
+                                    className="w-full py-2 px-3 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-lg transition-colors shadow-sm"
+                                  >
+                                    Перейти на цей план
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -1011,6 +1246,72 @@ export default function AccountPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Upgrade Subscription */}
+      {selectedPlanForUpgrade && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
+          <div className="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden">
+            <div className="px-6 py-4 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="px-2 py-0.5 rounded bg-slate-900 text-white font-black text-[10px] tracking-wider uppercase">
+                  BIZX PAY
+                </span>
+                <span className="text-xs font-bold text-slate-700">Зміна тарифного плану</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedPlanForUpgrade(null)}
+                className="text-slate-400 hover:text-slate-700 text-sm font-bold p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="border border-slate-200 rounded-xl p-4 bg-slate-50/50 space-y-2 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-600">Новий тариф:</span>
+                  <span className="font-black text-slate-900">{selectedPlanForUpgrade.name}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-600">Вартість:</span>
+                  <span className="font-black text-slate-900">{selectedPlanForUpgrade.priceUah} ₴ / міс</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-600">Термін:</span>
+                  <span className="font-semibold text-slate-700">30 днів (тестова активація)</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-600">Ліміт закладів:</span>
+                  <span className="font-semibold text-slate-700">До {selectedPlanForUpgrade.maxStores} закладів</span>
+                </div>
+              </div>
+
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-[11px] text-blue-900 leading-relaxed">
+                ℹ️ <strong>Тестова оплата:</strong> Справжні кошти не знімаються. Підписку буде миттєво активовано на 30 днів.
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedPlanForUpgrade(null)}
+                  className="px-3 py-2 border border-slate-200 text-xs font-semibold text-slate-700 rounded-lg hover:bg-slate-50"
+                >
+                  Скасувати
+                </button>
+                <button
+                  type="button"
+                  disabled={isActivatingSub}
+                  onClick={handleConfirmSubscriptionChange}
+                  className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-lg disabled:opacity-50 transition-colors shadow-sm"
+                >
+                  {isActivatingSub ? 'Активація...' : 'Підтвердити зміну тарифу'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

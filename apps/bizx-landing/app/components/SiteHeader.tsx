@@ -139,6 +139,9 @@ export const SiteHeader: React.FC = () => {
             <Link href="/#benefits" className="hover:text-slate-900 transition-colors">
               Для бізнесу
             </Link>
+            <Link href="/pricing" className="hover:text-slate-900 transition-colors">
+              Тарифи
+            </Link>
             <Link href="/#process" className="hover:text-slate-900 transition-colors">
               Як це працює
             </Link>
@@ -207,7 +210,7 @@ export const SiteHeader: React.FC = () => {
                         <div className="text-[11px] text-slate-500 truncate">{user.email}</div>
                       </div>
                     </div>
-                    <div className="px-4 py-1.5">
+                    <div className="px-4 py-1.5 flex items-center gap-1.5 flex-wrap">
                       {isPlatformStaff ? (
                         <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800">
                           BizX Staff
@@ -219,6 +222,15 @@ export const SiteHeader: React.FC = () => {
                       ) : (
                         <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700">
                           Клієнт
+                        </span>
+                      )}
+
+                      {user.subscriptionTier && user.subscriptionTier !== 'free' && (
+                        <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-200 uppercase">
+                          {user.subscriptionTier === 'client_premium' && 'Premium'}
+                          {user.subscriptionTier === 'business_starter' && 'Starter'}
+                          {user.subscriptionTier === 'business_pro' && 'Pro'}
+                          {user.subscriptionTier === 'business_enterprise' && 'Enterprise'}
                         </span>
                       )}
                     </div>
@@ -246,6 +258,16 @@ export const SiteHeader: React.FC = () => {
                           <span>BizX Panel</span>
                         </a>
                       )}
+
+                      {/* Tariffs / Subscription Link */}
+                      <Link
+                        href="/pricing"
+                        onClick={() => setIsDropdownOpen(false)}
+                        className="flex items-center gap-2.5 px-4 py-2 text-slate-700 hover:bg-slate-100 hover:text-slate-900 transition-colors font-medium"
+                      >
+                        <span className="w-4 h-4 text-slate-500 font-bold text-center leading-none">₴</span>
+                        <span>Тарифи та підписка</span>
+                      </Link>
 
                       {/* Account Settings */}
                       <Link
