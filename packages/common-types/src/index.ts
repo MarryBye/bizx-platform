@@ -68,6 +68,18 @@ export function isBusinessTier(tier?: string | null): boolean {
   return tier === 'business_starter' || tier === 'business_pro' || tier === 'business_enterprise';
 }
 
+/**
+ * Локалізація та мови (i18n)
+ */
+export const supportedLocaleSchema = z.enum(['uk', 'en']);
+export type SupportedLocale = z.infer<typeof supportedLocaleSchema>;
+
+export function getNormalizedLocale(input?: string | null): SupportedLocale {
+  if (!input) return 'uk';
+  const clean = input.toLowerCase().trim();
+  if (clean === 'en' || clean.startsWith('en-') || clean === 'eng') return 'en';
+  return 'uk';
+}
 
 /**
  * Пользователи и авторизация
@@ -78,6 +90,7 @@ export const userSchema = z.object({
   name: z.string().min(2, { message: 'Имя должно содержать минимум 2 символа' }),
   phone: z.string().nullable().optional(),
   avatarUrl: z.string().nullable().optional(),
+  preferredLanguage: supportedLocaleSchema.default('uk').optional(),
   status: z.enum(['active', 'suspended', 'archived']).default('active').optional(),
   subscriptionTier: subscriptionTierSchema.default('free').optional(),
   subscriptionStatus: subscriptionStatusSchema.default('none').optional(),
@@ -144,6 +157,7 @@ export const userProfileSchema = z.object({
   systemRole: systemRoleSchema.default('user'),
   phone: z.string().nullable().optional(),
   avatarUrl: z.string().nullable().optional(),
+  preferredLanguage: supportedLocaleSchema.default('uk').optional(),
   status: z.enum(['active', 'suspended', 'archived']).default('active').optional(),
   subscriptionTier: subscriptionTierSchema.default('free').optional(),
   subscriptionStatus: subscriptionStatusSchema.default('none').optional(),
@@ -159,7 +173,8 @@ export type UserProfile = z.infer<typeof userProfileSchema>;
 export const updateUserProfileDtoSchema = z.object({
   name: z.string().min(2, { message: 'Имя должно содержать минимум 2 символа' }).optional(),
   phone: z.string().nullable().optional(),
-  avatarUrl: z.string().nullable().optional()
+  avatarUrl: z.string().nullable().optional(),
+  preferredLanguage: supportedLocaleSchema.optional()
 });
 
 export type UpdateUserProfileDto = z.infer<typeof updateUserProfileDtoSchema>;
