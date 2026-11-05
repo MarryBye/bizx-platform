@@ -197,9 +197,11 @@ export class StoresService {
           address: dto.address,
           phone: dto.phone,
           email: dto.email,
-          status: 'active'
+          status: 'draft'
         })
         .returning();
+
+      await tx.update(users).set({ role: 'business_owner', updatedAt: new Date() }).where(eq(users.id, ownerId));
 
       await tx.insert(storeMembers).values({
         storeId: insertedStore.id,
@@ -527,6 +529,10 @@ export class StoresService {
     systemRole?: SystemRole
   ): Promise<StoreRecord> {
     const store = await this.assertStoreOwnership(storeId, userId, userRole, systemRole);
+
+    if (dto?.status && systemRole !== 'platform_admin' && dto.status === 'active') {
+      throw new ForbiddenException('Активація магазину можлива лише після схвалення адміністраторами платформи BizX');
+    }
 
     if (dto?.slug && dto.slug.toLowerCase() !== store.slug) {
       const [duplicate] = await this.databaseService.db

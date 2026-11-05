@@ -146,11 +146,12 @@ export class AuthController {
   @Post('logout')
   async logout(
     @Req() req: Request,
-    @Res({ passthrough: true }) res: Response
+    @Res({ passthrough: true }) res: Response,
+    @CurrentUser('sub') userId?: string
   ): Promise<ApiResponse<{ message: string }>> {
     const rawToken =
       req.cookies?.[REFRESH_COOKIE_NAME] || (req.body as RefreshTokenDto)?.refreshToken;
-    await this.authService.logout(rawToken);
+    await this.authService.logout(rawToken, userId);
     this.clearRefreshCookie(res);
 
     return {

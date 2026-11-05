@@ -87,7 +87,7 @@ export const registerDtoSchema = z.object({
   email: z.string().email({ message: 'Некорректный email адрес' }),
   password: z.string().min(6, { message: 'Пароль должен содержать минимум 6 символов' }),
   name: z.string().min(2, { message: 'Имя должно содержать минимум 2 символа' }),
-  role: userRoleSchema.optional().default('client')
+  role: z.literal('client').optional().default('client')
 });
 
 export type RegisterDto = z.infer<typeof registerDtoSchema>;
@@ -149,7 +149,7 @@ export type UpdateStoreCategoryDto = z.infer<typeof updateStoreCategoryDtoSchema
 /**
  * Магазины (бизнесы-партнеры)
  */
-export const storeStatusSchema = z.enum(['active', 'pending', 'suspended', 'closed', 'archived']);
+export const storeStatusSchema = z.enum(['draft', 'pending', 'active', 'suspended', 'closed', 'archived']);
 export type StoreStatus = z.infer<typeof storeStatusSchema>;
 
 export const storeSchema = z.object({
@@ -164,7 +164,7 @@ export const storeSchema = z.object({
   address: z.string().nullable().optional(),
   phone: z.string().nullable().optional(),
   email: z.string().email().nullable().optional(),
-  status: storeStatusSchema.default('active'),
+  status: storeStatusSchema.default('draft'),
   memberRole: storeMemberRoleSchema.optional(),
   archivedAt: z.string().datetime().nullable().optional(),
   createdAt: z.string().datetime().optional(),

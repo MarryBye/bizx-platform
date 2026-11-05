@@ -89,7 +89,7 @@ export class AuthService {
         email: dto.email.toLowerCase(),
         name: dto.name,
         passwordHash,
-        role: dto.role || 'client'
+        role: 'client'
       })
       .returning({
         id: users.id,
@@ -202,7 +202,7 @@ export class AuthService {
     };
   }
 
-  async logout(rawRefreshToken?: string): Promise<void> {
+  async logout(rawRefreshToken?: string, userId?: string): Promise<void> {
     if (rawRefreshToken) {
       const tokenHash = this.hashToken(rawRefreshToken);
       await this.databaseService.db
