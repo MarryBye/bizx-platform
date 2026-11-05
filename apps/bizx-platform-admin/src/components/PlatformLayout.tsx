@@ -94,7 +94,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({
               </div>
             </div>
             <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200 font-mono">
-              :3103
+              Control
             </span>
           </div>
 
@@ -137,7 +137,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({
               rel="noreferrer"
               className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-colors text-xs font-medium"
             >
-              <span>Головний портал (:3100)</span>
+              <span>Головний портал</span>
               <ExternalLink className="w-3 h-3 text-slate-400" />
             </a>
             <a
@@ -146,7 +146,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({
               rel="noreferrer"
               className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-colors text-xs font-medium"
             >
-              <span>Кабінет мерчанта (:3102)</span>
+              <span>Панель бізнесу</span>
               <ExternalLink className="w-3 h-3 text-slate-400" />
             </a>
           </div>

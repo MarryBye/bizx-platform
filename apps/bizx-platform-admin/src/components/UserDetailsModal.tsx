@@ -198,7 +198,7 @@ export const UserDetailsModal: React.FC<UserDetailsModalProps> = ({
                 Привілеї співробітника BizX Staff
               </div>
               <div className="text-[11px] text-slate-500 mt-0.5">
-                Надає доступ до цієї внутрішньої адмін-панелі на порту :3103
+                Надає повний доступ до внутрішньої консолі керування BizX
               </div>
             </div>
 

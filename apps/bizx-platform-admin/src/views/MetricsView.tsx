@@ -251,7 +251,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
                   </div>
                   <div>
                     <div className="text-xs font-bold text-slate-900">NestJS Core API</div>
-                    <div className="text-[10px] text-slate-400 font-mono">http://localhost:3101</div>
+                    <div className="text-[10px] text-slate-400 font-mono">Основний API Gateway</div>
                   </div>
                 </div>
                 <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded uppercase">
@@ -266,7 +266,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
                   </div>
                   <div>
                     <div className="text-xs font-bold text-slate-900">PostgreSQL + Drizzle</div>
-                    <div className="text-[10px] text-slate-400 font-mono">localhost:5432 / bizx_db</div>
+                    <div className="text-[10px] text-slate-400 font-mono">База даних PostgreSQL Primary</div>
                   </div>
                 </div>
                 <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded uppercase">
@@ -296,7 +296,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
                   </div>
                   <div>
                     <div className="text-xs font-bold text-slate-900">Merchant Portal</div>
-                    <div className="text-[10px] text-slate-400 font-mono">http://localhost:3102</div>
+                    <div className="text-[10px] text-slate-400 font-mono">Бізнес-портал мерчантів</div>
                   </div>
                 </div>
                 <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded uppercase">

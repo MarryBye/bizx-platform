@@ -394,6 +394,8 @@ export const App: React.FC = () => {
     }
     platformApi.client.setAccessToken(null);
     localStorage.removeItem('bizx_platform_admin_token');
+    localStorage.removeItem('bizx_access_token');
+    localStorage.removeItem('bizx_admin_access_token');
     setCurrentUser(null);
   };
 
@@ -437,7 +439,7 @@ export const App: React.FC = () => {
               href="http://localhost:3102"
               className="w-full py-2 px-4 rounded-lg border border-slate-200 text-slate-700 text-xs font-semibold hover:bg-slate-50 transition-colors text-center"
             >
-              Перейти в кабінет мерчанта (:3102)
+              Перейти в кабінет бізнесу
             </a>
           </div>
         </div>
