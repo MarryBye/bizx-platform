@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { api } from '../lib/api';
+import { i18n } from '@bizx/utils';
 import type { UserProfile, LoginDto } from '@bizx/common-types';
 
 interface AuthState {
@@ -35,6 +36,20 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   init: async () => {
     set({ isLoading: true, error: null });
+
+    // Pick up token from URL if redirected from other platform portal
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const tokenFromUrl = urlParams.get('token');
+      if (tokenFromUrl) {
+        api.client.setAccessToken(tokenFromUrl);
+        localStorage.setItem('bizx_admin_access_token', tokenFromUrl);
+        localStorage.setItem('bizx_access_token', tokenFromUrl);
+        const cleanUrl = window.location.pathname;
+        window.history.replaceState({}, document.title, cleanUrl);
+      }
+    }
+
     try {
       const res = await api.auth.me();
       if (res.success && res.data) {
@@ -48,6 +63,14 @@ export const useAuthStore = create<AuthState>((set) => ({
           });
           return;
         }
+
+        if (res.data.preferredLanguage && (res.data.preferredLanguage === 'uk' || res.data.preferredLanguage === 'en')) {
+          i18n.setLocale(res.data.preferredLanguage);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('bizx_locale', res.data.preferredLanguage);
+          }
+        }
+
         set({ user: res.data, isLoading: false });
         return;
       }

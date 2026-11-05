@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useAuthStore } from '../store/useAuthStore';
 import { useBusinessStore } from '../store/useBusinessStore';
+import { useTranslation } from '../hooks/useTranslation';
+import { api } from '../lib/api';
 import { Button, Select } from '@bizx/ui';
 import {
   BarChart3,
@@ -25,6 +27,7 @@ import { resolveMediaUrl } from '../lib/media';
 type TabType = 'analytics' | 'products' | 'orders' | 'settings' | 'staff' | 'payouts';
 
 export const DashboardLayout: React.FC = () => {
+  const { t, locale, setLocale } = useTranslation();
   const { user, logout } = useAuthStore();
   const { stores, activeStoreId, setActiveStore } = useBusinessStore();
   const [currentTab, setCurrentTab] = useState<TabType>('analytics');
@@ -32,12 +35,12 @@ export const DashboardLayout: React.FC = () => {
   const [avatarError, setAvatarError] = useState(false);
 
   const merchantNavItems = [
-    { id: 'analytics' as const, label: 'Аналітика', icon: BarChart3 },
-    { id: 'products' as const, label: 'Товари та склад', icon: Package },
-    { id: 'orders' as const, label: 'Замовлення', icon: ShoppingBag },
-    { id: 'settings' as const, label: 'Магазин та медіа', icon: Settings },
-    { id: 'staff' as const, label: 'Персонал та ролі', icon: Users },
-    { id: 'payouts' as const, label: 'Виплати (Скоро)', icon: CreditCard, isStub: true }
+    { id: 'analytics' as const, label: t('admin.analytics'), icon: BarChart3 },
+    { id: 'products' as const, label: t('admin.products'), icon: Package },
+    { id: 'orders' as const, label: t('admin.orders'), icon: ShoppingBag },
+    { id: 'settings' as const, label: t('admin.settings'), icon: Settings },
+    { id: 'staff' as const, label: t('admin.staff'), icon: Users },
+    { id: 'payouts' as const, label: locale === 'en' ? 'Payouts (Soon)' : 'Виплати (Скоро)', icon: CreditCard, isStub: true }
   ];
 
   const getInitials = (userName: string) => {
@@ -206,13 +209,30 @@ export const DashboardLayout: React.FC = () => {
             <ExternalLink className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-700 shrink-0 ml-1" />
           </a>
 
+          <div className="flex items-center justify-between px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg">
+            <span className="text-[11px] font-bold text-slate-500">{t('account.language')}</span>
+            <button
+              type="button"
+              onClick={() => {
+                const next = locale === 'uk' ? 'en' : 'uk';
+                setLocale(next);
+                if (user) {
+                  api.auth.updateProfile({ preferredLanguage: next }).catch(() => {});
+                }
+              }}
+              className="px-2 py-0.5 text-[10px] font-black rounded bg-slate-100 hover:bg-slate-200 text-slate-800 transition-colors uppercase"
+            >
+              {locale === 'uk' ? 'EN' : 'UA'}
+            </button>
+          </div>
+
           <Button
             variant="outline"
             size="sm"
             onClick={logout}
             className="w-full flex items-center justify-center gap-1.5 text-xs text-red-600 hover:bg-red-50 hover:border-red-200"
           >
-            <LogOut className="w-3.5 h-3.5" /> Вийти з системи
+            <LogOut className="w-3.5 h-3.5" /> {t('common.logout')}
           </Button>
         </div>
       </aside>
