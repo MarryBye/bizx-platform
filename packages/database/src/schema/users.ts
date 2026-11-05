@@ -11,6 +11,9 @@ export const users = pgTable('users', {
   phone: varchar('phone', { length: 50 }),
   avatarUrl: varchar('avatar_url', { length: 500 }),
   status: varchar('status', { length: 50 }).default('active').notNull(), // 'active' | 'suspended' | 'archived'
+  subscriptionTier: varchar('subscription_tier', { length: 50 }).default('free').notNull(), // 'free' | 'client_premium' | 'business_starter' | 'business_pro' | 'business_enterprise'
+  subscriptionStatus: varchar('subscription_status', { length: 50 }).default('none').notNull(), // 'none' | 'active' | 'expired' | 'cancelled'
+  subscriptionExpiresAt: timestamp('subscription_expires_at', { withTimezone: true }),
   archivedAt: timestamp('archived_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull()
