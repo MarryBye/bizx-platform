@@ -22,10 +22,14 @@ export function getPlatformApiClient(): BizXClient {
           localStorage.setItem(PLATFORM_TOKEN_KEY, token);
         } else {
           localStorage.removeItem(PLATFORM_TOKEN_KEY);
+          localStorage.removeItem('bizx_access_token');
+          localStorage.removeItem('bizx_admin_access_token');
         }
       },
       onUnauthorized: () => {
         localStorage.removeItem(PLATFORM_TOKEN_KEY);
+        localStorage.removeItem('bizx_access_token');
+        localStorage.removeItem('bizx_admin_access_token');
         window.dispatchEvent(new CustomEvent('bizx:unauthorized'));
       }
     });
