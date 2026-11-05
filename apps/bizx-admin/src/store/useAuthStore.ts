@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { api } from '../lib/api';
-import type { UserProfile, LoginDto, RegisterDto } from '@bizx/common-types';
+import type { UserProfile, LoginDto } from '@bizx/common-types';
 
 interface AuthState {
   user: UserProfile | null;
@@ -8,7 +8,6 @@ interface AuthState {
   error: string | null;
   init: () => Promise<void>;
   login: (dto: LoginDto) => Promise<boolean>;
-  register: (dto: RegisterDto) => Promise<boolean>;
   logout: () => Promise<void>;
   updateAvatar: (file: File) => Promise<boolean>;
   updateProfile: (dto: { name?: string; phone?: string }) => Promise<boolean>;
@@ -24,7 +23,11 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       const res = await api.auth.me();
       if (res.success && res.data) {
-        if (res.data.role !== 'business_owner') {
+        if (
+          res.data.role !== 'business_owner' &&
+          res.data.role !== 'admin' &&
+          res.data.systemRole !== 'platform_admin'
+        ) {
           api.client.setAccessToken(null);
           set({ user: null, isLoading: false });
           return;
@@ -43,7 +46,11 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       const res = await api.auth.login(dto);
       if (res.success && res.data) {
-        if (res.data.user.role !== 'business_owner') {
+        if (
+          res.data.user.role !== 'business_owner' &&
+          res.data.user.role !== 'admin' &&
+          res.data.user.systemRole !== 'platform_admin'
+        ) {
           api.client.setAccessToken(null);
           set({
             user: null,
@@ -64,31 +71,18 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
   },
 
-  register: async (dto: RegisterDto) => {
-    set({ isLoading: true, error: null });
-    try {
-      const res = await api.auth.register({
-        ...dto,
-        role: 'business_owner'
-      });
-      if (res.success && res.data) {
-        set({ user: res.data.user, isLoading: false });
-        return true;
-      }
-      set({ error: 'Не вдалося зареєструватися [AUTH_1003]', isLoading: false });
-      return false;
-    } catch (err: any) {
-      const message = err.data?.message || err.message || 'Помилка реєстрації [AUTH_1000]';
-      set({ error: message, isLoading: false });
-      return false;
-    }
-  },
-
   logout: async () => {
     try {
       await api.auth.logout();
     } catch {
       // Ignore error on logout
+    } finally {
+      api.client.setAccessToken(null);
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('bizx_admin_access_token');
+        localStorage.removeItem('bizx_access_token');
+        localStorage.removeItem('bizx_platform_admin_token');
+      }
     }
     set({ user: null, error: null });
   },
@@ -101,8 +95,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         return true;
       }
       return false;
-    } catch (err: any) {
-      set({ error: err.message || 'Не вдалося оновити аватар' });
+    } catch {
       return false;
     }
   },
@@ -118,7 +111,8 @@ export const useAuthStore = create<AuthState>((set) => ({
       set({ error: 'Не вдалося оновити профіль', isLoading: false });
       return false;
     } catch (err: any) {
-      set({ error: err.message || 'Помилка оновлення профілю', isLoading: false });
+      const message = err.data?.message || err.message || 'Помилка оновлення профілю';
+      set({ error: message, isLoading: false });
       return false;
     }
   }
