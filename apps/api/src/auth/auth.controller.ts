@@ -151,7 +151,9 @@ export class AuthController {
   ): Promise<ApiResponse<{ message: string }>> {
     const rawToken =
       req.cookies?.[REFRESH_COOKIE_NAME] || (req.body as RefreshTokenDto)?.refreshToken;
-    await this.authService.logout(rawToken, userId);
+    const authHeader = req.headers.authorization;
+    const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.split(' ')[1] : undefined;
+    await this.authService.logout(rawToken, userId, bearerToken);
     this.clearRefreshCookie(res);
 
     return {

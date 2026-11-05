@@ -40,6 +40,7 @@ export class AuthService {
       systemRole: (user.systemRole || 'user') as UserProfile['systemRole'],
       phone: user.phone || null,
       avatarUrl: user.avatarUrl || null,
+      preferredLanguage: (user.preferredLanguage || 'uk') as UserProfile['preferredLanguage'],
       status: (user.status || 'active') as UserProfile['status'],
       subscriptionTier: (user.subscriptionTier || 'free') as any,
       subscriptionStatus: (user.subscriptionStatus || 'none') as any,
@@ -208,12 +209,30 @@ export class AuthService {
     };
   }
 
-  async logout(rawRefreshToken?: string, userId?: string): Promise<void> {
+  async logout(rawRefreshToken?: string, userId?: string, bearerToken?: string): Promise<void> {
     if (rawRefreshToken) {
       const tokenHash = this.hashToken(rawRefreshToken);
       await this.databaseService.db
         .delete(refreshTokens)
         .where(eq(refreshTokens.tokenHash, tokenHash));
+    }
+
+    let resolvedUserId = userId;
+    if (!resolvedUserId && bearerToken) {
+      try {
+        const decoded = this.jwtService.decode(bearerToken) as { sub?: string } | null;
+        if (decoded?.sub) {
+          resolvedUserId = decoded.sub;
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    if (resolvedUserId) {
+      await this.databaseService.db
+        .delete(refreshTokens)
+        .where(eq(refreshTokens.userId, resolvedUserId));
     }
   }
 
@@ -232,6 +251,7 @@ export class AuthService {
       name?: string;
       phone?: string | null;
       avatarUrl?: string | null;
+      preferredLanguage?: string;
       updatedAt: Date;
     } = {
       updatedAt: new Date()
@@ -240,6 +260,7 @@ export class AuthService {
     if (dto.name !== undefined) updateData.name = dto.name;
     if (dto.phone !== undefined) updateData.phone = dto.phone;
     if (dto.avatarUrl !== undefined) updateData.avatarUrl = dto.avatarUrl;
+    if (dto.preferredLanguage !== undefined) updateData.preferredLanguage = dto.preferredLanguage;
 
     const [updated] = await this.databaseService.db
       .update(users)
@@ -251,16 +272,7 @@ export class AuthService {
       throw new NotFoundException('Пользователь не найден');
     }
 
-    return {
-      id: updated.id,
-      email: updated.email,
-      name: updated.name,
-      role: updated.role as UserProfile['role'],
-      systemRole: (updated.systemRole || 'user') as UserProfile['systemRole'],
-      phone: updated.phone,
-      avatarUrl: updated.avatarUrl,
-      createdAt: updated.createdAt.toISOString()
-    };
+    return this.mapToProfile(updated);
   }
 
   async updateAvatar(userId: string, avatarUrl: string): Promise<UserProfile> {
