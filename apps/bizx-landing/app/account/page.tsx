@@ -1,5 +1,7 @@
 'use client';
 
+import { AuthCard } from '@bizx/ui';
+
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { api } from '../lib/api';
@@ -19,8 +21,6 @@ import {
   LogOut,
   AlertCircle
 } from 'lucide-react';
-import LoginOutlinedIcon from '@mui/icons-material/LoginOutlined';
-import PersonAddOutlinedIcon from '@mui/icons-material/PersonAddOutlined';
 import StorefrontOutlinedIcon from '@mui/icons-material/StorefrontOutlined';
 import ShieldOutlinedIcon from '@mui/icons-material/ShieldOutlined';
 
@@ -61,12 +61,18 @@ export default function AccountPage() {
   // Stores
   const [myStores, setMyStores] = useState<Store[]>([]);
 
+  // Create Business State
+  const [showCreateStoreModal, setShowCreateStoreModal] = useState(false);
+  const [newStoreName, setNewStoreName] = useState('');
+  const [newStoreSlug, setNewStoreSlug] = useState('');
+  const [newStoreDesc, setNewStoreDesc] = useState('');
+  const [newStorePhone, setNewStorePhone] = useState('');
+  const [newStoreEmail, setNewStoreEmail] = useState('');
+  const [isCreatingStore, setIsCreatingStore] = useState(false);
+  const [createStoreError, setCreateStoreError] = useState<string | null>(null);
+  const [moderationNotice, setModerationNotice] = useState<string | null>(null);
+
   // In-page Auth State for Guests
-  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
-  const [authEmail, setAuthEmail] = useState('');
-  const [authPassword, setAuthPassword] = useState('');
-  const [authName, setAuthName] = useState('');
-  const [authRole, setAuthRole] = useState<'client' | 'business_owner'>('client');
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
 
@@ -185,54 +191,51 @@ export default function AccountPage() {
     window.location.reload();
   };
 
-  const handleInlineAuthSubmit = async (e: React.FormEvent) => {
+    const handleCreateStore = async (e: React.FormEvent) => {
     e.preventDefault();
-    setAuthError(null);
-    setAuthLoading(true);
+    if (!newStoreName.trim() || !newStoreSlug.trim()) return;
+    setIsCreatingStore(true);
+    setCreateStoreError(null);
 
     try {
-      if (authMode === 'login') {
-        const res = await api.auth.login({ email: authEmail, password: authPassword });
-        if (res.success && res.data) {
-          setUser(res.data.user);
-          setName(res.data.user.name || '');
-          setEmail(res.data.user.email || '');
-          setPhone(res.data.user.phone || '');
-          setAvatarUrl(res.data.user.avatarUrl || '');
+      const res = await api.stores.createStore({
+        name: newStoreName.trim(),
+        slug: newStoreSlug.trim().toLowerCase(),
+        description: newStoreDesc.trim() || undefined,
+        phone: newStorePhone.trim() || undefined,
+        email: newStoreEmail.trim() || undefined
+      });
 
-          try {
-            const storesRes = await api.stores.getMyStores();
-            if (storesRes.success && storesRes.data) {
-              setMyStores(storesRes.data);
-            }
-          } catch {
-            setMyStores([]);
-          }
-          return;
-        }
-        setAuthError('Невірний логін або пароль');
-      } else {
-        const res = await api.auth.register({
-          name: authName,
-          email: authEmail,
-          password: authPassword,
-          role: authRole
-        });
-        if (res.success && res.data) {
-          setUser(res.data.user);
-          setName(res.data.user.name || '');
-          setEmail(res.data.user.email || '');
-          setPhone(res.data.user.phone || '');
-          setAvatarUrl(res.data.user.avatarUrl || '');
-          return;
-        }
-        setAuthError('Не вдалося створити акаунт. Перевірте введені дані');
+      if (res.success && res.data) {
+        setShowCreateStoreModal(false);
+        setNewStoreName('');
+        setNewStoreSlug('');
+        setNewStoreDesc('');
+        setNewStorePhone('');
+        setNewStoreEmail('');
+        await loadData();
+        return;
+      }
+      setCreateStoreError('Не вдалося зареєструвати бізнес. Перевірте унікальність slug.');
+    } catch (err: unknown) {
+      const errObj = err as { data?: { message?: string }; message?: string };
+      setCreateStoreError(errObj.data?.message || errObj.message || 'Помилка створення бізнесу');
+    } finally {
+      setIsCreatingStore(false);
+    }
+  };
+
+  const handleSubmitForModeration = async (storeId: string) => {
+    try {
+      const res = await api.stores.updateStore(storeId, { status: 'pending' });
+      if (res.success) {
+        setModerationNotice('Заклад успішно відправлено на перевірку модераторам BizX');
+        await loadData();
+        setTimeout(() => setModerationNotice(null), 4000);
       }
     } catch (err: unknown) {
       const errObj = err as { data?: { message?: string }; message?: string };
-      setAuthError(errObj.data?.message || errObj.message || 'Помилка авторизації');
-    } finally {
-      setAuthLoading(false);
+      alert(errObj.data?.message || errObj.message || 'Помилка надсилання на модерацію');
     }
   };
 
@@ -270,143 +273,51 @@ export default function AccountPage() {
             <div className="text-xs font-semibold text-slate-500">Завантаження облікового запису...</div>
           </div>
         ) : !user ? (
-          /* Unauthenticated State: Clean Metro Auth Card */
-          <div className="max-w-md mx-auto py-10">
-            <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-              <div className="p-6 text-center border-b border-slate-100 bg-slate-50/50">
-                <div className="w-12 h-12 bg-slate-900 text-white rounded-xl flex items-center justify-center font-bold text-lg mx-auto mb-3 shadow-sm">
-                  B
-                </div>
-                <h2 className="text-lg font-black text-slate-900">Обліковий запис BizX</h2>
-                <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto">
-                  Увійдіть у систему, щоб переглянути дані профілю, список ваших закладів та персональні налаштування.
-                </p>
-              </div>
-
-              {/* Mode Switcher */}
-              <div className="flex border-b border-slate-200 px-6 pt-3 bg-white">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAuthMode('login');
-                    setAuthError(null);
-                  }}
-                  className={`pb-2.5 px-3 text-xs font-bold border-b-2 transition-colors flex items-center gap-1.5 ${
-                    authMode === 'login'
-                      ? 'border-slate-900 text-slate-900'
-                      : 'border-transparent text-slate-500 hover:text-slate-800'
-                  }`}
-                >
-                  <LoginOutlinedIcon className="w-4 h-4" />
-                  <span>Вхід</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAuthMode('register');
-                    setAuthError(null);
-                  }}
-                  className={`pb-2.5 px-3 text-xs font-bold border-b-2 transition-colors flex items-center gap-1.5 ${
-                    authMode === 'register'
-                      ? 'border-slate-900 text-slate-900'
-                      : 'border-transparent text-slate-500 hover:text-slate-800'
-                  }`}
-                >
-                  <PersonAddOutlinedIcon className="w-4 h-4" />
-                  <span>Реєстрація</span>
-                </button>
-              </div>
-
-              {/* Form */}
-              <form onSubmit={handleInlineAuthSubmit} className="p-6 space-y-4">
-                {authError && (
-                  <div className="p-3 text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2">
-                    <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
-                    <span>{authError}</span>
-                  </div>
-                )}
-
-                {authMode === 'register' && (
-                  <>
-                    <div className="space-y-1">
-                      <label className="text-xs font-bold text-slate-700">Ім&apos;я та прізвище</label>
-                      <input
-                        type="text"
-                        required
-                        value={authName}
-                        onChange={(e) => setAuthName(e.target.value)}
-                        placeholder="Олександр Коваленко"
-                        className="w-full text-xs px-3 py-2 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-slate-900 focus:border-slate-900"
-                      />
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="text-xs font-bold text-slate-700">Тип облікового запису</label>
-                      <div className="grid grid-cols-2 gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setAuthRole('client')}
-                          className={`py-2 px-3 text-xs font-medium rounded-lg border text-center transition-all ${
-                            authRole === 'client'
-                              ? 'border-slate-900 bg-slate-900 text-white font-semibold'
-                              : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-                          }`}
-                        >
-                          Клієнт / Покупець
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setAuthRole('business_owner')}
-                          className={`py-2 px-3 text-xs font-medium rounded-lg border text-center transition-all ${
-                            authRole === 'business_owner'
-                              ? 'border-slate-900 bg-slate-900 text-white font-semibold'
-                              : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-                          }`}
-                        >
-                          Власник бізнесу
-                        </button>
-                      </div>
-                    </div>
-                  </>
-                )}
-
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700">Електронна пошта</label>
-                  <input
-                    type="email"
-                    required
-                    value={authEmail}
-                    onChange={(e) => setAuthEmail(e.target.value)}
-                    placeholder="name@example.com"
-                    className="w-full text-xs px-3 py-2 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-slate-900 focus:border-slate-900"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700">Пароль</label>
-                  <input
-                    type="password"
-                    required
-                    value={authPassword}
-                    onChange={(e) => setAuthPassword(e.target.value)}
-                    placeholder="••••••••"
-                    className="w-full text-xs px-3 py-2 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-slate-900 focus:border-slate-900"
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={authLoading}
-                  className="w-full mt-2 py-2.5 px-4 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-lg transition-colors shadow-sm disabled:opacity-50"
-                >
-                  {authLoading
-                    ? 'Зачекайте...'
-                    : authMode === 'login'
-                    ? 'Увійти в акаунт'
-                    : 'Зареєструватися'}
-                </button>
-              </form>
-            </div>
+          /* Unauthenticated State: Unified Metro AuthCard */
+          <div className="flex justify-center items-center py-10">
+            <AuthCard
+              badgeText="BIZX ID"
+              title="Особистий кабінет BizX"
+              subtitle="Увійдіть або зареєструйтесь для доступу до персонального кабінету"
+              allowRegister={true}
+              onSubmit={async (data) => {
+                setAuthError(null);
+                setAuthLoading(true);
+                try {
+                  if (data.mode === 'login') {
+                    const res = await api.auth.login({
+                      email: data.email,
+                      password: data.password
+                    });
+                    if (res.success && res.data) {
+                      await loadData();
+                      return;
+                    }
+                    setAuthError('Невірний логін або пароль');
+                  } else {
+                    const res = await api.auth.register({
+                      name: data.name || '',
+                      email: data.email,
+                      password: data.password,
+                      role: 'client'
+                    });
+                    if (res.success && res.data) {
+                      await loadData();
+                      return;
+                    }
+                    setAuthError('Не вдалося зареєструватися');
+                  }
+                } catch (err: unknown) {
+                  const errObj = err as { data?: { message?: string }; message?: string };
+                  setAuthError(errObj.data?.message || errObj.message || 'Помилка авторизації');
+                } finally {
+                  setAuthLoading(false);
+                }
+              }}
+              isLoading={authLoading}
+              error={authError}
+              footerNotice="Єдиний обліковий запис для всієї екосистеми BizX"
+            />
           </div>
         ) : (
           /* Authenticated Dashboard View */
@@ -634,69 +545,143 @@ export default function AccountPage() {
               {/* Tab: Businesses */}
               {activeTab === 'businesses' && (
                 <div className="space-y-6">
-                  <div className="border-b border-slate-100 pb-4">
-                    <h2 className="text-lg font-black text-slate-900">Мої заклади та ролі</h2>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      Список підключених торгових точок, де ви маєте статус власника або працівника
-                    </p>
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-100 pb-4">
+                    <div>
+                      <h2 className="text-lg font-black text-slate-900">Мої заклади та ролі</h2>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Керуйте торговими точками, модерацією та переходом у панель бізнесу
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowCreateStoreModal(true);
+                        setCreateStoreError(null);
+                      }}
+                      className="self-start sm:self-auto inline-flex items-center gap-1.5 px-3 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold transition-colors shadow-sm"
+                    >
+                      <StorefrontOutlinedIcon className="w-4 h-4" />
+                      <span>Створити бізнес</span>
+                    </button>
                   </div>
+
+                  {moderationNotice && (
+                    <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-800 flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-blue-600 shrink-0" />
+                      <span>{moderationNotice}</span>
+                    </div>
+                  )}
 
                   {myStores.length === 0 ? (
                     <div className="p-8 text-center border border-dashed border-slate-200 rounded-xl space-y-3">
                       <Building2 className="w-8 h-8 text-slate-400 mx-auto" />
                       <div className="text-xs font-bold text-slate-800">
-                        У вас поки немає підключених бізнесів
+                        У вас поки немає зареєстрованих закладів
                       </div>
                       <p className="text-[11px] text-slate-500 max-w-sm mx-auto">
-                        Ви зареєстровані як покупець або співробітник без призначених прав до магазинів.
+                        Ви зареєстровані як клієнт. Щоб почати продажі та відкрити кабінет партнера, зареєструйте новий заклад.
                       </p>
-                      <a
-                        href="http://localhost:3102"
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowCreateStoreModal(true);
+                          setCreateStoreError(null);
+                        }}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 text-white rounded-lg text-xs font-bold hover:bg-slate-800 transition-colors"
                       >
-                        <span>Зареєструвати новий заклад</span>
-                        <ExternalLink className="w-3.5 h-3.5" />
-                      </a>
+                        <StorefrontOutlinedIcon className="w-4 h-4" />
+                        <span>Створити новий заклад</span>
+                      </button>
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {myStores.map((st) => (
-                        <div
-                          key={st.id}
-                          className="p-4 border border-slate-200 rounded-xl hover:border-slate-300 transition-colors bg-slate-50/50 space-y-2.5"
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                              Торгова точка
-                            </span>
-                            <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded uppercase">
-                              {st.status}
-                            </span>
+                      {myStores.map((st) => {
+                        const isDraft = st.status === 'draft';
+                        const isPending = st.status === 'pending';
+                        const isActive = st.status === 'active';
+
+                        return (
+                          <div
+                            key={st.id}
+                            className="p-4 border border-slate-200 rounded-xl bg-slate-50/50 space-y-3"
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                                Торгова точка
+                              </span>
+                              {isDraft && (
+                                <span className="text-[10px] font-bold text-amber-800 bg-amber-100 border border-amber-200 px-2 py-0.5 rounded uppercase">
+                                  В розробці
+                                </span>
+                              )}
+                              {isPending && (
+                                <span className="text-[10px] font-bold text-blue-800 bg-blue-100 border border-blue-200 px-2 py-0.5 rounded uppercase">
+                                  На перевірці
+                                </span>
+                              )}
+                              {isActive && (
+                                <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded uppercase">
+                                  Активний
+                                </span>
+                              )}
+                              {!isDraft && !isPending && !isActive && (
+                                <span className="text-[10px] font-bold text-slate-700 bg-slate-200 px-2 py-0.5 rounded uppercase">
+                                  {st.status}
+                                </span>
+                              )}
+                            </div>
+
+                            <div>
+                              <div className="text-sm font-bold text-slate-900">{st.name}</div>
+                              <div className="text-[11px] text-slate-500 font-mono">/{st.slug}</div>
+                              {st.description && (
+                                <p className="text-xs text-slate-600 mt-1 line-clamp-2">
+                                  {st.description}
+                                </p>
+                              )}
+                            </div>
+
+                            {isDraft && (
+                              <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-lg space-y-2">
+                                <div className="text-[11px] text-amber-900 leading-tight">
+                                  Заклад у статусі чернетки. Надішліть його на перевірку адміністраторам BizX, коли будете готові.
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handleSubmitForModeration(st.id)}
+                                  className="w-full py-1.5 px-2 bg-amber-600 hover:bg-amber-700 text-white rounded text-xs font-bold transition-colors"
+                                >
+                                  Відправити на модерацію в BizX
+                                </button>
+                              </div>
+                            )}
+
+                            {isPending && (
+                              <div className="p-2.5 bg-blue-50 border border-blue-200 rounded-lg text-[11px] text-blue-900 leading-tight">
+                                Заявку надіслано на розгляд модераторам BizX. Заклад очікує підтвердження.
+                              </div>
+                            )}
+
+                            <div className="pt-2 border-t border-slate-200 flex items-center justify-between">
+                              <span className="text-[11px] font-semibold text-slate-700">
+                                Власник
+                              </span>
+                              <a
+                                href="http://localhost:3102"
+                                className="text-xs font-bold text-slate-900 hover:underline inline-flex items-center gap-1"
+                              >
+                                <span>Панель керування</span>
+                                <ExternalLink className="w-3 h-3" />
+                              </a>
+                            </div>
                           </div>
-                          <div>
-                            <div className="text-sm font-bold text-slate-900">{st.name}</div>
-                            <div className="text-[11px] text-slate-500 font-mono">/{st.slug}</div>
-                          </div>
-                          <div className="pt-2 border-t border-slate-200 flex items-center justify-between">
-                            <span className="text-[11px] font-semibold text-slate-700">
-                              Власник
-                            </span>
-                            <a
-                              href="http://localhost:3102"
-                              className="text-xs font-bold text-slate-900 hover:underline inline-flex items-center gap-1"
-                            >
-                              <span>Увійти в панель</span>
-                              <ExternalLink className="w-3 h-3" />
-                            </a>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>
               )}
 
-              {/* Tab: Security */}
               {activeTab === 'security' && (
                 <div className="space-y-6">
                   <div className="border-b border-slate-100 pb-4">
@@ -911,6 +896,125 @@ export default function AccountPage() {
             </section>
           </div>
         )}
+
+      {/* Modal: Create Business */}
+      {showCreateStoreModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
+          <div className="w-full max-w-lg bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden">
+            <div className="px-6 py-4 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="px-2 py-0.5 rounded bg-slate-900 text-white font-extrabold text-[11px] uppercase tracking-wider">
+                  BIZX BUSINESS
+                </span>
+                <span className="text-xs font-bold text-slate-700">Створення нового закладу</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCreateStoreModal(false)}
+                className="text-slate-400 hover:text-slate-700 text-sm font-bold p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateStore} className="p-6 space-y-4">
+              {createStoreError && (
+                <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg">
+                  {createStoreError}
+                </div>
+              )}
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-700">Назва закладу / бізнесу *</label>
+                <input
+                  type="text"
+                  required
+                  value={newStoreName}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setNewStoreName(val);
+                    if (!newStoreSlug || newStoreSlug === newStoreName.toLowerCase().replace(/[^a-z0-9]+/g, '-')) {
+                      setNewStoreSlug(val.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''));
+                    }
+                  }}
+                  placeholder="Кав'ярня 'Аромат'"
+                  className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:border-slate-900"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-700">URL-ідентифікатор (Slug) *</label>
+                <input
+                  type="text"
+                  required
+                  pattern="[a-z0-9-]+"
+                  value={newStoreSlug}
+                  onChange={(e) => setNewStoreSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+                  placeholder="aromat-cafe"
+                  className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:border-slate-900 font-mono"
+                />
+                <p className="text-[10px] text-slate-400">Тільки малі латинські літери, цифри та дефіси</p>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-700">Короткий опис</label>
+                <textarea
+                  rows={2}
+                  value={newStoreDesc}
+                  onChange={(e) => setNewStoreDesc(e.target.value)}
+                  placeholder="Свіжообсмажена кава, випічка та десерти"
+                  className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:border-slate-900"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-700">Контактний телефон</label>
+                  <input
+                    type="tel"
+                    value={newStorePhone}
+                    onChange={(e) => setNewStorePhone(e.target.value)}
+                    placeholder="+380 50 123 4567"
+                    className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:border-slate-900"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-700">Контактний Email</label>
+                  <input
+                    type="email"
+                    value={newStoreEmail}
+                    onChange={(e) => setNewStoreEmail(e.target.value)}
+                    placeholder="contact@business.ua"
+                    className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:border-slate-900"
+                  />
+                </div>
+              </div>
+
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-[11px] text-slate-600">
+                Створений бізнес спочатку буде збережено в статусі чернетки <strong>«В розробці»</strong>. Ви зможете налаштувати каталог та відправити заклад на модерацію BizX у будь-який зручний момент.
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateStoreModal(false)}
+                  className="px-3 py-2 border border-slate-200 text-xs font-semibold text-slate-700 rounded-lg hover:bg-slate-50"
+                >
+                  Скасувати
+                </button>
+                <button
+                  type="submit"
+                  disabled={isCreatingStore}
+                  className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-lg disabled:opacity-50 transition-colors shadow-sm"
+                >
+                  {isCreatingStore ? 'Створення...' : 'Зареєструвати заклад'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       </main>
 
       {/* Metro Minimal Footer */}
