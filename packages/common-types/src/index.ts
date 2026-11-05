@@ -1,6 +1,75 @@
 import { z } from 'zod';
 
 /**
+ * Підписки та тарифні плани BizX
+ */
+export const subscriptionTierSchema = z.enum([
+  'free',
+  'client_premium',
+  'business_starter',
+  'business_pro',
+  'business_enterprise'
+]);
+export type SubscriptionTier = z.infer<typeof subscriptionTierSchema>;
+
+export const subscriptionStatusSchema = z.enum([
+  'none',
+  'active',
+  'expired',
+  'cancelled'
+]);
+export type SubscriptionStatus = z.infer<typeof subscriptionStatusSchema>;
+
+export const subscribeDtoSchema = z.object({
+  tier: subscriptionTierSchema,
+  periodDays: z.number().int().positive().default(30).optional()
+});
+export type SubscribeDto = z.infer<typeof subscribeDtoSchema>;
+
+export const subscriptionPlanSchema = z.object({
+  id: subscriptionTierSchema,
+  name: z.string(),
+  target: z.enum(['client', 'business']),
+  priceUah: z.number(),
+  period: z.string(),
+  maxStores: z.number(),
+  badge: z.string().optional(),
+  popular: z.boolean().optional(),
+  features: z.array(z.string())
+});
+export type SubscriptionPlan = z.infer<typeof subscriptionPlanSchema>;
+
+export const userSubscriptionDetailsSchema = z.object({
+  tier: subscriptionTierSchema,
+  status: subscriptionStatusSchema,
+  expiresAt: z.string().datetime().nullable(),
+  daysLeft: z.number().int(),
+  maxAllowedStores: z.number().int(),
+  activeStoresCount: z.number().int(),
+  hasExceededStoreLimit: z.boolean(),
+  canAccessBusinessAdmin: z.boolean()
+});
+export type UserSubscriptionDetails = z.infer<typeof userSubscriptionDetailsSchema>;
+
+export const SUBSCRIPTION_TIER_LIMITS: Record<SubscriptionTier, { maxStores: number; target: 'client' | 'business' }> = {
+  free: { maxStores: 0, target: 'client' },
+  client_premium: { maxStores: 0, target: 'client' },
+  business_starter: { maxStores: 1, target: 'business' },
+  business_pro: { maxStores: 3, target: 'business' },
+  business_enterprise: { maxStores: 10, target: 'business' }
+};
+
+export function getMaxAllowedStoresForTier(tier?: string | null): number {
+  if (!tier || !(tier in SUBSCRIPTION_TIER_LIMITS)) return 0;
+  return SUBSCRIPTION_TIER_LIMITS[tier as SubscriptionTier].maxStores;
+}
+
+export function isBusinessTier(tier?: string | null): boolean {
+  return tier === 'business_starter' || tier === 'business_pro' || tier === 'business_enterprise';
+}
+
+
+/**
  * Пользователи и авторизация
  */
 export const userSchema = z.object({
@@ -10,6 +79,11 @@ export const userSchema = z.object({
   phone: z.string().nullable().optional(),
   avatarUrl: z.string().nullable().optional(),
   status: z.enum(['active', 'suspended', 'archived']).default('active').optional(),
+  subscriptionTier: subscriptionTierSchema.default('free').optional(),
+  subscriptionStatus: subscriptionStatusSchema.default('none').optional(),
+  subscriptionExpiresAt: z.string().datetime().nullable().optional(),
+  subscriptionDaysLeft: z.number().int().default(0).optional(),
+  maxAllowedStores: z.number().int().default(0).optional(),
   archivedAt: z.string().datetime().nullable().optional(),
   createdAt: z.string().datetime().optional()
 });
@@ -60,6 +134,8 @@ export const updateStoreMemberDtoSchema = z.object({
 
 export type UpdateStoreMemberDto = z.infer<typeof updateStoreMemberDtoSchema>;
 
+
+
 export const userProfileSchema = z.object({
   id: z.string().uuid(),
   email: z.string().email({ message: 'Некорректный email адрес' }),
@@ -69,6 +145,11 @@ export const userProfileSchema = z.object({
   phone: z.string().nullable().optional(),
   avatarUrl: z.string().nullable().optional(),
   status: z.enum(['active', 'suspended', 'archived']).default('active').optional(),
+  subscriptionTier: subscriptionTierSchema.default('free').optional(),
+  subscriptionStatus: subscriptionStatusSchema.default('none').optional(),
+  subscriptionExpiresAt: z.string().datetime().nullable().optional(),
+  subscriptionDaysLeft: z.number().int().default(0).optional(),
+  maxAllowedStores: z.number().int().default(0).optional(),
   archivedAt: z.string().datetime().nullable().optional(),
   createdAt: z.string().datetime().optional()
 });
