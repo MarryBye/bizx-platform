@@ -6,6 +6,8 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { api } from '../lib/api';
 import { SiteHeader } from '../components/SiteHeader';
+import { useTranslation } from '../hooks/useTranslation';
+import type { SupportedLocale } from '@bizx/utils';
 import type { UserProfile, Store, SubscriptionPlan, UserSubscriptionDetails, SubscriptionTier } from '@bizx/common-types';
 import {
   User,
@@ -28,9 +30,22 @@ import ShieldOutlinedIcon from '@mui/icons-material/ShieldOutlined';
 type AccountTab = 'profile' | 'businesses' | 'subscriptions' | 'security' | 'privacy' | 'integrations';
 
 export default function AccountPage() {
+  const { t, locale, setLocale } = useTranslation();
   const [user, setUser] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<AccountTab>('profile');
+  const [languageNotice, setLanguageNotice] = useState<string | null>(null);
+
+  const handleLanguageChange = async (newLocale: SupportedLocale) => {
+    setLocale(newLocale);
+    try {
+      await api.auth.updateProfile({ preferredLanguage: newLocale });
+      setLanguageNotice(t('account.languageUpdated'));
+      setTimeout(() => setLanguageNotice(null), 3000);
+    } catch {
+      // ignore
+    }
+  };
 
   // Profile Form State
   const [name, setName] = useState('');
@@ -94,6 +109,10 @@ export default function AccountPage() {
         setEmail(res.data.email || '');
         setPhone(res.data.phone || '');
         setAvatarUrl(res.data.avatarUrl || '');
+
+        if (res.data.preferredLanguage && (res.data.preferredLanguage === 'uk' || res.data.preferredLanguage === 'en')) {
+          setLocale(res.data.preferredLanguage);
+        }
 
         try {
           const subRes = await api.subscriptions.getMySubscription();
@@ -211,6 +230,7 @@ export default function AccountPage() {
     if (typeof window !== 'undefined') {
       localStorage.removeItem('bizx_access_token');
       localStorage.removeItem('bizx_admin_access_token');
+      localStorage.removeItem('bizx_platform_admin_token');
     }
     setUser(null);
     setMyStores([]);
@@ -319,13 +339,24 @@ export default function AccountPage() {
 
   const isPlatformStaff = user?.role === 'admin' || user?.systemRole === 'platform_admin';
 
+  const currentToken =
+    typeof window !== 'undefined'
+      ? localStorage.getItem('bizx_access_token') || localStorage.getItem('bizx_admin_access_token')
+      : null;
+  const businessAdminUrl = currentToken
+    ? `http://localhost:3102?token=${encodeURIComponent(currentToken)}`
+    : 'http://localhost:3102';
+  const platformAdminUrl = currentToken
+    ? `http://localhost:3103?token=${encodeURIComponent(currentToken)}`
+    : 'http://localhost:3103';
+
   const menuItems = [
-    { id: 'profile' as const, label: 'Особисті дані', desc: 'Імʼя, контакти та аватар', icon: User },
-    { id: 'businesses' as const, label: 'Мої бізнеси та ролі', desc: 'Заклади та права доступу', icon: Building2 },
-    { id: 'subscriptions' as const, label: 'Підписка та тарифи', desc: 'Статус, дні дії та плани', icon: CreditCard },
-    { id: 'security' as const, label: 'Безпека та пароль', desc: 'Пароль, 2FA та сесії', icon: Shield },
-    { id: 'privacy' as const, label: 'Сповіщення та приватність', desc: 'Email, SMS та маркетинг', icon: Bell },
-    { id: 'integrations' as const, label: 'Інтеграції та API', desc: 'CRM вебхуки та ключі', icon: Plug }
+    { id: 'profile' as const, label: t('account.profileTab'), desc: t('account.profileTabDesc'), icon: User },
+    { id: 'businesses' as const, label: t('account.businessesTab'), desc: t('account.businessesTabDesc'), icon: Building2 },
+    { id: 'subscriptions' as const, label: t('account.subscriptionsTab'), desc: t('account.subscriptionsTabDesc'), icon: CreditCard },
+    { id: 'security' as const, label: t('account.securityTab'), desc: t('account.securityTabDesc'), icon: Shield },
+    { id: 'privacy' as const, label: t('account.privacyTab'), desc: t('account.privacyTabDesc'), icon: Bell },
+    { id: 'integrations' as const, label: t('account.integrationsTab'), desc: t('account.integrationsTabDesc'), icon: Plug }
   ];
 
   return (
@@ -465,12 +496,12 @@ export default function AccountPage() {
               <div className="pt-2 border-t border-slate-100 mt-2 space-y-1">
                 {isBusinessUser && (
                   <a
-                    href="http://localhost:3102"
+                    href={businessAdminUrl}
                     className="w-full flex items-center justify-between p-2 rounded-lg text-slate-700 hover:bg-slate-100 transition-colors text-xs font-medium"
                   >
                     <span className="flex items-center gap-2">
                       <StorefrontOutlinedIcon className="w-4 h-4 text-slate-500" />
-                      <span>Панель бізнесу</span>
+                      <span>{t('nav.businessAdmin')}</span>
                     </span>
                     <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
                   </a>
@@ -478,12 +509,12 @@ export default function AccountPage() {
 
                 {isPlatformStaff && (
                   <a
-                    href="http://localhost:3103"
+                    href={platformAdminUrl}
                     className="w-full flex items-center justify-between p-2 rounded-lg text-blue-700 hover:bg-blue-50 transition-colors text-xs font-medium"
                   >
                     <span className="flex items-center gap-2">
                       <ShieldOutlinedIcon className="w-4 h-4 text-blue-600" />
-                      <span>BizX Panel</span>
+                      <span>{t('nav.platformAdmin')}</span>
                     </span>
                     <ExternalLink className="w-3.5 h-3.5 text-blue-400" />
                   </a>
@@ -495,7 +526,7 @@ export default function AccountPage() {
                   className="w-full flex items-center gap-2 p-2 rounded-lg text-red-600 hover:bg-red-50 transition-colors text-xs font-medium"
                 >
                   <LogOut className="w-4 h-4 text-red-500" />
-                  <span>Вийти з акаунту</span>
+                  <span>{t('common.logout')}</span>
                 </button>
               </div>
             </aside>
@@ -594,6 +625,52 @@ export default function AccountPage() {
                         placeholder="+380 50 123 45 67"
                         className="w-full text-xs px-3 py-2 bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-slate-900"
                       />
+                    </div>
+
+                    {/* Language Preference Section */}
+                    <div className="space-y-2 pt-3 border-t border-slate-100">
+                      <div>
+                        <label className="text-xs font-bold text-slate-700 block">
+                          {t('account.language')}
+                        </label>
+                        <p className="text-[11px] text-slate-500">
+                          {t('account.languageDesc')}
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => handleLanguageChange('uk')}
+                          className={`flex items-center justify-center gap-2 p-3 rounded-xl border text-xs font-bold transition-all ${
+                            locale === 'uk'
+                              ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
+                              : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                          }`}
+                        >
+                          <span className="text-sm font-black text-amber-500">UA</span>
+                          <span>{t('account.ukrainian')}</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleLanguageChange('en')}
+                          className={`flex items-center justify-center gap-2 p-3 rounded-xl border text-xs font-bold transition-all ${
+                            locale === 'en'
+                              ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
+                              : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                          }`}
+                        >
+                          <span className="text-sm font-black text-blue-500">EN</span>
+                          <span>{t('account.english')}</span>
+                        </button>
+                      </div>
+
+                      {languageNotice && (
+                        <div className="text-[11px] font-bold text-emerald-600 animate-fade-in mt-1">
+                          {languageNotice}
+                        </div>
+                      )}
                     </div>
 
                     <div className="pt-2">
