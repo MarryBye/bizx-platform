@@ -13,6 +13,21 @@ interface AuthState {
   updateProfile: (dto: { name?: string; phone?: string }) => Promise<boolean>;
 }
 
+function hasActiveBusinessAccess(user: UserProfile): boolean {
+  if (user.role === 'admin' || user.systemRole === 'platform_admin') {
+    return true;
+  }
+  const isBizTier = ['business_starter', 'business_pro', 'business_enterprise'].includes(
+    user.subscriptionTier || ''
+  );
+  const isSubActive =
+    isBizTier &&
+    (user.subscriptionDaysLeft ?? 0) > 0 &&
+    user.subscriptionStatus === 'active';
+
+  return isSubActive;
+}
+
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   isLoading: true,
@@ -23,13 +38,14 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       const res = await api.auth.me();
       if (res.success && res.data) {
-        if (
-          res.data.role !== 'business_owner' &&
-          res.data.role !== 'admin' &&
-          res.data.systemRole !== 'platform_admin'
-        ) {
+        if (!hasActiveBusinessAccess(res.data)) {
           api.client.setAccessToken(null);
-          set({ user: null, isLoading: false });
+          set({
+            user: null,
+            error:
+              'Доступ обмежено: для входу в панель бізнесу необхідна активна бізнес-підписка. Оформіть тарифний план у кабінеті BizX.',
+            isLoading: false
+          });
           return;
         }
         set({ user: res.data, isLoading: false });
@@ -46,15 +62,12 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       const res = await api.auth.login(dto);
       if (res.success && res.data) {
-        if (
-          res.data.user.role !== 'business_owner' &&
-          res.data.user.role !== 'admin' &&
-          res.data.user.systemRole !== 'platform_admin'
-        ) {
+        if (!hasActiveBusinessAccess(res.data.user)) {
           api.client.setAccessToken(null);
           set({
             user: null,
-            error: 'Доступ обмежено: портал призначений виключно для бізнес-партнерів [AUTH_1002].',
+            error:
+              'Доступ обмежено: для входу в панель бізнесу необхідна активна бізнес-підписка. Будь ласка, активуйте тарифний план у кабінеті BizX.',
             isLoading: false
           });
           return false;

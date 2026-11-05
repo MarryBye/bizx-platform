@@ -145,6 +145,35 @@ export const DashboardLayout: React.FC = () => {
           </div>
         </div>
 
+        {/* Subscription Status Pill */}
+        {user && user.subscriptionTier && (
+          <div className="px-4 py-3 border-t border-slate-100 bg-white">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                Тарифний план
+              </span>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-900 text-white">
+                {user.subscriptionTier === 'business_starter' && 'Starter'}
+                {user.subscriptionTier === 'business_pro' && 'Pro'}
+                {user.subscriptionTier === 'business_enterprise' && 'Enterprise'}
+                {user.subscriptionTier !== 'business_starter' &&
+                  user.subscriptionTier !== 'business_pro' &&
+                  user.subscriptionTier !== 'business_enterprise' &&
+                  user.subscriptionTier}
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-[11px] text-slate-600">
+              <span>Залишилось днів:</span>
+              <span className="font-bold text-slate-900">{user.subscriptionDaysLeft ?? 0} дн.</span>
+            </div>
+            {(user.subscriptionDaysLeft ?? 0) <= 5 && (
+              <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded text-[10px] text-amber-800">
+                Увага: підписка закінчується незабаром. Продовжте тариф у кабінеті BizX.
+              </div>
+            )}
+          </div>
+        )}
+
         {/* User Profile Badge & Central Account Link */}
         <div className="p-4 border-t border-slate-100 bg-slate-50/50 space-y-3">
           <a
