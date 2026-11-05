@@ -5,7 +5,8 @@ import {
   Text,
   TouchableOpacity,
   StatusBar,
-  StyleSheet
+  StyleSheet,
+  ActivityIndicator
 } from 'react-native';
 import { MaterialIcon } from './src/components/MaterialIcon';
 import './global.css';
@@ -19,6 +20,7 @@ import { StoreDetailScreen } from './src/screens/StoreDetailScreen';
 import { CartScreen } from './src/screens/CartScreen';
 import { OrdersScreen } from './src/screens/OrdersScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
+import { AuthScreen } from './src/screens/AuthScreen';
 import type { Store } from '@bizx/common-types';
 
 type TabType = 'stores' | 'cart' | 'orders' | 'profile';
@@ -27,7 +29,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<TabType>('stores');
   const [selectedStore, setSelectedStore] = useState<Store | null>(null);
 
-  const { init } = useMobileAuthStore();
+  const { user, isInitialized, init } = useMobileAuthStore();
   const { fetchInitialData, selectStore } = useMobileStoresStore();
   const { items } = useCartStore();
 
@@ -46,6 +48,29 @@ export default function App() {
   const handleBackToStores = () => {
     setSelectedStore(null);
   };
+
+  if (!isInitialized) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f8fafc' }}>
+          <ActivityIndicator size="large" color="#0f172a" />
+          <Text style={{ marginTop: 12, fontSize: 12, fontWeight: '700', color: '#64748b' }}>
+            Завантаження BizX...
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!user) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
+        <AuthScreen />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>

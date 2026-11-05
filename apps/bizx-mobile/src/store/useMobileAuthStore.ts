@@ -5,6 +5,7 @@ import type { UserProfile, LoginDto, RegisterDto } from '@bizx/common-types';
 interface MobileAuthState {
   user: UserProfile | null;
   isLoading: boolean;
+  isInitialized: boolean;
   error: string | null;
   login: (dto: LoginDto) => Promise<boolean>;
   register: (dto: RegisterDto) => Promise<boolean>;
@@ -16,17 +17,20 @@ interface MobileAuthState {
 export const useMobileAuthStore = create<MobileAuthState>((set) => ({
   user: null,
   isLoading: false,
+  isInitialized: false,
   error: null,
 
   init: async () => {
     try {
       const res = await mobileApi.auth.me();
       if (res.success && res.data) {
-        set({ user: res.data });
+        set({ user: res.data, isInitialized: true });
+        return;
       }
     } catch {
       // Guest
     }
+    set({ user: null, isInitialized: true });
   },
 
   login: async (dto: LoginDto) => {
@@ -35,7 +39,7 @@ export const useMobileAuthStore = create<MobileAuthState>((set) => ({
       const res = await mobileApi.auth.login(dto);
       if (res.success && res.data) {
         setMobileToken(res.data.accessToken);
-        set({ user: res.data.user, isLoading: false });
+        set({ user: res.data.user, isLoading: false, isInitialized: true });
         return true;
       }
       set({ error: 'Помилка входу', isLoading: false });
@@ -56,7 +60,7 @@ export const useMobileAuthStore = create<MobileAuthState>((set) => ({
       });
       if (res.success && res.data) {
         setMobileToken(res.data.accessToken);
-        set({ user: res.data.user, isLoading: false });
+        set({ user: res.data.user, isLoading: false, isInitialized: true });
         return true;
       }
       set({ error: 'Помилка реєстрації', isLoading: false });
