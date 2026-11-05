@@ -10,6 +10,7 @@ export const users = pgTable('users', {
   systemRole: varchar('system_role', { length: 50 }).default('user').notNull(),
   phone: varchar('phone', { length: 50 }),
   avatarUrl: varchar('avatar_url', { length: 500 }),
+  preferredLanguage: varchar('preferred_language', { length: 10 }).default('uk').notNull(),
   status: varchar('status', { length: 50 }).default('active').notNull(), // 'active' | 'suspended' | 'archived'
   subscriptionTier: varchar('subscription_tier', { length: 50 }).default('free').notNull(), // 'free' | 'client_premium' | 'business_starter' | 'business_pro' | 'business_enterprise'
   subscriptionStatus: varchar('subscription_status', { length: 50 }).default('none').notNull(), // 'none' | 'active' | 'expired' | 'cancelled'
