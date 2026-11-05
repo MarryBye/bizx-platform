@@ -36,20 +36,6 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   init: async () => {
     set({ isLoading: true, error: null });
-
-    // Pick up token from URL if redirected from other platform portal
-    if (typeof window !== 'undefined') {
-      const urlParams = new URLSearchParams(window.location.search);
-      const tokenFromUrl = urlParams.get('token');
-      if (tokenFromUrl) {
-        api.client.setAccessToken(tokenFromUrl);
-        localStorage.setItem('bizx_admin_access_token', tokenFromUrl);
-        localStorage.setItem('bizx_access_token', tokenFromUrl);
-        const cleanUrl = window.location.pathname;
-        window.history.replaceState({}, document.title, cleanUrl);
-      }
-    }
-
     try {
       const res = await api.auth.me();
       if (res.success && res.data) {

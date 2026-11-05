@@ -115,17 +115,6 @@ export const SiteHeader: React.FC = () => {
   // Platform admin is strictly staff members with systemRole === 'platform_admin'
   const isPlatformStaff = user?.systemRole === 'platform_admin';
 
-  const currentToken =
-    typeof window !== 'undefined'
-      ? localStorage.getItem('bizx_access_token') || localStorage.getItem('bizx_admin_access_token')
-      : null;
-  const businessAdminUrl = currentToken
-    ? `http://localhost:3102?token=${encodeURIComponent(currentToken)}`
-    : 'http://localhost:3102';
-  const platformAdminUrl = currentToken
-    ? `http://localhost:3103?token=${encodeURIComponent(currentToken)}`
-    : 'http://localhost:3103';
-
   // Compute initials
   const getInitials = (name?: string) => {
     if (!name) return 'U';
@@ -273,7 +262,7 @@ export const SiteHeader: React.FC = () => {
                       {/* Business Panel Link (if business owner or has stores) */}
                       {isBusinessUser && (
                         <a
-                          href={businessAdminUrl}
+                          href="http://localhost:3102"
                           className="flex items-center gap-2.5 px-4 py-2 text-slate-700 hover:bg-slate-100 hover:text-slate-900 transition-colors font-medium"
                         >
                           <StorefrontOutlinedIcon className="w-4 h-4 text-slate-500" />
@@ -284,7 +273,7 @@ export const SiteHeader: React.FC = () => {
                       {/* BizX Platform Admin Link (if BizX employee / platform admin) */}
                       {isPlatformStaff && (
                         <a
-                          href={platformAdminUrl}
+                          href="http://localhost:3103"
                           className="flex items-center gap-2.5 px-4 py-2 text-slate-700 hover:bg-slate-100 hover:text-slate-900 transition-colors font-medium"
                         >
                           <ShieldOutlinedIcon className="w-4 h-4 text-blue-600" />
@@ -340,7 +329,7 @@ export const SiteHeader: React.FC = () => {
                 </button>
 
                 <a
-                  href={businessAdminUrl}
+                  href="http://localhost:3102"
                   className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-lg bg-slate-900 text-white hover:bg-slate-800 transition-colors shadow-sm"
                 >
                   <span>{locale === 'en' ? 'For Partners' : 'Для партнерів'}</span>

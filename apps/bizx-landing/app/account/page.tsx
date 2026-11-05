@@ -339,17 +339,6 @@ export default function AccountPage() {
 
   const isPlatformStaff = user?.role === 'admin' || user?.systemRole === 'platform_admin';
 
-  const currentToken =
-    typeof window !== 'undefined'
-      ? localStorage.getItem('bizx_access_token') || localStorage.getItem('bizx_admin_access_token')
-      : null;
-  const businessAdminUrl = currentToken
-    ? `http://localhost:3102?token=${encodeURIComponent(currentToken)}`
-    : 'http://localhost:3102';
-  const platformAdminUrl = currentToken
-    ? `http://localhost:3103?token=${encodeURIComponent(currentToken)}`
-    : 'http://localhost:3103';
-
   const menuItems = [
     { id: 'profile' as const, label: t('account.profileTab'), desc: t('account.profileTabDesc'), icon: User },
     { id: 'businesses' as const, label: t('account.businessesTab'), desc: t('account.businessesTabDesc'), icon: Building2 },
@@ -496,7 +485,7 @@ export default function AccountPage() {
               <div className="pt-2 border-t border-slate-100 mt-2 space-y-1">
                 {isBusinessUser && (
                   <a
-                    href={businessAdminUrl}
+                    href="http://localhost:3102"
                     className="w-full flex items-center justify-between p-2 rounded-lg text-slate-700 hover:bg-slate-100 transition-colors text-xs font-medium"
                   >
                     <span className="flex items-center gap-2">
@@ -509,7 +498,7 @@ export default function AccountPage() {
 
                 {isPlatformStaff && (
                   <a
-                    href={platformAdminUrl}
+                    href="http://localhost:3103"
                     className="w-full flex items-center justify-between p-2 rounded-lg text-blue-700 hover:bg-blue-50 transition-colors text-xs font-medium"
                   >
                     <span className="flex items-center gap-2">

@@ -298,18 +298,6 @@ export const App: React.FC = () => {
   useEffect(() => {
     const initAuth = async () => {
       setIsLoadingAuth(true);
-
-      if (typeof window !== 'undefined') {
-        const urlParams = new URLSearchParams(window.location.search);
-        const tokenFromUrl = urlParams.get('token');
-        if (tokenFromUrl) {
-          platformApi.client.setAccessToken(tokenFromUrl);
-          localStorage.setItem('bizx_platform_admin_token', tokenFromUrl);
-          const cleanUrl = window.location.pathname;
-          window.history.replaceState({}, document.title, cleanUrl);
-        }
-      }
-
       try {
         const res = await platformApi.auth.me();
         if (res.success && res.data) {
