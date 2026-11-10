@@ -282,7 +282,7 @@ Continuous Integration is automated via GitHub Actions (`.github/workflows/ci.ym
 ## Documentation Archive
 
 Supplementary internal engineering specifications and testing feedback are archived under the [`docs/`](./docs) directory:
-- [Developer Guide (Ukrainian)](./docs/DEVELOPER_GUIDE_RU.md)
+- [Developer Guide (Russian)](./docs/DEVELOPER_GUIDE_RU.md)
 - [QA Audit & Feedback Plan #1](./docs/QA_FEEDBACK_1.md)
 
 ---
