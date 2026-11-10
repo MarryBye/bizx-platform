@@ -78,7 +78,7 @@ export const LoginView: React.FC = () => {
 
               {isRegisterMode && (
                 <div className="space-y-1">
-                  <label className="text-xs font-semibold text-slate-700">Ім'я та Прізвище</label>
+                  <label className="text-xs font-semibold text-slate-700">{"Ім'я та Прізвище"}</label>
                   <Input
                     required
                     placeholder="Олександр Коваленко"
