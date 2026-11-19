@@ -55,6 +55,7 @@ export interface RolesManagerProps {
   myAccess: RbacActorAccess;
   canCreate: boolean;
   canEdit: boolean;
+  canArchive?: boolean;
   readOnly?: boolean;
   isLoading?: boolean;
   locale?: 'uk' | 'en';
@@ -81,6 +82,7 @@ export const RolesManager: React.FC<RolesManagerProps> = ({
   myAccess,
   canCreate,
   canEdit,
+  canArchive,
   readOnly = false,
   isLoading = false,
   locale = 'uk',
@@ -105,6 +107,8 @@ export const RolesManager: React.FC<RolesManagerProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [modalError, setModalError] = useState<string | null>(null);
   const [confirmArchive, setConfirmArchive] = useState(false);
+
+  const allowArchive = canArchive !== undefined ? canArchive : canEdit;
 
   const isRoleEditable = (role: RbacRole) =>
     !readOnly && canEdit && !role.isSystem && role.priority < myAccess.priority;
@@ -595,7 +599,7 @@ export const RolesManager: React.FC<RolesManagerProps> = ({
               {/* Footer Actions */}
               <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
-                  {editingRole && !editingRole.isSystem && (
+                  {editingRole && !editingRole.isSystem && allowArchive && (
                     confirmArchive ? (
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-bold text-red-700">

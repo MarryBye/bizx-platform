@@ -16,7 +16,8 @@ const ACTION_COLORS: Record<string, string> = {
   write: 'bg-emerald-50 text-emerald-700',
   edit: 'bg-blue-50 text-blue-700',
   manage: 'bg-amber-50 text-amber-800',
-  export: 'bg-purple-50 text-purple-700'
+  export: 'bg-purple-50 text-purple-700',
+  archive: 'bg-rose-50 text-rose-700'
 };
 
 export interface PermissionMatrixProps {
@@ -95,10 +96,14 @@ export const PermissionMatrix: React.FC<PermissionMatrixProps> = ({
     onChange(Array.from(next));
   };
 
+  const adminPerm = catalog.find((p) => p.code === 'store.admin' || p.code === 'platform.admin');
+  const isAdminSelected = Boolean(adminPerm && selectedSet.has(adminPerm.id));
+
   return (
     <div className={cn('grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3', className)}>
       {categories.map((cat) => {
         const perms = grouped.get(cat) || [];
+        const isAdminCategory = cat === 'admin' || cat === 'platform_admin';
         const grantable = perms.filter(canToggle);
         const allGrantableChecked =
           grantable.length > 0 && grantable.every((p) => selectedSet.has(p.id));
@@ -107,13 +112,18 @@ export const PermissionMatrix: React.FC<PermissionMatrixProps> = ({
         return (
           <div
             key={cat}
-            className="border border-slate-200 rounded-xl bg-slate-50/60 p-3 flex flex-col gap-2"
+            className={cn(
+              'border rounded-xl p-3 flex flex-col gap-2',
+              isAdminCategory
+                ? 'col-span-full border-amber-300 bg-amber-50/60'
+                : 'border-slate-200 bg-slate-50/60'
+            )}
           >
             <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-slate-200/80">
               <span className="text-[11px] font-black text-slate-800 uppercase tracking-wider truncate">
                 {catTitle}
               </span>
-              {!disabled && grantable.length > 0 && (
+              {!disabled && !isAdminCategory && grantable.length > 0 && (
                 <button
                   type="button"
                   onClick={() => toggleCategory(perms)}
@@ -132,8 +142,10 @@ export const PermissionMatrix: React.FC<PermissionMatrixProps> = ({
 
             <div className="space-y-1.5">
               {perms.map((perm) => {
-                const checked = selectedSet.has(perm.id);
-                const allowed = canToggle(perm);
+                const isSelfAdmin = perm.code === 'store.admin' || perm.code === 'platform.admin';
+                const impliedByAdmin = isAdminSelected && !isSelfAdmin && !perm.ownerOnly;
+                const checked = selectedSet.has(perm.id) || impliedByAdmin;
+                const allowed = canToggle(perm) && !impliedByAdmin;
                 const permLabel = translateOrFallback(`permissions.${perm.code}`, perm.code);
                 const actionLabel = translateOrFallback(
                   `permissionActions.${perm.action}`,
@@ -147,15 +159,19 @@ export const PermissionMatrix: React.FC<PermissionMatrixProps> = ({
                     disabled={!allowed}
                     onClick={() => togglePermission(perm)}
                     title={
-                      !allowed && !disabled
-                        ? perm.ownerOnly
-                          ? locale === 'en'
-                            ? 'Only Owner can grant this permission'
-                            : 'Це право може видавати лише Власник'
-                          : locale === 'en'
-                            ? 'You do not hold this permission yourself'
-                            : 'У вас немає цього права'
-                        : undefined
+                      impliedByAdmin
+                        ? locale === 'en'
+                          ? 'Included automatically via Administrator permission'
+                          : 'Увімкнено автоматично правом Адміністратора'
+                        : !allowed && !disabled
+                          ? perm.ownerOnly
+                            ? locale === 'en'
+                              ? 'Only Owner can grant this permission'
+                              : 'Це право може видавати лише Власник'
+                            : locale === 'en'
+                              ? 'You do not hold this permission yourself'
+                              : 'У вас немає цього права'
+                          : undefined
                     }
                     className={cn(
                       'w-full flex items-start gap-2.5 p-2 rounded-lg border text-left transition-all',
@@ -169,7 +185,9 @@ export const PermissionMatrix: React.FC<PermissionMatrixProps> = ({
                       className={cn(
                         'w-4 h-4 rounded flex items-center justify-center shrink-0 mt-0.5 border transition-colors',
                         checked
-                          ? 'bg-slate-900 border-slate-900 text-white'
+                          ? impliedByAdmin
+                            ? 'bg-amber-600 border-amber-600 text-white'
+                            : 'bg-slate-900 border-slate-900 text-white'
                           : 'bg-white border-slate-300'
                       )}
                     >
@@ -188,6 +206,11 @@ export const PermissionMatrix: React.FC<PermissionMatrixProps> = ({
                         >
                           {actionLabel}
                         </span>
+                        {impliedByAdmin && (
+                          <span className="inline-block px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-900">
+                            {locale === 'en' ? 'Via Admin' : 'Через Адміна'}
+                          </span>
+                        )}
                         {perm.ownerOnly && (
                           <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-900">
                             <Lock className="w-2.5 h-2.5" />

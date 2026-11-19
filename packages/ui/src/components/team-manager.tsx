@@ -47,6 +47,7 @@ export interface TeamManagerProps {
   currentUserId?: string;
   canAdd: boolean;
   canEdit: boolean;
+  canArchive?: boolean;
   readOnly?: boolean;
   showDepartment?: boolean;
   isLoading?: boolean;
@@ -86,6 +87,7 @@ export const TeamManager: React.FC<TeamManagerProps> = ({
   currentUserId,
   canAdd,
   canEdit,
+  canArchive,
   readOnly = false,
   showDepartment = false,
   isLoading = false,
@@ -122,12 +124,16 @@ export const TeamManager: React.FC<TeamManagerProps> = ({
   const [archivingMember, setArchivingMember] = useState<TeamMemberItem | null>(null);
   const [isArchiving, setIsArchiving] = useState(false);
 
-  const canManageTarget = (m: TeamMemberItem) =>
+  const allowArchive = canArchive !== undefined ? canArchive : canEdit;
+
+  const isBelowActor = (m: TeamMemberItem) =>
     !readOnly &&
-    canEdit &&
     !m.isOwner &&
     m.userId !== currentUserId &&
     m.priority < myAccess.priority;
+
+  const canEditTarget = (m: TeamMemberItem) => canEdit && isBelowActor(m);
+  const canArchiveTarget = (m: TeamMemberItem) => allowArchive && isBelowActor(m);
 
   const openAddModal = () => {
     setEditingMember(null);
@@ -300,7 +306,8 @@ export const TeamManager: React.FC<TeamManagerProps> = ({
           <div className="divide-y divide-slate-100">
             {members.map((m) => {
               const avatar = resolveAvatarUrl ? resolveAvatarUrl(m.userAvatarUrl) : null;
-              const manageable = canManageTarget(m);
+              const editable = canEditTarget(m);
+              const archivable = canArchiveTarget(m);
               const roleColor = m.roleColor || '#334155';
 
               return (
@@ -368,24 +375,28 @@ export const TeamManager: React.FC<TeamManagerProps> = ({
 
                     {/* Pencil & Archive Actions */}
                     <div className="flex items-center gap-1">
-                      {manageable ? (
+                      {editable || archivable ? (
                         <>
-                          <button
-                            type="button"
-                            onClick={() => openEditModal(m)}
-                            title={locale === 'en' ? 'Edit role & permissions' : 'Змінити роль та доступи'}
-                            className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-900 hover:text-white hover:border-slate-900 transition-colors"
-                          >
-                            <Pencil className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setArchivingMember(m)}
-                            title={locale === 'en' ? 'Archive member' : 'Архівувати працівника'}
-                            className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors"
-                          >
-                            <Archive className="w-3.5 h-3.5" />
-                          </button>
+                          {editable && (
+                            <button
+                              type="button"
+                              onClick={() => openEditModal(m)}
+                              title={locale === 'en' ? 'Edit role & permissions' : 'Змінити роль та доступи'}
+                              className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-900 hover:text-white hover:border-slate-900 transition-colors"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          {archivable && (
+                            <button
+                              type="button"
+                              onClick={() => setArchivingMember(m)}
+                              title={locale === 'en' ? 'Archive member' : 'Архівувати працівника'}
+                              className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors"
+                            >
+                              <Archive className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                         </>
                       ) : (
                         <span
