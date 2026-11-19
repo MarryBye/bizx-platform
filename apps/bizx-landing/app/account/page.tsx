@@ -862,6 +862,15 @@ export default function AccountPage() {
                                     {locale === 'en' ? 'Submit for BizX review' : 'На перевірку в BizX'}
                                   </button>
                                 )}
+                                {st.status === 'active' && (
+                                  <Link
+                                    href={`/store/${st.slug}`}
+                                    className="text-xs font-bold text-emerald-700 hover:underline inline-flex items-center gap-1"
+                                  >
+                                    <span>{locale === 'en' ? 'Storefront' : 'Сайт закладу'}</span>
+                                    <ExternalLink className="w-3 h-3" />
+                                  </Link>
+                                )}
                                 <a
                                   href="http://localhost:3102"
                                   className="text-xs font-bold text-slate-900 hover:underline inline-flex items-center gap-1"
