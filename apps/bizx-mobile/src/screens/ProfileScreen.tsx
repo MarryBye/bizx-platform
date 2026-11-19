@@ -10,11 +10,11 @@ import {
 import { MaterialIcon } from '../components/MaterialIcon';
 import { SafeImage } from '../components/SafeImage';
 import { MobilePhoneInput } from '../components/MobilePhoneInput';
+import { MobileBadge, MobileCountBadge } from '../components/MobileBadge';
 import { useMobileAuthStore } from '../store/useMobileAuthStore';
 import { useMobileTranslation } from '../hooks/useMobileTranslation';
 import { InboxModal } from './InboxModal';
 import { mobileApi } from '../lib/api';
-import { formatCompactCount } from '@bizx/common-types';
 
 export const ProfileScreen: React.FC = () => {
   const { user, login, register, updateProfile, logout, isLoading, error } = useMobileAuthStore();
@@ -115,10 +115,8 @@ export const ProfileScreen: React.FC = () => {
               <Text className="text-xs text-slate-500 font-mono" numberOfLines={1}>
                 {user.email}
               </Text>
-              <View className="mt-1.5 self-start px-2 py-0.5 bg-slate-100 border border-slate-200 rounded">
-                <Text className="text-[10px] font-bold text-slate-700 uppercase tracking-wider">
-                  Клієнт BizX
-                </Text>
+              <View className="mt-1.5">
+                <MobileBadge tone="slate" label="Клієнт BizX" uppercase />
               </View>
             </View>
           </View>
@@ -282,13 +280,7 @@ export const ProfileScreen: React.FC = () => {
               </View>
             </View>
             <View className="flex-row items-center gap-2">
-              {inboxUnread > 0 && (
-                <View className="bg-blue-600 px-2 py-0.5 rounded-full">
-                  <Text className="text-[10px] font-black text-white">
-                    {formatCompactCount(inboxUnread)}
-                  </Text>
-                </View>
-              )}
+              <MobileCountBadge count={inboxUnread} tone="blue" />
               <MaterialIcon name="chevron-right" size={18} color="#94a3b8" />
             </View>
           </TouchableOpacity>

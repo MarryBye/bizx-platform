@@ -6,9 +6,9 @@ import {
   TouchableOpacity
 } from 'react-native';
 import { MaterialIcon } from '../components/MaterialIcon';
+import { MobileBadge, MobileCountBadge, getOrderStatusMeta } from '../components/MobileBadge';
 import { useMobileStoresStore } from '../store/useMobileStoresStore';
 import { useMobileAuthStore } from '../store/useMobileAuthStore';
-import { formatCompactCount } from '@bizx/common-types';
 import type { CustomerOrderSummary } from '@bizx/api-client';
 
 interface OrdersScreenProps {
@@ -37,39 +37,6 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
       minimumFractionDigits: 2,
       maximumFractionDigits: 2
     });
-  };
-
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case 'confirmed':
-        return 'Підтверджено';
-      case 'processing':
-        return 'Комплектується';
-      case 'shipped':
-        return 'В дорозі';
-      case 'delivered':
-        return 'Виконано';
-      case 'cancelled':
-        return 'Скасовано';
-      case 'pending':
-      default:
-        return 'Очікує підтвердження';
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'delivered':
-        return 'bg-emerald-50 text-emerald-700 border border-emerald-200';
-      case 'shipped':
-      case 'confirmed':
-        return 'bg-slate-100 text-slate-800 border border-slate-200';
-      case 'cancelled':
-        return 'bg-red-50 text-red-700 border border-red-200';
-      case 'pending':
-      default:
-        return 'bg-amber-50 text-amber-700 border border-amber-200';
-    }
   };
 
   if (!user) {
@@ -148,20 +115,11 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                   </View>
 
                   <View className="flex-row items-center gap-1.5">
-                    {unread > 0 && (
-                      <View className="bg-blue-600 px-2 py-0.5 rounded-full flex-row items-center gap-1">
-                        <MaterialIcon name="chat-bubble" size={10} color="#ffffff" />
-                        <Text className="text-[10px] font-black text-white">
-                          {formatCompactCount(unread)}
-                        </Text>
-                      </View>
-                    )}
-
-                    <View className={`px-2 py-0.5 rounded ${getStatusColor(order.status)}`}>
-                      <Text className="text-[10px] font-bold uppercase">
-                        {getStatusText(order.status)}
-                      </Text>
-                    </View>
+                    <MobileCountBadge count={unread} tone="blue" iconName="chat-bubble" />
+                    {(() => {
+                      const st = getOrderStatusMeta(order.status);
+                      return <MobileBadge tone={st.tone} label={st.label} uppercase />;
+                    })()}
                   </View>
                 </View>
 
@@ -184,36 +142,32 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
                 <View className="mt-2.5 pt-2.5 border-t border-slate-100 flex-row items-center justify-between flex-wrap gap-1.5">
                   <View className="flex-row items-center gap-1.5 flex-wrap">
                     {hasActiveDispute && (
-                      <View className="bg-red-50 border border-red-200 px-2 py-0.5 rounded flex-row items-center gap-1">
-                        <MaterialIcon name="report-problem" size={11} color="#b91c1c" />
-                        <Text className="text-[10px] font-bold text-red-700">
-                          {order.activeDispute?.status === 'escalated_platform'
+                      <MobileBadge
+                        tone="rose"
+                        iconName="report-problem"
+                        label={
+                          order.activeDispute?.status === 'escalated_platform'
                             ? 'На розгляді BizX'
-                            : 'Відкрито спір'}
-                        </Text>
-                      </View>
+                            : 'Відкрито спір'
+                        }
+                      />
                     )}
                     {hasPendingRefund && (
-                      <View className="bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded flex-row items-center gap-1">
-                        <MaterialIcon name="currency-exchange" size={11} color="#047857" />
-                        <Text className="text-[10px] font-bold text-emerald-700">
-                          Підтвердіть повернення
-                        </Text>
-                      </View>
+                      <MobileBadge
+                        tone="emerald"
+                        iconName="currency-exchange"
+                        label="Підтвердіть повернення"
+                      />
                     )}
                     {order.review && (
-                      <View className="bg-amber-50 border border-amber-200 px-2 py-0.5 rounded flex-row items-center gap-0.5">
-                        <MaterialIcon name="star" size={11} color="#f59e0b" />
-                        <Text className="text-[10px] font-bold text-amber-800">
-                          {order.review.rating}/5
-                        </Text>
-                      </View>
+                      <MobileBadge
+                        tone="amber"
+                        iconName="star"
+                        label={`${order.review.rating}/5`}
+                      />
                     )}
                     {order.status === 'delivered' && !order.review && (
-                      <View className="bg-slate-100 px-2 py-0.5 rounded flex-row items-center gap-0.5">
-                        <MaterialIcon name="star-border" size={11} color="#475569" />
-                        <Text className="text-[10px] font-semibold text-slate-600">Оцінити</Text>
-                      </View>
+                      <MobileBadge tone="slate" iconName="star-border" label="Оцінити" />
                     )}
                   </View>
 

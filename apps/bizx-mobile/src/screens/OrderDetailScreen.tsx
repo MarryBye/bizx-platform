@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -6,14 +6,14 @@ import {
   TouchableOpacity,
   TextInput,
   ActivityIndicator,
-  Modal,
   Platform,
-  Linking,
   KeyboardAvoidingView
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { MaterialIcon } from '../components/MaterialIcon';
-import { SafeImage } from '../components/SafeImage';
+import { MobileModal, MobileActionSheet } from '../components/MobileModal';
+import { MobileBadge, getOrderStatusMeta } from '../components/MobileBadge';
+import { MobileChatThread, type MobileChatMessage } from '../components/MobileChatThread';
 import { mobileApi } from '../lib/api';
 import {
   DISPUTE_CATEGORIES,
@@ -78,36 +78,27 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
       maximumFractionDigits: 2
     });
 
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case 'confirmed':
-        return 'Підтверджено';
-      case 'processing':
-        return 'Комплектується';
-      case 'shipped':
-        return 'В дорозі';
-      case 'delivered':
-        return 'Виконано';
-      case 'cancelled':
-        return 'Скасовано';
-      default:
-        return 'Очікує підтвердження';
-    }
-  };
-
-  const getStatusClass = (status: string) => {
-    switch (status) {
-      case 'delivered':
-        return 'bg-emerald-50 border-emerald-200 text-emerald-700';
-      case 'cancelled':
-        return 'bg-red-50 border-red-200 text-red-700';
-      case 'shipped':
-      case 'confirmed':
-        return 'bg-blue-50 border-blue-200 text-blue-700';
-      default:
-        return 'bg-amber-50 border-amber-200 text-amber-700';
-    }
-  };
+  const mappedMessages: MobileChatMessage[] = useMemo(
+    () =>
+      messages.map((m) => ({
+        id: m.id,
+        senderRole:
+          m.senderType === 'system'
+            ? 'system'
+            : m.senderType === 'customer'
+              ? 'own'
+              : m.senderType === 'platform'
+                ? 'platform'
+                : 'other',
+        senderName:
+          m.senderType === 'platform' ? 'Арбітраж BizX' : m.senderName || 'Підтримка закладу',
+        body: m.body,
+        attachments: m.attachments,
+        isRead: Boolean(m.readByStoreAt),
+        createdAt: m.createdAt
+      })),
+    [messages]
+  );
 
   const loadOrderAndMessages = useCallback(
     async (silent = false) => {
@@ -378,9 +369,10 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
         </View>
 
         <View className="flex-row items-center gap-2">
-          <View className={`px-2 py-1 rounded border ${getStatusClass(order.status)}`}>
-            <Text className="text-[10px] font-bold uppercase">{getStatusText(order.status)}</Text>
-          </View>
+          {(() => {
+            const st = getOrderStatusMeta(order.status);
+            return <MobileBadge tone={st.tone} label={st.label} uppercase />;
+          })()}
 
           <TouchableOpacity
             onPress={() => setMenuOpen(true)}
@@ -610,7 +602,7 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
           </View>
         )}
 
-        {/* Order Messenger Card */}
+        {/* Order Messenger Card — Shared MobileChatThread */}
         <View className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
           <View className="px-4 py-3 border-b border-slate-100 flex-row items-center justify-between bg-slate-50">
             <View className="flex-row items-center gap-2">
@@ -620,461 +612,192 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
             <Text className="text-[10px] text-slate-400 font-medium">Онлайн</Text>
           </View>
 
-          {/* Messages List */}
-          <View className="p-3.5 bg-slate-50/50 space-y-2.5 min-h-[180px]">
-            {messages.length === 0 ? (
-              <View className="py-8 items-center">
-                <MaterialIcon name="forum" size={26} color="#cbd5e1" />
-                <Text className="text-xs font-semibold text-slate-500 mt-2">
-                  Повідомлень ще немає
-                </Text>
-                <Text className="text-[11px] text-slate-400 text-center mt-0.5">
-                  Напишіть закладу, щоб уточнити деталі доставки або товарів
-                </Text>
-              </View>
-            ) : (
-              messages.map((m) => {
-                if (m.senderType === 'system') {
-                  return (
-                    <View key={m.id} className="items-center my-1">
-                      <View className="bg-slate-200/80 px-3 py-1 rounded-full">
-                        <Text className="text-[10px] font-semibold text-slate-700 text-center">
-                          {m.body}
-                        </Text>
-                      </View>
-                    </View>
-                  );
-                }
-
-                const isOwn = m.senderType === 'customer';
-                const isPlatform = m.senderType === 'platform';
-                const isRead = Boolean(m.readByStoreAt);
-
-                return (
-                  <View
-                    key={m.id}
-                    className={`mb-2 ${isOwn ? 'items-end' : 'items-start'}`}
-                  >
-                    <View
-                      className={`max-w-[84%] rounded-2xl px-3.5 py-2.5 border ${
-                        isOwn
-                          ? 'bg-slate-900 border-slate-900 rounded-br-sm'
-                          : isPlatform
-                          ? 'bg-indigo-50 border-indigo-200 rounded-bl-sm'
-                          : 'bg-white border-slate-200 rounded-bl-sm'
-                      }`}
-                    >
-                      {!isOwn && (
-                        <Text
-                          className={`text-[10px] font-black mb-0.5 ${
-                            isPlatform ? 'text-indigo-700' : 'text-slate-500'
-                          }`}
-                        >
-                          {isPlatform ? 'Арбітраж BizX' : m.senderName || 'Підтримка закладу'}
-                        </Text>
-                      )}
-
-                      {m.body ? (
-                        <Text
-                          className={`text-xs leading-4 ${
-                            isOwn ? 'text-white' : 'text-slate-800'
-                          }`}
-                        >
-                          {m.body}
-                        </Text>
-                      ) : null}
-
-                      {m.attachments && m.attachments.length > 0 && (
-                        <View className="mt-2 gap-1.5">
-                          {m.attachments.map((att, idx) => {
-                            const isImage = att.mimeType.startsWith('image/');
-                            return isImage ? (
-                              <TouchableOpacity
-                                key={`${m.id}-att-${idx}`}
-                                onPress={() => Linking.openURL(att.url).catch(() => {})}
-                                className="rounded-lg overflow-hidden border border-slate-200"
-                              >
-                                <SafeImage
-                                  sourceUrl={att.url}
-                                  className="w-44 h-32"
-                                  resizeMode="cover"
-                                  fallback={
-                                    <View className="w-44 h-32 bg-slate-100 items-center justify-center">
-                                      <MaterialIcon name="image" size={24} color="#94a3b8" />
-                                    </View>
-                                  }
-                                />
-                              </TouchableOpacity>
-                            ) : (
-                              <TouchableOpacity
-                                key={`${m.id}-att-${idx}`}
-                                onPress={() => Linking.openURL(att.url).catch(() => {})}
-                                className={`flex-row items-center gap-1.5 px-2.5 py-1.5 rounded-lg border ${
-                                  isOwn
-                                    ? 'bg-slate-800 border-slate-700'
-                                    : 'bg-slate-50 border-slate-200'
-                                }`}
-                              >
-                                <MaterialIcon
-                                  name="attach-file"
-                                  size={14}
-                                  color={isOwn ? '#e2e8f0' : '#475569'}
-                                />
-                                <Text
-                                  className={`text-[11px] font-medium ${
-                                    isOwn ? 'text-slate-100' : 'text-slate-700'
-                                  }`}
-                                  numberOfLines={1}
-                                >
-                                  {att.fileName}
-                                </Text>
-                              </TouchableOpacity>
-                            );
-                          })}
-                        </View>
-                      )}
-
-                      <View className="flex-row items-center justify-end gap-1 mt-1">
-                        <Text
-                          className={`text-[9px] ${
-                            isOwn ? 'text-slate-400' : 'text-slate-400'
-                          }`}
-                        >
-                          {new Date(m.createdAt).toLocaleTimeString('uk-UA', {
-                            hour: '2-digit',
-                            minute: '2-digit'
-                          })}
-                        </Text>
-                        {isOwn && (
-                          <Text
-                            className={`text-[10px] font-bold ${
-                              isRead ? 'text-sky-400' : 'text-slate-400'
-                            }`}
-                          >
-                            {isRead ? '✓✓' : '✓'}
-                          </Text>
-                        )}
-                      </View>
-                    </View>
-                  </View>
-                );
-              })
-            )}
-          </View>
-
-          {/* Quick-reply Chips */}
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ paddingHorizontal: 12, paddingVertical: 8, gap: 6 }}
-            className="border-t border-slate-100 bg-white"
-          >
-            {CUSTOMER_QUICK_REPLIES.uk.map((phrase) => (
-              <TouchableOpacity
-                key={phrase}
-                onPress={() => setText(phrase)}
-                className="bg-slate-100 border border-slate-200 px-2.5 py-1.5 rounded-full"
-              >
-                <Text className="text-[11px] font-medium text-slate-700">{phrase}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-
-          {/* Pending attachments preview */}
-          {pendingAttachments.length > 0 && (
-            <View className="px-3 py-2 border-t border-slate-100 flex-row flex-wrap gap-2 bg-slate-50">
-              {pendingAttachments.map((att, idx) => (
-                <View
-                  key={`${att.url}-${idx}`}
-                  className="flex-row items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-2 py-1"
-                >
-                  <MaterialIcon name="image" size={14} color="#0f172a" />
-                  <Text className="text-[11px] text-slate-700 max-w-[140px]" numberOfLines={1}>
-                    {att.fileName}
-                  </Text>
-                  <TouchableOpacity
-                    onPress={() =>
-                      setPendingAttachments((prev) => prev.filter((_, i) => i !== idx))
-                    }
-                  >
-                    <MaterialIcon name="close" size={14} color="#64748b" />
-                  </TouchableOpacity>
-                </View>
-              ))}
-            </View>
-          )}
-
-          {/* Composer */}
-          <View className="p-2.5 border-t border-slate-200 bg-white flex-row items-center gap-2">
-            <TouchableOpacity
-              disabled={isUploading}
-              onPress={handlePickAttachment}
-              className="w-9 h-9 rounded-lg bg-slate-100 border border-slate-200 items-center justify-center"
-            >
-              {isUploading ? (
-                <ActivityIndicator size="small" color="#0f172a" />
-              ) : (
-                <MaterialIcon name="add-photo-alternate" size={19} color="#334155" />
-              )}
-            </TouchableOpacity>
-
-            <TextInput
-              value={text}
-              onChangeText={setText}
-              placeholder="Написати повідомлення..."
-              placeholderTextColor="#94a3b8"
-              multiline
-              className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 max-h-24"
-            />
-
-            <TouchableOpacity
-              disabled={isSending || (!text.trim() && pendingAttachments.length === 0)}
-              onPress={() => handleSendMessage()}
-              className={`w-9 h-9 rounded-lg items-center justify-center ${
-                isSending || (!text.trim() && pendingAttachments.length === 0)
-                  ? 'bg-slate-200'
-                  : 'bg-slate-900'
-              }`}
-            >
-              {isSending ? (
-                <ActivityIndicator size="small" color="#ffffff" />
-              ) : (
-                <MaterialIcon name="send" size={17} color="#ffffff" />
-              )}
-            </TouchableOpacity>
-          </View>
+          <MobileChatThread
+            messages={mappedMessages}
+            emptySubtitle="Напишіть закладу, щоб уточнити деталі доставки або товарів"
+            canSend={true}
+            quickReplies={CUSTOMER_QUICK_REPLIES.uk}
+            text={text}
+            onChangeText={setText}
+            onSend={() => handleSendMessage()}
+            isSending={isSending}
+            pendingAttachments={pendingAttachments}
+            onPickAttachment={handlePickAttachment}
+            onRemoveAttachment={(idx) =>
+              setPendingAttachments((prev) => prev.filter((_, i) => i !== idx))
+            }
+            isUploading={isUploading}
+          />
         </View>
       </ScrollView>
 
-      {/* `⋯` Action Menu Modal */}
-      <Modal
+      {/* `⋯` Action Menu — Shared MobileActionSheet */}
+      <MobileActionSheet
         visible={menuOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setMenuOpen(false)}
+        onClose={() => setMenuOpen(false)}
+        title={`Дії по замовленню ${order.orderNumber}`}
       >
-        <TouchableOpacity
-          activeOpacity={1}
-          onPress={() => setMenuOpen(false)}
-          className="flex-1 bg-black/40 justify-end"
-        >
-          <View className="bg-white rounded-t-2xl p-4 pb-8 space-y-2">
-            <Text className="text-xs font-black text-slate-400 uppercase px-2 mb-1">
-              Дії по замовленню {order.orderNumber}
+        {canOpenDispute && (
+          <TouchableOpacity
+            onPress={() => {
+              setMenuOpen(false);
+              setDisputeModalOpen(true);
+            }}
+            className="flex-row items-center gap-3 p-3 rounded-xl bg-amber-50 border border-amber-200"
+          >
+            <MaterialIcon name="report-problem" size={20} color="#b45309" />
+            <View className="flex-1">
+              <Text className="text-xs font-bold text-amber-900">Відкрити спір</Text>
+              <Text className="text-[11px] text-amber-700">
+                Повідомити заклад про проблему із замовленням
+              </Text>
+            </View>
+          </TouchableOpacity>
+        )}
+
+        {activeDispute && (
+          <TouchableOpacity
+            onPress={() => {
+              setMenuOpen(false);
+              setWithdrawModalOpen(true);
+            }}
+            className="flex-row items-center gap-3 p-3 rounded-xl bg-emerald-50 border border-emerald-200"
+          >
+            <MaterialIcon name="check-circle" size={20} color="#047857" />
+            <View className="flex-1">
+              <Text className="text-xs font-bold text-emerald-900">Відкликати спір</Text>
+              <Text className="text-[11px] text-emerald-700">
+                Питання вирішено — закрити спір без санкцій
+              </Text>
+            </View>
+          </TouchableOpacity>
+        )}
+
+        {activeDispute?.status === 'open_store' && (
+          <TouchableOpacity
+            onPress={() => {
+              setMenuOpen(false);
+              setEscalateModalOpen(true);
+            }}
+            className="flex-row items-center gap-3 p-3 rounded-xl bg-rose-50 border border-rose-200"
+          >
+            <MaterialIcon name="gavel" size={20} color="#be123c" />
+            <View className="flex-1">
+              <Text className="text-xs font-bold text-rose-900">Передати скаргу в BizX</Text>
+              <Text className="text-[11px] text-rose-700">
+                Якщо заклад не відповідає або порушує правила
+              </Text>
+            </View>
+          </TouchableOpacity>
+        )}
+
+        {!canOpenDispute && !activeDispute && (
+          <View className="p-3 bg-slate-50 rounded-xl">
+            <Text className="text-xs text-slate-500 text-center">
+              Для скасованого замовлення відкриття спору недоступне
             </Text>
-
-            {canOpenDispute && (
-              <TouchableOpacity
-                onPress={() => {
-                  setMenuOpen(false);
-                  setDisputeModalOpen(true);
-                }}
-                className="flex-row items-center gap-3 p-3 rounded-xl bg-amber-50 border border-amber-200"
-              >
-                <MaterialIcon name="report-problem" size={20} color="#b45309" />
-                <View className="flex-1">
-                  <Text className="text-xs font-bold text-amber-900">Відкрити спір</Text>
-                  <Text className="text-[11px] text-amber-700">
-                    Повідомити заклад про проблему із замовленням
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            )}
-
-            {activeDispute && (
-              <TouchableOpacity
-                onPress={() => {
-                  setMenuOpen(false);
-                  setWithdrawModalOpen(true);
-                }}
-                className="flex-row items-center gap-3 p-3 rounded-xl bg-emerald-50 border border-emerald-200"
-              >
-                <MaterialIcon name="check-circle" size={20} color="#047857" />
-                <View className="flex-1">
-                  <Text className="text-xs font-bold text-emerald-900">Відкликати спір</Text>
-                  <Text className="text-[11px] text-emerald-700">
-                    Питання вирішено — закрити спір без санкцій
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            )}
-
-            {activeDispute?.status === 'open_store' && (
-              <TouchableOpacity
-                onPress={() => {
-                  setMenuOpen(false);
-                  setEscalateModalOpen(true);
-                }}
-                className="flex-row items-center gap-3 p-3 rounded-xl bg-red-50 border border-red-200"
-              >
-                <MaterialIcon name="gavel" size={20} color="#b91c1c" />
-                <View className="flex-1">
-                  <Text className="text-xs font-bold text-red-900">Передати скаргу в BizX</Text>
-                  <Text className="text-[11px] text-red-700">
-                    Якщо заклад не відповідає або порушує правила
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            )}
-
-            {!canOpenDispute && !activeDispute && (
-              <View className="p-3 bg-slate-50 rounded-xl">
-                <Text className="text-xs text-slate-500 text-center">
-                  Для скасованого замовлення відкриття спору недоступне
-                </Text>
-              </View>
-            )}
-
-            <TouchableOpacity
-              onPress={() => setMenuOpen(false)}
-              className="mt-2 py-3 rounded-xl bg-slate-100 items-center"
-            >
-              <Text className="text-xs font-bold text-slate-700">Закрити</Text>
-            </TouchableOpacity>
           </View>
-        </TouchableOpacity>
-      </Modal>
+        )}
+      </MobileActionSheet>
 
-      {/* Open Dispute Modal */}
-      <Modal
+      {/* Open Dispute Modal — Unified MobileModal */}
+      <MobileModal
         visible={disputeModalOpen}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setDisputeModalOpen(false)}
+        onClose={() => setDisputeModalOpen(false)}
+        title="Відкрити спір"
+        subtitle={order.orderNumber}
+        tone="warning"
+        iconName="report-problem"
+        confirmLabel="Відкрити спір"
+        confirmTone="amber"
+        onConfirm={handleOpenDispute}
+        isLoading={isActionLoading}
       >
-        <View className="flex-1 bg-black/50 justify-center p-4">
-          <View className="bg-white rounded-2xl p-5 max-w-md w-full self-center">
-            <Text className="text-base font-black text-slate-900">Відкрити спір</Text>
-            <Text className="text-xs text-slate-500 mt-1 mb-3">
-              Оберіть причину та опишіть ситуацію. Заклад отримає термінове сповіщення.
-            </Text>
+        <Text className="text-xs text-slate-500 mb-3">
+          Оберіть причину та опишіть ситуацію. Заклад отримає термінове сповіщення.
+        </Text>
 
-            <View className="flex-row flex-wrap gap-1.5 mb-3">
-              {DISPUTE_CATEGORIES.map((cat) => (
-                <TouchableOpacity
-                  key={cat}
-                  onPress={() => setDisputeCategory(cat)}
-                  className={`px-2.5 py-1.5 rounded-lg border ${
-                    disputeCategory === cat
-                      ? 'bg-slate-900 border-slate-900'
-                      : 'bg-slate-50 border-slate-200'
-                  }`}
-                >
-                  <Text
-                    className={`text-[11px] font-bold ${
-                      disputeCategory === cat ? 'text-white' : 'text-slate-700'
-                    }`}
-                  >
-                    {DISPUTE_CATEGORY_LABELS[cat]}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <TextInput
-              value={disputeDescription}
-              onChangeText={setDisputeDescription}
-              placeholder="Детально опишіть проблему (мін. 5 символів)..."
-              placeholderTextColor="#94a3b8"
-              multiline
-              numberOfLines={4}
-              className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-900 min-h-[84px]"
-              style={{ textAlignVertical: 'top' }}
-            />
-
-            <View className="flex-row gap-2 mt-4">
-              <TouchableOpacity
-                onPress={() => setDisputeModalOpen(false)}
-                className="flex-1 py-2.5 bg-slate-100 rounded-lg items-center"
+        <View className="flex-row flex-wrap gap-1.5 mb-3">
+          {DISPUTE_CATEGORIES.map((cat) => (
+            <TouchableOpacity
+              key={cat}
+              onPress={() => setDisputeCategory(cat)}
+              className={`px-2.5 py-1.5 rounded-lg border ${
+                disputeCategory === cat
+                  ? 'bg-slate-900 border-slate-900'
+                  : 'bg-slate-50 border-slate-200'
+              }`}
+            >
+              <Text
+                className={`text-[11px] font-bold ${
+                  disputeCategory === cat ? 'text-white' : 'text-slate-700'
+                }`}
               >
-                <Text className="text-xs font-bold text-slate-700">Скасувати</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                disabled={isActionLoading}
-                onPress={handleOpenDispute}
-                className="flex-1 py-2.5 bg-amber-600 rounded-lg items-center"
-              >
-                <Text className="text-xs font-bold text-white">Відкрити спір</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+                {DISPUTE_CATEGORY_LABELS[cat]}
+              </Text>
+            </TouchableOpacity>
+          ))}
         </View>
-      </Modal>
 
-      {/* Withdraw Confirmation Modal */}
-      <Modal
+        <TextInput
+          value={disputeDescription}
+          onChangeText={setDisputeDescription}
+          placeholder="Детально опишіть проблему (мін. 5 символів)..."
+          placeholderTextColor="#94a3b8"
+          multiline
+          numberOfLines={4}
+          className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-900 min-h-[84px]"
+          style={{ textAlignVertical: 'top' }}
+        />
+      </MobileModal>
+
+      {/* Withdraw Confirmation Modal — Unified MobileModal */}
+      <MobileModal
         visible={withdrawModalOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setWithdrawModalOpen(false)}
+        onClose={() => setWithdrawModalOpen(false)}
+        title="Відкликати спір?"
+        subtitle={order.orderNumber}
+        tone="success"
+        iconName="check-circle"
+        cancelLabel="Назад"
+        confirmLabel="Підтвердити"
+        confirmTone="emerald"
+        onConfirm={handleWithdrawDispute}
+        isLoading={isActionLoading}
       >
-        <View className="flex-1 bg-black/50 justify-center p-4">
-          <View className="bg-white rounded-2xl p-5 max-w-md w-full self-center">
-            <Text className="text-base font-black text-slate-900">Відкликати спір?</Text>
-            <Text className="text-xs text-slate-600 mt-1.5 leading-4">
-              Підтвердіть, що питання успішно вирішено. Спір буде закрито без жодних санкцій для
-              закладу.
-            </Text>
-            <View className="flex-row gap-2 mt-4">
-              <TouchableOpacity
-                onPress={() => setWithdrawModalOpen(false)}
-                className="flex-1 py-2.5 bg-slate-100 rounded-lg items-center"
-              >
-                <Text className="text-xs font-bold text-slate-700">Назад</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                disabled={isActionLoading}
-                onPress={handleWithdrawDispute}
-                className="flex-1 py-2.5 bg-emerald-700 rounded-lg items-center"
-              >
-                <Text className="text-xs font-bold text-white">Підтвердити</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+        <Text className="text-xs text-slate-600 leading-5">
+          Підтвердіть, що питання успішно вирішено. Спір буде закрито без жодних санкцій для
+          закладу.
+        </Text>
+      </MobileModal>
 
-      {/* Escalate Confirmation Modal */}
-      <Modal
+      {/* Escalate Confirmation Modal — Unified MobileModal */}
+      <MobileModal
         visible={escalateModalOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setEscalateModalOpen(false)}
+        onClose={() => setEscalateModalOpen(false)}
+        title="Передати скаргу в BizX?"
+        subtitle={order.orderNumber}
+        tone="danger"
+        iconName="gavel"
+        confirmLabel="Передати в BizX"
+        confirmTone="destructive"
+        onConfirm={handleEscalateDispute}
+        isLoading={isActionLoading}
       >
-        <View className="flex-1 bg-black/50 justify-center p-4">
-          <View className="bg-white rounded-2xl p-5 max-w-md w-full self-center">
-            <Text className="text-base font-black text-red-900">Передати скаргу в BizX?</Text>
-            <Text className="text-xs text-slate-600 mt-1.5 leading-4 mb-3">
-              Модератори BizX перевірять ваше замовлення та всю переписку в чаті. Якщо заклад
-              порушив правила, йому може бути винесено страйк.
-            </Text>
-            <TextInput
-              value={escalateReason}
-              onChangeText={setEscalateReason}
-              placeholder="Додатковий коментар для модератора (необов'язково)..."
-              placeholderTextColor="#94a3b8"
-              multiline
-              className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-900 min-h-[64px]"
-              style={{ textAlignVertical: 'top' }}
-            />
-            <View className="flex-row gap-2 mt-4">
-              <TouchableOpacity
-                onPress={() => setEscalateModalOpen(false)}
-                className="flex-1 py-2.5 bg-slate-100 rounded-lg items-center"
-              >
-                <Text className="text-xs font-bold text-slate-700">Скасувати</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                disabled={isActionLoading}
-                onPress={handleEscalateDispute}
-                className="flex-1 py-2.5 bg-red-600 rounded-lg items-center"
-              >
-                <Text className="text-xs font-bold text-white">Передати в BizX</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+        <Text className="text-xs text-slate-600 leading-5 mb-3">
+          Модератори BizX перевірять ваше замовлення та всю переписку в чаті. Якщо заклад порушив
+          правила, йому може бути винесено страйк.
+        </Text>
+        <TextInput
+          value={escalateReason}
+          onChangeText={setEscalateReason}
+          placeholder="Додатковий коментар для модератора (необов'язково)..."
+          placeholderTextColor="#94a3b8"
+          multiline
+          className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-900 min-h-[64px]"
+          style={{ textAlignVertical: 'top' }}
+        />
+      </MobileModal>
     </KeyboardAvoidingView>
   );
 };
