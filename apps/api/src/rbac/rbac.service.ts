@@ -16,6 +16,7 @@ import {
   platformMembers,
   platformMemberPermissions,
   stores,
+  storeCategories,
   users,
   eq,
   and,
@@ -57,6 +58,8 @@ const DEFAULT_MANAGER_STORE_CODES: StorePermissionCode[] = [
   'products.read',
   'products.write',
   'products.edit',
+  'products.status',
+  'products.archive',
   'orders.read',
   'orders.edit',
   'analytics.read',
@@ -66,15 +69,37 @@ const DEFAULT_MANAGER_STORE_CODES: StorePermissionCode[] = [
   'staff.read',
   'staff.write',
   'staff.edit',
-  'roles.read'
+  'staff.archive',
+  'roles.read',
+  'roles.write',
+  'roles.edit',
+  'roles.archive'
 ];
 
 const DEFAULT_STAFF_STORE_CODES: StorePermissionCode[] = [
   'products.read',
   'orders.read',
-  'orders.edit',
-  'store.read'
+  'orders.edit'
 ];
+
+const STORE_ADMIN_PERM_ID = PERM_BY_CODE.get('store.admin')!.id;
+const PLATFORM_ADMIN_PERM_ID = PERM_BY_CODE.get('platform.admin')!.id;
+
+function expandEffectivePermissionIds(scope: PermissionScope, rawIds: number[]): number[] {
+  const unique = new Set(rawIds);
+  if (scope === 'store' && unique.has(STORE_ADMIN_PERM_ID)) {
+    for (const p of STORE_PERMISSIONS) {
+      if (!p.ownerOnly) {
+        unique.add(p.id);
+      }
+    }
+  } else if (scope === 'platform' && unique.has(PLATFORM_ADMIN_PERM_ID)) {
+    for (const p of PLATFORM_PERMISSIONS) {
+      unique.add(p.id);
+    }
+  }
+  return Array.from(unique);
+}
 
 const DEFAULT_OPS_PLATFORM_CODES: PlatformPermissionCode[] = [
   'platform.stores.read',
@@ -449,7 +474,10 @@ export class RbacService implements OnModuleInit {
         .from(storeMemberPermissions)
         .where(eq(storeMemberPermissions.storeMemberId, member.id));
 
-      const permIds = customRows.map((r) => r.permissionId);
+      const permIds = expandEffectivePermissionIds(
+        'store',
+        customRows.map((r) => r.permissionId)
+      );
       const permCodes = permIds
         .map((id) => PERM_BY_ID.get(id)?.code)
         .filter((c): c is string => Boolean(c));
@@ -489,7 +517,10 @@ export class RbacService implements OnModuleInit {
       .from(rolePermissions)
       .where(eq(rolePermissions.roleId, role.id));
 
-    const permIds = rpRows.map((r) => r.permissionId);
+    const permIds = expandEffectivePermissionIds(
+      'store',
+      rpRows.map((r) => r.permissionId)
+    );
     const permCodes = permIds
       .map((id) => PERM_BY_ID.get(id)?.code)
       .filter((c): c is string => Boolean(c));
@@ -557,7 +588,10 @@ export class RbacService implements OnModuleInit {
         .from(platformMemberPermissions)
         .where(eq(platformMemberPermissions.platformMemberId, member.id));
 
-      const permIds = customRows.map((r) => r.permissionId);
+      const permIds = expandEffectivePermissionIds(
+        'platform',
+        customRows.map((r) => r.permissionId)
+      );
       const permCodes = permIds
         .map((id) => PERM_BY_ID.get(id)?.code)
         .filter((c): c is string => Boolean(c));
@@ -597,7 +631,10 @@ export class RbacService implements OnModuleInit {
       .from(rolePermissions)
       .where(eq(rolePermissions.roleId, role.id));
 
-    const permIds = rpRows.map((r) => r.permissionId);
+    const permIds = expandEffectivePermissionIds(
+      'platform',
+      rpRows.map((r) => r.permissionId)
+    );
     const permCodes = permIds
       .map((id) => PERM_BY_ID.get(id)?.code)
       .filter((c): c is string => Boolean(c));
@@ -790,22 +827,26 @@ export class RbacService implements OnModuleInit {
   async listRoles(scope: PermissionScope, storeId: string | null, userId: string): Promise<RoleItem[]> {
     if (scope === 'store' && storeId) {
       await this.ensureStoreRolesExist(storeId);
-      // Будь-який учасник магазину з roles.read або staff.read може переглядати список ролей
       const access = await this.getStoreMemberAccess(storeId, userId);
-      if (
-        !access.isMember ||
-        (!access.permissions.includes('roles.read') && !access.permissions.includes('staff.read'))
-      ) {
+      const canSeeRoles =
+        access.isMember &&
+        (access.permissions.includes('roles.read') ||
+          access.permissions.includes('staff.read') ||
+          access.permissions.includes('staff.write') ||
+          access.permissions.includes('staff.edit'));
+      if (!canSeeRoles) {
         throw new ForbiddenException('Недостатньо прав для перегляду ролей');
       }
     } else {
       await this.ensureDefaultPlatformRoles();
       const access = await this.getPlatformMemberAccess(userId);
-      if (
-        !access.isMember ||
-        (!access.permissions.includes('platform.roles.read') &&
-          !access.permissions.includes('platform.staff.read'))
-      ) {
+      const canSeeRoles =
+        access.isMember &&
+        (access.permissions.includes('platform.roles.read') ||
+          access.permissions.includes('platform.staff.read') ||
+          access.permissions.includes('platform.staff.write') ||
+          access.permissions.includes('platform.staff.edit'));
+      if (!canSeeRoles) {
         throw new ForbiddenException('Недостатньо прав для перегляду ролей платформи');
       }
     }
@@ -1108,7 +1149,7 @@ export class RbacService implements OnModuleInit {
     roleId: string,
     userId: string
   ): Promise<{ message: string }> {
-    const permNeeded = scope === 'store' ? 'roles.edit' : 'platform.roles.edit';
+    const permNeeded = scope === 'store' ? 'roles.archive' : 'platform.roles.archive';
     const actor = await this.getActorAccessForScope(scope, storeId, userId, permNeeded, true);
 
     const [role] = await this.databaseService.db
@@ -1551,7 +1592,7 @@ export class RbacService implements OnModuleInit {
     const { store, access: actor } = await this.assertStorePermission(
       storeId,
       callerUserId,
-      'staff.edit',
+      'staff.archive',
       { write: true }
     );
 
@@ -1861,7 +1902,7 @@ export class RbacService implements OnModuleInit {
     memberId: string,
     callerUserId: string
   ): Promise<{ message: string }> {
-    const actor = await this.assertPlatformPermission(callerUserId, 'platform.staff.edit');
+    const actor = await this.assertPlatformPermission(callerUserId, 'platform.staff.archive');
 
     const [target] = await this.databaseService.db
       .select()
@@ -1961,7 +2002,9 @@ export class RbacService implements OnModuleInit {
     callerUserId: string,
     status: 'active' | 'suspended' | 'archived'
   ) {
-    const actor = await this.assertPlatformPermission(callerUserId, 'platform.users.edit');
+    const requiredPerm: PlatformPermissionCode =
+      status === 'archived' ? 'platform.users.archive' : 'platform.users.edit';
+    const actor = await this.assertPlatformPermission(callerUserId, requiredPerm);
 
     if (targetUserId === callerUserId) {
       throw new ForbiddenException('Не можна змінювати власний статус');
@@ -1995,5 +2038,40 @@ export class RbacService implements OnModuleInit {
       id: updated.id,
       status: updated.status
     };
+  }
+
+  // ==================== РЕЄСТР ТОРГОВИХ ТОЧОК ДЛЯ ПЛАТФОРМИ ====================
+
+  async listPlatformStores(userId: string) {
+    await this.assertPlatformPermission(userId, 'platform.stores.read');
+
+    const rows = await this.databaseService.db
+      .select({
+        id: stores.id,
+        ownerId: stores.ownerId,
+        categoryId: stores.categoryId,
+        name: stores.name,
+        slug: stores.slug,
+        description: stores.description,
+        logoUrl: stores.logoUrl,
+        bannerUrl: stores.bannerUrl,
+        address: stores.address,
+        phone: stores.phone,
+        email: stores.email,
+        status: stores.status,
+        createdAt: stores.createdAt,
+        categoryName: storeCategories.name,
+        ownerName: users.name,
+        ownerEmail: users.email
+      })
+      .from(stores)
+      .leftJoin(storeCategories, eq(stores.categoryId, storeCategories.id))
+      .leftJoin(users, eq(stores.ownerId, users.id))
+      .orderBy(desc(stores.createdAt));
+
+    return rows.map((s) => ({
+      ...s,
+      createdAt: s.createdAt.toISOString()
+    }));
   }
 }

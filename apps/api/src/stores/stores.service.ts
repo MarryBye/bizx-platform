@@ -252,16 +252,11 @@ export class StoresService {
     const pageSize = query.pageSize || 20;
     const offset = (page - 1) * pageSize;
 
-    const conditions = [isNull(stores.archivedAt)];
+    // Публічний каталог завжди показує тільки активні неархівовані магазини
+    const conditions = [isNull(stores.archivedAt), eq(stores.status, 'active')];
 
     if (query.categoryId) {
       conditions.push(eq(stores.categoryId, query.categoryId));
-    }
-
-    if (query.status) {
-      conditions.push(eq(stores.status, query.status));
-    } else {
-      conditions.push(eq(stores.status, 'active'));
     }
 
     if (query.search) {
@@ -408,7 +403,19 @@ export class StoresService {
     let store: StoreRecord;
     let viaPlatform = false;
 
-    if (hasStatusChange) {
+    if (dto?.status === 'archived') {
+      // Архівація магазину — виключно право платформи platform.stores.archive
+      await this.rbacService.assertPlatformPermission(userId, 'platform.stores.archive');
+      const [found] = await this.databaseService.db
+        .select()
+        .from(stores)
+        .where(eq(stores.id, storeId));
+      if (!found) {
+        throw new NotFoundException('Магазин не знайдено');
+      }
+      store = found;
+      viaPlatform = true;
+    } else if (hasStatusChange) {
       const check = await this.rbacService.assertStorePermission(
         storeId,
         userId,
@@ -427,7 +434,8 @@ export class StoresService {
       store = check.store;
     }
 
-    if (hasStatusChange && hasDataChange && !viaPlatform) {
+    if (hasStatusChange && hasDataChange) {
+      // Навіть модератор платформи не має права змінювати назву/дані мерчанта без права store.edit
       await this.rbacService.assertStorePermission(storeId, userId, 'store.edit', { write: true });
     }
 
@@ -488,6 +496,11 @@ export class StoresService {
       .set({
         ...dto,
         slug: dto?.slug ? dto.slug.toLowerCase() : undefined,
+        ...(dto?.status === 'archived'
+          ? { archivedAt: new Date() }
+          : dto?.status !== undefined
+            ? { archivedAt: null }
+            : {}),
         updatedAt: new Date()
       })
       .where(eq(stores.id, storeId))
@@ -500,8 +513,8 @@ export class StoresService {
     storeId: string,
     userId: string
   ): Promise<{ message: string }> {
-    // Видалення (архівація) магазину заборонено для бізнес-ролей — доступно лише модераторам платформи BizX
-    await this.rbacService.assertPlatformPermission(userId, 'platform.stores.moderate');
+    // Видалення (архівація) магазину заборонено для бізнес-ролей — доступно лише за правом platform.stores.archive
+    await this.rbacService.assertPlatformPermission(userId, 'platform.stores.archive');
 
     await this.databaseService.db
       .update(stores)

@@ -247,6 +247,12 @@ export class RbacController {
     return { success: true, data, timestamp: new Date().toISOString() };
   }
 
+  @Get('platform/stores')
+  async getPlatformStores(@CurrentUser('sub') userId: string): Promise<ApiResponse<unknown[]>> {
+    const data = await this.rbacService.listPlatformStores(userId);
+    return { success: true, data, timestamp: new Date().toISOString() };
+  }
+
   @Get('platform/users')
   async getPlatformUsers(@CurrentUser('sub') userId: string): Promise<ApiResponse<unknown[]>> {
     const data = await this.rbacService.listPlatformUsers(userId);

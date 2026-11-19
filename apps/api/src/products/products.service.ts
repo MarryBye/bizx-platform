@@ -95,7 +95,7 @@ export class ProductsService {
       throw new NotFoundException('Категория товаров не найдена');
     }
 
-    await this.rbacService.assertStorePermission(category.storeId, userId, 'products.edit', { write: true });
+    await this.rbacService.assertStorePermission(category.storeId, userId, 'products.archive', { write: true });
 
     await this.databaseService.db
       .update(productCategories)
@@ -244,7 +244,11 @@ export class ProductsService {
     return product;
   }
 
-  async assertProductOwnership(id: string, userId: string): Promise<ProductRecord> {
+  async assertProductOwnership(
+    id: string,
+    userId: string,
+    requiredPerm: 'products.edit' | 'products.status' | 'products.archive' = 'products.edit'
+  ): Promise<ProductRecord> {
     const [product] = await this.databaseService.db
       .select()
       .from(products)
@@ -254,7 +258,7 @@ export class ProductsService {
       throw new NotFoundException('Товар не найден');
     }
 
-    await this.rbacService.assertStorePermission(product.storeId, userId, 'products.edit', { write: true });
+    await this.rbacService.assertStorePermission(product.storeId, userId, requiredPerm, { write: true });
     return product;
   }
 
@@ -263,7 +267,39 @@ export class ProductsService {
     userId: string,
     dto: UpdateProductDto
   ): Promise<ProductRecord> {
-    const product = await this.assertProductOwnership(id, userId);
+    const [existing] = await this.databaseService.db
+      .select()
+      .from(products)
+      .where(eq(products.id, id));
+
+    if (!existing) {
+      throw new NotFoundException('Товар не найден');
+    }
+
+    const hasStatusChange =
+      dto.isActive !== undefined && dto.isActive !== existing.isActive;
+    const hasDataChange =
+      dto.name !== undefined ||
+      dto.categoryId !== undefined ||
+      dto.sku !== undefined ||
+      dto.description !== undefined ||
+      dto.price !== undefined ||
+      dto.oldPrice !== undefined ||
+      dto.imageUrl !== undefined ||
+      dto.inventoryCount !== undefined;
+
+    if (hasStatusChange) {
+      await this.rbacService.assertStorePermission(existing.storeId, userId, 'products.status', {
+        write: true
+      });
+    }
+    if (hasDataChange || !hasStatusChange) {
+      await this.rbacService.assertStorePermission(existing.storeId, userId, 'products.edit', {
+        write: true
+      });
+    }
+
+    const product = existing;
 
     if (dto.categoryId) {
       const [category] = await this.databaseService.db
@@ -294,7 +330,7 @@ export class ProductsService {
   }
 
   async deleteProduct(id: string, userId: string): Promise<{ message: string }> {
-    await this.assertProductOwnership(id, userId);
+    await this.assertProductOwnership(id, userId, 'products.archive');
 
     await this.databaseService.db
       .update(products)

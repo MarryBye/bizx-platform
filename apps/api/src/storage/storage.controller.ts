@@ -130,7 +130,7 @@ export class StorageController {
     @Param('key') keyParam: string | string[],
     @CurrentUser('sub') userId: string
   ): Promise<ApiResponse<{ message: string }>> {
-    await this.rbacService.assertPlatformPermission(userId, 'platform.stores.moderate');
+    await this.rbacService.assertPlatformPermission(userId, 'platform.stores.archive');
     const rawKey = Array.isArray(keyParam) ? keyParam.join('/') : keyParam;
     const fileKey = rawKey.replace(/^file\//, '').replace(/^\/+/, '');
 
