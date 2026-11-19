@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service.js';
 import { StoresService } from '../stores/stores.service.js';
+import { RbacService } from '../rbac/rbac.service.js';
 import {
   orders,
   orderItems,
@@ -17,16 +18,15 @@ import {
 import type {
   AnalyticsQuery,
   StoreAnalytics,
-  PlatformAnalytics,
-  UserRole,
-  SystemRole
+  PlatformAnalytics
 } from '@bizx/common-types';
 
 @Injectable()
 export class AnalyticsService {
   constructor(
     private readonly databaseService: DatabaseService,
-    private readonly storesService: StoresService
+    private readonly storesService: StoresService,
+    private readonly rbacService: RbacService
   ) {}
 
   private getDateRange(query: AnalyticsQuery): {
@@ -61,11 +61,12 @@ export class AnalyticsService {
   async getStoreAnalytics(
     storeId: string,
     userId: string,
-    userRole?: UserRole,
-    query: AnalyticsQuery = { period: 'all' },
-    systemRole?: SystemRole
+    query: AnalyticsQuery = { period: 'all' }
   ): Promise<StoreAnalytics> {
-    await this.storesService.assertStoreAccess(storeId, userId, ['owner', 'manager'], systemRole);
+    await this.rbacService.assertStorePermission(storeId, userId, 'analytics.read', {
+      write: false,
+      allowPlatformPermission: 'platform.analytics.read'
+    });
 
     const { startDate, endDate } = this.getDateRange(query);
     const conditions = [eq(orders.storeId, storeId)];
@@ -156,7 +157,8 @@ export class AnalyticsService {
       ordersCount: Number(row.ordersCount)
     }));
 
-    // 4. Топ-10 продаваемых товаров
+    // 4. Топ продаваемых товаров (по умолчанию Топ-10, настраивается через topLimit)
+    const topLimit = query.topLimit ?? 10;
     const topProductsRaw = await this.databaseService.db
       .select({
         productId: sql<string>`coalesce(${orderItems.productId}::text, 'unknown')`,
@@ -169,7 +171,7 @@ export class AnalyticsService {
       .where(whereClause)
       .groupBy(orderItems.productId, orderItems.productName)
       .orderBy(desc(sql`sum(${orderItems.totalPrice})`))
-      .limit(10);
+      .limit(topLimit);
 
     const topProducts = topProductsRaw.map((p) => ({
       productId: p.productId,
@@ -290,7 +292,8 @@ export class AnalyticsService {
     // 3. Количество товаров
     const [productsCount] = await this.databaseService.db.select({ total: count() }).from(products);
 
-    // 4. Топ-15 магазинов по обороту
+    // 4. Топ магазинов по обороту (по умолчанию Топ-10, настраивается через topLimit)
+    const topLimit = query.topLimit ?? 10;
     const topStoresRaw = await this.databaseService.db
       .select({
         storeId: stores.id,
@@ -307,7 +310,7 @@ export class AnalyticsService {
       )
       .groupBy(stores.id, stores.name)
       .orderBy(desc(sql`coalesce(sum(${orders.totalAmount}), 0)`))
-      .limit(15);
+      .limit(topLimit);
 
     const topStoresByRevenue = topStoresRaw.map((s) => ({
       storeId: s.storeId,

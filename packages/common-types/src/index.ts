@@ -113,22 +113,225 @@ export const createUserDtoSchema = z.object({
 
 export type CreateUserDto = z.infer<typeof createUserDtoSchema>;
 
-export type UserRole = 'client' | 'business_owner' | 'admin';
-export const userRoleSchema = z.enum(['client', 'business_owner', 'admin']);
+/**
+ * ==========================================
+ * RBAC: РОЛИ, ПРИОРИТЕТЫ И ГРАНУЛЯРНЫЕ ДОСТУПЫ
+ * ==========================================
+ */
+export type PermissionScope = 'store' | 'platform';
+export const permissionScopeSchema = z.enum(['store', 'platform']);
 
-export type SystemRole = 'user' | 'platform_admin';
-export const systemRoleSchema = z.enum(['user', 'platform_admin']);
+export const ROLE_ICON_KEYS = [
+  'crown',
+  'shield',
+  'briefcase',
+  'zap',
+  'headphones',
+  'coffee',
+  'package',
+  'bar-chart',
+  'shopping-bag',
+  'wrench',
+  'users',
+  'key',
+  'star',
+  'flame',
+  'award',
+  'sliders',
+  'truck',
+  'tag'
+] as const;
 
-export type StoreMemberRole = 'owner' | 'manager' | 'staff';
-export const storeMemberRoleSchema = z.enum(['owner', 'manager', 'staff']);
+export type RoleIconKey = (typeof ROLE_ICON_KEYS)[number];
+
+export interface PermissionDefinition {
+  id: number;
+  code: string;
+  scope: PermissionScope;
+  category: string;
+  action: 'read' | 'write' | 'edit' | 'manage' | 'export' | 'archive';
+  ownerOnly: boolean;
+}
+
+export const STORE_PERMISSIONS: PermissionDefinition[] = [
+  // Адміністрування (повний доступ однією галочкою, крім ownerOnly та ієрархії)
+  { id: 100, code: 'store.admin', scope: 'store', category: 'admin', action: 'manage', ownerOnly: false },
+  // Товари та каталог
+  { id: 101, code: 'products.read', scope: 'store', category: 'products', action: 'read', ownerOnly: false },
+  { id: 102, code: 'products.write', scope: 'store', category: 'products', action: 'write', ownerOnly: false },
+  { id: 103, code: 'products.edit', scope: 'store', category: 'products', action: 'edit', ownerOnly: false },
+  { id: 104, code: 'products.status', scope: 'store', category: 'products', action: 'manage', ownerOnly: false },
+  { id: 105, code: 'products.archive', scope: 'store', category: 'products', action: 'archive', ownerOnly: false },
+  // Замовлення
+  { id: 111, code: 'orders.read', scope: 'store', category: 'orders', action: 'read', ownerOnly: false },
+  { id: 112, code: 'orders.edit', scope: 'store', category: 'orders', action: 'edit', ownerOnly: false },
+  // Статистика та аналітика
+  { id: 121, code: 'analytics.read', scope: 'store', category: 'analytics', action: 'read', ownerOnly: false },
+  { id: 122, code: 'analytics.export', scope: 'store', category: 'analytics', action: 'export', ownerOnly: false },
+  // Дані магазину
+  { id: 131, code: 'store.read', scope: 'store', category: 'store', action: 'read', ownerOnly: false },
+  { id: 132, code: 'store.edit', scope: 'store', category: 'store', action: 'edit', ownerOnly: false },
+  { id: 133, code: 'store.status.manage', scope: 'store', category: 'store', action: 'manage', ownerOnly: true },
+  // Команда
+  { id: 141, code: 'staff.read', scope: 'store', category: 'staff', action: 'read', ownerOnly: false },
+  { id: 142, code: 'staff.write', scope: 'store', category: 'staff', action: 'write', ownerOnly: false },
+  { id: 143, code: 'staff.edit', scope: 'store', category: 'staff', action: 'edit', ownerOnly: false },
+  { id: 144, code: 'staff.archive', scope: 'store', category: 'staff', action: 'archive', ownerOnly: false },
+  // Ролі
+  { id: 151, code: 'roles.read', scope: 'store', category: 'roles', action: 'read', ownerOnly: false },
+  { id: 152, code: 'roles.write', scope: 'store', category: 'roles', action: 'write', ownerOnly: false },
+  { id: 153, code: 'roles.edit', scope: 'store', category: 'roles', action: 'edit', ownerOnly: false },
+  { id: 154, code: 'roles.archive', scope: 'store', category: 'roles', action: 'archive', ownerOnly: false }
+];
+
+export const PLATFORM_PERMISSIONS: PermissionDefinition[] = [
+  // Адміністрування платформи (повний доступ однією галочкою з урахуванням ієрархії)
+  { id: 200, code: 'platform.admin', scope: 'platform', category: 'platform_admin', action: 'manage', ownerOnly: false },
+  // Торгові точки
+  { id: 201, code: 'platform.stores.read', scope: 'platform', category: 'platform_stores', action: 'read', ownerOnly: false },
+  { id: 202, code: 'platform.stores.moderate', scope: 'platform', category: 'platform_stores', action: 'manage', ownerOnly: false },
+  { id: 203, code: 'platform.categories.manage', scope: 'platform', category: 'platform_stores', action: 'edit', ownerOnly: false },
+  { id: 204, code: 'platform.stores.archive', scope: 'platform', category: 'platform_stores', action: 'archive', ownerOnly: false },
+  // Користувачі BizX
+  { id: 211, code: 'platform.users.read', scope: 'platform', category: 'platform_users', action: 'read', ownerOnly: false },
+  { id: 212, code: 'platform.users.edit', scope: 'platform', category: 'platform_users', action: 'edit', ownerOnly: false },
+  { id: 213, code: 'platform.users.archive', scope: 'platform', category: 'platform_users', action: 'archive', ownerOnly: false },
+  // Аналітика платформи
+  { id: 221, code: 'platform.analytics.read', scope: 'platform', category: 'platform_analytics', action: 'read', ownerOnly: false },
+  { id: 222, code: 'platform.analytics.export', scope: 'platform', category: 'platform_analytics', action: 'export', ownerOnly: false },
+  // Команда BizX
+  { id: 231, code: 'platform.staff.read', scope: 'platform', category: 'platform_staff', action: 'read', ownerOnly: false },
+  { id: 232, code: 'platform.staff.write', scope: 'platform', category: 'platform_staff', action: 'write', ownerOnly: false },
+  { id: 233, code: 'platform.staff.edit', scope: 'platform', category: 'platform_staff', action: 'edit', ownerOnly: false },
+  { id: 234, code: 'platform.staff.archive', scope: 'platform', category: 'platform_staff', action: 'archive', ownerOnly: false },
+  // Ролі платформи
+  { id: 241, code: 'platform.roles.read', scope: 'platform', category: 'platform_roles', action: 'read', ownerOnly: false },
+  { id: 242, code: 'platform.roles.write', scope: 'platform', category: 'platform_roles', action: 'write', ownerOnly: false },
+  { id: 243, code: 'platform.roles.edit', scope: 'platform', category: 'platform_roles', action: 'edit', ownerOnly: false },
+  { id: 244, code: 'platform.roles.archive', scope: 'platform', category: 'platform_roles', action: 'archive', ownerOnly: false }
+];
+
+export const ALL_PERMISSIONS: PermissionDefinition[] = [
+  ...STORE_PERMISSIONS,
+  ...PLATFORM_PERMISSIONS
+];
+
+export type StorePermissionCode =
+  | 'store.admin'
+  | 'products.read'
+  | 'products.write'
+  | 'products.edit'
+  | 'products.status'
+  | 'products.archive'
+  | 'orders.read'
+  | 'orders.edit'
+  | 'analytics.read'
+  | 'analytics.export'
+  | 'store.read'
+  | 'store.edit'
+  | 'store.status.manage'
+  | 'staff.read'
+  | 'staff.write'
+  | 'staff.edit'
+  | 'staff.archive'
+  | 'roles.read'
+  | 'roles.write'
+  | 'roles.edit'
+  | 'roles.archive';
+
+export type PlatformPermissionCode =
+  | 'platform.admin'
+  | 'platform.stores.read'
+  | 'platform.stores.moderate'
+  | 'platform.categories.manage'
+  | 'platform.stores.archive'
+  | 'platform.users.read'
+  | 'platform.users.edit'
+  | 'platform.users.archive'
+  | 'platform.analytics.read'
+  | 'platform.analytics.export'
+  | 'platform.staff.read'
+  | 'platform.staff.write'
+  | 'platform.staff.edit'
+  | 'platform.staff.archive'
+  | 'platform.roles.read'
+  | 'platform.roles.write'
+  | 'platform.roles.edit'
+  | 'platform.roles.archive';
+
+export const OWNER_ROLE_PRIORITY = 10000;
+
+export interface RoleItem {
+  id: string;
+  scope: PermissionScope;
+  storeId: string | null;
+  name: string;
+  icon: string | null;
+  color: string;
+  priority: number;
+  isSystem: boolean;
+  permissionIds: number[];
+  permissionCodes: string[];
+  membersCount: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface MemberAccessSummary {
+  isOwner: boolean;
+  isMember: boolean;
+  priority: number;
+  roleId: string | null;
+  roleName: string | null;
+  isCustom: boolean;
+  permissionIds: number[];
+  permissions: string[];
+}
+
+export interface PermissionsResponse {
+  catalog: PermissionDefinition[];
+  myAccess: MemberAccessSummary;
+  ownerHasActiveSubscription?: boolean;
+}
+
+export const createRoleDtoSchema = z.object({
+  name: z.string().min(2, 'Назва ролі має містити мінімум 2 символи').max(100),
+  icon: z.string().max(50).nullable().optional(),
+  color: z.string().min(4).max(20).default('#334155').optional(),
+  priority: z.number().int().min(1).max(OWNER_ROLE_PRIORITY - 1).optional(),
+  permissionIds: z.array(z.number().int().positive()).default([])
+});
+export type CreateRoleDto = z.infer<typeof createRoleDtoSchema>;
+
+export const updateRoleDtoSchema = z.object({
+  name: z.string().min(2, 'Назва ролі має містити мінімум 2 символи').max(100).optional(),
+  icon: z.string().max(50).nullable().optional(),
+  color: z.string().min(4).max(20).optional(),
+  priority: z.number().int().min(1).max(OWNER_ROLE_PRIORITY - 1).optional(),
+  permissionIds: z.array(z.number().int().positive()).optional()
+});
+export type UpdateRoleDto = z.infer<typeof updateRoleDtoSchema>;
+
+export const reorderRolesDtoSchema = z.object({
+  orderedRoleIds: z.array(z.string().uuid()).min(1)
+});
+export type ReorderRolesDto = z.infer<typeof reorderRolesDtoSchema>;
 
 export const storeMemberSchema = z.object({
   id: z.string().uuid(),
   storeId: z.string().uuid(),
   userId: z.string().uuid(),
-  role: storeMemberRoleSchema,
+  roleId: z.string().uuid().nullable().optional(),
+  roleName: z.string().nullable().optional(),
+  roleIcon: z.string().nullable().optional(),
+  roleColor: z.string().nullable().optional(),
+  priority: z.number().int().optional(),
+  isCustom: z.boolean().optional(),
+  isOwner: z.boolean().optional(),
+  permissionIds: z.array(z.number().int()).optional(),
   userName: z.string().optional(),
   userEmail: z.string().optional(),
+  userPhone: z.string().nullable().optional(),
   userAvatarUrl: z.string().nullable().optional(),
   archivedAt: z.string().datetime().nullable().optional(),
   createdAt: z.string().datetime().optional(),
@@ -137,18 +340,71 @@ export const storeMemberSchema = z.object({
 
 export type StoreMember = z.infer<typeof storeMemberSchema>;
 
-export const addStoreMemberDtoSchema = z.object({
-  email: z.string().email({ message: 'Некоректний email' }),
-  role: storeMemberRoleSchema.default('staff')
-});
+export const addStoreMemberDtoSchema = z
+  .object({
+    email: z.string().email({ message: 'Некоректний email' }).optional(),
+    phone: z.string().min(7, { message: 'Некоректний номер телефону' }).optional(),
+    roleId: z.string().uuid().nullable().optional(),
+    isCustom: z.boolean().optional().default(false),
+    permissionIds: z.array(z.number().int().positive()).optional().default([])
+  })
+  .refine((data) => Boolean(data.email || data.phone), {
+    message: 'Вкажіть email або номер телефону працівника',
+    path: ['email']
+  });
 
 export type AddStoreMemberDto = z.infer<typeof addStoreMemberDtoSchema>;
 
 export const updateStoreMemberDtoSchema = z.object({
-  role: storeMemberRoleSchema
+  roleId: z.string().uuid().nullable().optional(),
+  isCustom: z.boolean().optional(),
+  permissionIds: z.array(z.number().int().positive()).optional()
 });
 
 export type UpdateStoreMemberDto = z.infer<typeof updateStoreMemberDtoSchema>;
+
+export interface PlatformMember {
+  id: string;
+  userId: string;
+  roleId: string | null;
+  roleName: string | null;
+  roleIcon: string | null;
+  roleColor: string | null;
+  priority: number;
+  isCustom: boolean;
+  isOwner: boolean;
+  department: string | null;
+  permissionIds: number[];
+  userName: string;
+  userEmail: string;
+  userPhone: string | null;
+  userAvatarUrl: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const addPlatformMemberDtoSchema = z
+  .object({
+    email: z.string().email({ message: 'Некоректний email' }).optional(),
+    phone: z.string().min(7, { message: 'Некоректний номер телефону' }).optional(),
+    department: z.string().max(100).optional(),
+    roleId: z.string().uuid().nullable().optional(),
+    isCustom: z.boolean().optional().default(false),
+    permissionIds: z.array(z.number().int().positive()).optional().default([])
+  })
+  .refine((data) => Boolean(data.email || data.phone), {
+    message: 'Вкажіть email або номер телефону співробітника',
+    path: ['email']
+  });
+export type AddPlatformMemberDto = z.infer<typeof addPlatformMemberDtoSchema>;
+
+export const updatePlatformMemberDtoSchema = z.object({
+  department: z.string().max(100).nullable().optional(),
+  roleId: z.string().uuid().nullable().optional(),
+  isCustom: z.boolean().optional(),
+  permissionIds: z.array(z.number().int().positive()).optional()
+});
+export type UpdatePlatformMemberDto = z.infer<typeof updatePlatformMemberDtoSchema>;
 
 
 
@@ -156,8 +412,9 @@ export const userProfileSchema = z.object({
   id: z.string().uuid(),
   email: z.string().email({ message: 'Некорректный email адрес' }),
   name: z.string().min(2, { message: 'Имя должно содержать минимум 2 символа' }),
-  role: userRoleSchema.default('client'),
-  systemRole: systemRoleSchema.default('user'),
+  isPlatformStaff: z.boolean().default(false),
+  isBusinessOwner: z.boolean().default(false),
+  hasStoreAccess: z.boolean().default(false),
   phone: z.string().nullable().optional(),
   avatarUrl: z.string().nullable().optional(),
   preferredLanguage: supportedLocaleSchema.default('uk').optional(),
@@ -198,8 +455,7 @@ export const registerDtoSchema = z.object({
   email: z.string().email({ message: 'Некорректный email адрес' }),
   password: z.string().min(6, { message: 'Пароль должен содержать минимум 6 символов' }),
   name: z.string().min(2, { message: 'Имя должно содержать минимум 2 символа' }),
-  phone: z.string().nullable().optional(),
-  role: z.literal('client').optional().default('client')
+  phone: z.string().nullable().optional()
 });
 
 export type RegisterDto = z.infer<typeof registerDtoSchema>;
@@ -284,7 +540,8 @@ export const storeSchema = z.object({
   phone: z.string().nullable().optional(),
   email: z.string().email().nullable().optional(),
   status: storeStatusSchema.default('draft'),
-  memberRole: storeMemberRoleSchema.optional(),
+  myRoleName: z.string().nullable().optional(),
+  myRoleIcon: z.string().nullable().optional(),
   archivedAt: z.string().datetime().nullable().optional(),
   createdAt: z.string().datetime().optional(),
   updatedAt: z.string().datetime().optional()
@@ -470,7 +727,8 @@ export const analyticsQuerySchema = z.object({
   status: orderStatusSchema.optional(),
   minAmount: z.coerce.number().int().nonnegative().optional(),
   maxAmount: z.coerce.number().int().nonnegative().optional(),
-  storeId: z.string().uuid().optional()
+  storeId: z.string().uuid().optional(),
+  topLimit: z.coerce.number().int().min(1).max(500).optional()
 });
 export type AnalyticsQuery = z.infer<typeof analyticsQuerySchema>;
 

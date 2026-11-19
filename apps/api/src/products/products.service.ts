@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service.js';
 import { StoresService } from '../stores/stores.service.js';
+import { RbacService } from '../rbac/rbac.service.js';
 import {
   products,
   productCategories,
@@ -19,9 +20,6 @@ import type {
   UpdateProductDto,
   ProductFilterQuery,
   CreateProductCategoryDto,
-  UserRole,
-  SystemRole,
-  StoreMemberRole,
   PaginatedResult
 } from '@bizx/common-types';
 
@@ -51,7 +49,8 @@ export interface ProductDetailItem extends ProductListItem {
 export class ProductsService {
   constructor(
     private readonly databaseService: DatabaseService,
-    private readonly storesService: StoresService
+    private readonly storesService: StoresService,
+    private readonly rbacService: RbacService
   ) {}
 
   // ==================== КАТЕГОРИИ ТОВАРОВ ====================
@@ -67,11 +66,9 @@ export class ProductsService {
   async createProductCategory(
     storeId: string,
     userId: string,
-    userRole: UserRole | undefined,
-    dto: CreateProductCategoryDto,
-    systemRole?: SystemRole
+    dto: CreateProductCategoryDto
   ): Promise<ProductCategoryRecord> {
-    await this.storesService.assertStoreAccess(storeId, userId, ['owner', 'manager'], systemRole, { write: true });
+    await this.rbacService.assertStorePermission(storeId, userId, 'products.write', { write: true });
 
     const [category] = await this.databaseService.db
       .insert(productCategories)
@@ -87,9 +84,7 @@ export class ProductsService {
 
   async deleteProductCategory(
     categoryId: string,
-    userId: string,
-    userRole?: UserRole,
-    systemRole?: SystemRole
+    userId: string
   ): Promise<{ message: string }> {
     const [category] = await this.databaseService.db
       .select()
@@ -100,7 +95,7 @@ export class ProductsService {
       throw new NotFoundException('Категория товаров не найдена');
     }
 
-    await this.storesService.assertStoreAccess(category.storeId, userId, ['owner', 'manager'], systemRole, { write: true });
+    await this.rbacService.assertStorePermission(category.storeId, userId, 'products.archive', { write: true });
 
     await this.databaseService.db
       .update(productCategories)
@@ -117,11 +112,9 @@ export class ProductsService {
   async createProduct(
     storeId: string,
     userId: string,
-    userRole: UserRole | undefined,
-    dto: CreateProductDto,
-    systemRole?: SystemRole
+    dto: CreateProductDto
   ): Promise<ProductRecord> {
-    await this.storesService.assertStoreAccess(storeId, userId, ['owner', 'manager'], systemRole, { write: true });
+    await this.rbacService.assertStorePermission(storeId, userId, 'products.write', { write: true });
 
     if (dto.categoryId) {
       const [category] = await this.databaseService.db
@@ -254,8 +247,7 @@ export class ProductsService {
   async assertProductOwnership(
     id: string,
     userId: string,
-    userRole?: UserRole,
-    systemRole?: SystemRole
+    requiredPerm: 'products.edit' | 'products.status' | 'products.archive' = 'products.edit'
   ): Promise<ProductRecord> {
     const [product] = await this.databaseService.db
       .select()
@@ -266,18 +258,48 @@ export class ProductsService {
       throw new NotFoundException('Товар не найден');
     }
 
-    await this.storesService.assertStoreAccess(product.storeId, userId, ['owner', 'manager'], systemRole, { write: true });
+    await this.rbacService.assertStorePermission(product.storeId, userId, requiredPerm, { write: true });
     return product;
   }
 
   async updateProduct(
     id: string,
     userId: string,
-    userRole: UserRole | undefined,
-    dto: UpdateProductDto,
-    systemRole?: SystemRole
+    dto: UpdateProductDto
   ): Promise<ProductRecord> {
-    const product = await this.assertProductOwnership(id, userId, userRole, systemRole);
+    const [existing] = await this.databaseService.db
+      .select()
+      .from(products)
+      .where(eq(products.id, id));
+
+    if (!existing) {
+      throw new NotFoundException('Товар не найден');
+    }
+
+    const hasStatusChange =
+      dto.isActive !== undefined && dto.isActive !== existing.isActive;
+    const hasDataChange =
+      dto.name !== undefined ||
+      dto.categoryId !== undefined ||
+      dto.sku !== undefined ||
+      dto.description !== undefined ||
+      dto.price !== undefined ||
+      dto.oldPrice !== undefined ||
+      dto.imageUrl !== undefined ||
+      dto.inventoryCount !== undefined;
+
+    if (hasStatusChange) {
+      await this.rbacService.assertStorePermission(existing.storeId, userId, 'products.status', {
+        write: true
+      });
+    }
+    if (hasDataChange || !hasStatusChange) {
+      await this.rbacService.assertStorePermission(existing.storeId, userId, 'products.edit', {
+        write: true
+      });
+    }
+
+    const product = existing;
 
     if (dto.categoryId) {
       const [category] = await this.databaseService.db
@@ -307,13 +329,8 @@ export class ProductsService {
     return updated;
   }
 
-  async deleteProduct(
-    id: string,
-    userId: string,
-    userRole?: UserRole,
-    systemRole?: SystemRole
-  ): Promise<{ message: string }> {
-    await this.assertProductOwnership(id, userId, userRole, systemRole);
+  async deleteProduct(id: string, userId: string): Promise<{ message: string }> {
+    await this.assertProductOwnership(id, userId, 'products.archive');
 
     await this.databaseService.db
       .update(products)

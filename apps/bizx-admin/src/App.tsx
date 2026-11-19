@@ -29,7 +29,7 @@ export const App: React.FC = () => {
     );
   }
 
-  if (!user || user.role !== 'business_owner') {
+  if (!user) {
     return <LoginView />;
   }
 

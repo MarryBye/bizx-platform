@@ -297,7 +297,11 @@ export default function PricingPage() {
             <div className="p-5 bg-white border border-slate-200 rounded-xl space-y-1.5 shadow-sm">
               <div className="flex items-center gap-2 font-bold text-xs text-slate-900">
                 <HelpCircle className="w-4 h-4 text-slate-500 shrink-0" />
-                <span>{locale === 'en' ? 'How does the 30-day demo work?' : 'Як працює тестова оплата?'}</span>
+                <span>
+                  {locale === 'en'
+                    ? 'How does plan activation work?'
+                    : 'Як відбувається підключення тарифу?'}
+                </span>
               </div>
               <p className="text-xs text-slate-600 leading-relaxed">{t('pricing.noCardNeeded')}</p>
             </div>

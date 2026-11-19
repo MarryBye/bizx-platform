@@ -199,10 +199,15 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ onOpenDetailed }) 
         </Card>
       </div>
 
-      {/* Top Products */}
+      {/* Top-10 Products by Revenue */}
       <Card className="border-slate-200 shadow-sm">
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between gap-2">
           <CardTitle className="text-base">{t('admin.topProductsTitle')}</CardTitle>
+          {analytics?.topProducts && analytics.topProducts.length > 0 && (
+            <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-md">
+              {t('platform.topCount', { count: Math.min(analytics.topProducts.length, 10) })}
+            </span>
+          )}
         </CardHeader>
         <CardContent>
           {analytics?.topProducts && analytics.topProducts.length > 0 ? (
@@ -216,11 +221,13 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ onOpenDetailed }) 
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {analytics.topProducts.map((p, index) => (
+                  {analytics.topProducts.slice(0, 10).map((p, index) => (
                     <tr key={p.productId} className="hover:bg-slate-50/50">
-                      <td className="py-3 font-medium text-slate-900 flex items-center gap-2">
-                        <span className="text-xs text-slate-400 w-4">{index + 1}.</span>
-                        {p.productName}
+                      <td className="py-3 font-medium text-slate-900 flex items-center gap-2.5">
+                        <span className="w-5 h-5 rounded bg-slate-900 text-white font-mono text-[10px] font-bold flex items-center justify-center shrink-0">
+                          {index + 1}
+                        </span>
+                        <span>{p.productName}</span>
                       </td>
                       <td className="py-3 text-right text-slate-600">
                         {p.totalQuantity} {t('common.pcs')}

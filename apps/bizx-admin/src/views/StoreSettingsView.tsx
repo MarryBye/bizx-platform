@@ -6,11 +6,15 @@ import { Card, CardHeader, CardTitle, CardContent, Button, Input, Textarea, Phon
 import { Upload, Check, AlertCircle, Building, Image as ImageIcon } from 'lucide-react';
 import { StoreMediaImage } from '../components/StoreMediaImage';
 
-export const StoreSettingsView: React.FC = () => {
+export const StoreSettingsView: React.FC<{ isReadOnly?: boolean; canEdit?: boolean }> = ({
+  isReadOnly: isReadOnlyProp,
+  canEdit: canEditProp
+}) => {
   const { activeStore, uploadStoreMedia, updateStore, isLoading } = useBusinessStore();
   const { hasActiveSubscription } = useAuthStore();
   const { t, locale } = useTranslation();
-  const isReadOnly = !hasActiveSubscription;
+  const isReadOnly = isReadOnlyProp !== undefined ? isReadOnlyProp : !hasActiveSubscription;
+  const canEdit = canEditProp !== undefined ? canEditProp && !isReadOnly : !isReadOnly;
 
   const [name, setName] = useState(activeStore?.name || '');
   const [description, setDescription] = useState(activeStore?.description || '');
@@ -74,9 +78,14 @@ export const StoreSettingsView: React.FC = () => {
     try {
       const ok = await uploadStoreMedia('logo', file);
       if (ok) {
-        setStatusMessage({ text: 'Логотип успішно оновлено в бакеті R2!' });
+        setStatusMessage({
+          text: locale === 'en' ? 'Logo updated successfully!' : 'Логотип успішно оновлено!'
+        });
       } else {
-        setStatusMessage({ text: 'Не вдалося завантажити логотип', isError: true });
+        setStatusMessage({
+          text: locale === 'en' ? 'Failed to upload logo' : 'Не вдалося завантажити логотип',
+          isError: true
+        });
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Помилка завантаження логотипу';
@@ -102,9 +111,14 @@ export const StoreSettingsView: React.FC = () => {
     try {
       const ok = await uploadStoreMedia('banner', file);
       if (ok) {
-        setStatusMessage({ text: 'Банер успішно оновлено в бакеті R2!' });
+        setStatusMessage({
+          text: locale === 'en' ? 'Banner updated successfully!' : 'Банер успішно оновлено!'
+        });
       } else {
-        setStatusMessage({ text: 'Не вдалося завантажити банер', isError: true });
+        setStatusMessage({
+          text: locale === 'en' ? 'Failed to upload banner' : 'Не вдалося завантажити банер',
+          isError: true
+        });
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Помилка завантаження банера';
@@ -167,7 +181,7 @@ export const StoreSettingsView: React.FC = () => {
       <Card className="border-slate-200 shadow-sm overflow-hidden">
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
-            <ImageIcon className="w-4 h-4 text-slate-600" /> Візуальні матеріали (Cloudflare R2)
+            <ImageIcon className="w-4 h-4 text-slate-600" /> {t('storeSettings.mediaBranding')}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -182,19 +196,21 @@ export const StoreSettingsView: React.FC = () => {
                 className="w-full h-full object-cover"
               />
 
-              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                <label className="cursor-pointer px-4 py-2 bg-white/95 text-slate-800 rounded-xl text-xs font-semibold hover:bg-white shadow-md flex items-center gap-2 transition-transform hover:scale-105">
-                  <Upload className="w-4 h-4 text-blue-600" />
-                  {isUploadingBanner ? 'Завантаження...' : 'Завантажити новий банер'}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    disabled={isUploadingBanner}
-                    onChange={handleBannerUpload}
-                    className="hidden"
-                  />
-                </label>
-              </div>
+              {canEdit && (
+                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                  <label className="cursor-pointer px-4 py-2 bg-white/95 text-slate-800 rounded-xl text-xs font-semibold hover:bg-white shadow-md flex items-center gap-2 transition-transform hover:scale-105">
+                    <Upload className="w-4 h-4 text-blue-600" />
+                    {isUploadingBanner ? 'Завантаження...' : 'Завантажити новий банер'}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      disabled={isUploadingBanner || !canEdit}
+                      onChange={handleBannerUpload}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+              )}
             </div>
           </div>
 
@@ -211,22 +227,24 @@ export const StoreSettingsView: React.FC = () => {
                 />
               </div>
 
-              <div>
-                <label className="cursor-pointer inline-flex items-center gap-2 px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-50 shadow-sm transition-colors">
-                  <Upload className="w-4 h-4 text-blue-600" />
-                  {isUploadingLogo ? 'Завантаження...' : 'Обрати новий логотип'}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    disabled={isUploadingLogo}
-                    onChange={handleLogoUpload}
-                    className="hidden"
-                  />
-                </label>
-                <p className="text-[11px] text-slate-400 mt-1">
-                  Підтримуються формати PNG, JPEG, SVG та WebP до 10 МБ
-                </p>
-              </div>
+              {canEdit && (
+                <div>
+                  <label className="cursor-pointer inline-flex items-center gap-2 px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-50 shadow-sm transition-colors">
+                    <Upload className="w-4 h-4 text-blue-600" />
+                    {isUploadingLogo ? 'Завантаження...' : 'Обрати новий логотип'}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      disabled={isUploadingLogo || !canEdit}
+                      onChange={handleLogoUpload}
+                      className="hidden"
+                    />
+                  </label>
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    Підтримуються формати PNG, JPEG, SVG та WebP до 10 МБ
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </CardContent>
@@ -235,8 +253,15 @@ export const StoreSettingsView: React.FC = () => {
       {/* Main Info Form */}
       <Card className="border-slate-200 shadow-sm">
         <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <Building className="w-4 h-4 text-slate-600" /> Основні дані та реквізити
+          <CardTitle className="text-base flex items-center justify-between gap-2">
+            <span className="flex items-center gap-2">
+              <Building className="w-4 h-4 text-slate-600" /> Основні дані та реквізити
+            </span>
+            {!canEdit && (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200 uppercase">
+                {locale === 'en' ? 'View only' : 'Тільки перегляд'}
+              </span>
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -246,6 +271,7 @@ export const StoreSettingsView: React.FC = () => {
                 <label className="text-xs font-semibold text-slate-700">Назва магазину</label>
                 <Input
                   required
+                  disabled={!canEdit}
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                 />
@@ -254,6 +280,7 @@ export const StoreSettingsView: React.FC = () => {
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-slate-700">Адреса (місто, вулиця)</label>
                 <Input
+                  disabled={!canEdit}
                   value={address}
                   onChange={(e) => setAddress(e.target.value)}
                   placeholder="м. Київ, вул. Хрещатик, 1"
@@ -265,6 +292,7 @@ export const StoreSettingsView: React.FC = () => {
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-slate-700">{t('account.storePhoneLabel')}</label>
                 <PhoneInput
+                  disabled={!canEdit}
                   value={phone}
                   onChange={setPhone}
                   locale={locale}
@@ -275,6 +303,7 @@ export const StoreSettingsView: React.FC = () => {
                 <label className="text-xs font-semibold text-slate-700">Email для сповіщень</label>
                 <Input
                   type="email"
+                  disabled={!canEdit}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="shop@bizx.ua"
@@ -285,6 +314,7 @@ export const StoreSettingsView: React.FC = () => {
             <div className="space-y-1">
               <label className="text-xs font-semibold text-slate-700">Опис магазину</label>
               <Textarea
+                disabled={!canEdit}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 rows={3}
@@ -292,11 +322,13 @@ export const StoreSettingsView: React.FC = () => {
               />
             </div>
 
-            <div className="flex justify-end pt-2">
-              <Button type="submit" disabled={isLoading || isReadOnly}>
-                {isLoading ? t('common.saving') : t('account.saveChanges')}
-              </Button>
-            </div>
+            {canEdit && (
+              <div className="flex justify-end pt-2">
+                <Button type="submit" disabled={isLoading || !canEdit}>
+                  {isLoading ? t('common.saving') : t('account.saveChanges')}
+                </Button>
+              </div>
+            )}
           </form>
         </CardContent>
       </Card>

@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service.js';
 import { StoresService } from '../stores/stores.service.js';
+import { RbacService } from '../rbac/rbac.service.js';
 import {
   orders,
   orderItems,
@@ -19,7 +20,7 @@ import {
   type OrderRecord,
   type OrderItemRecord
 } from '@bizx/database';
-import type { CreateOrderDto, UpdateOrderStatusDto, UserRole, SystemRole } from '@bizx/common-types';
+import type { CreateOrderDto, UpdateOrderStatusDto } from '@bizx/common-types';
 
 export interface OrderWithItems extends OrderRecord {
   items: OrderItemRecord[];
@@ -42,7 +43,8 @@ export interface OrderDetailWithStore extends OrderRecord {
 export class OrdersService {
   constructor(
     private readonly databaseService: DatabaseService,
-    private readonly storesService: StoresService
+    private readonly storesService: StoresService,
+    private readonly rbacService: RbacService
   ) {}
 
   private generateOrderNumber(): string {
@@ -225,13 +227,11 @@ export class OrdersService {
     }));
   }
 
-  async getStoreOrders(
-    storeId: string,
-    userId: string,
-    userRole?: UserRole,
-    systemRole?: SystemRole
-  ): Promise<OrderWithItems[]> {
-    await this.storesService.assertStoreAccess(storeId, userId, ['owner', 'manager', 'staff'], systemRole);
+  async getStoreOrders(storeId: string, userId: string): Promise<OrderWithItems[]> {
+    await this.rbacService.assertStorePermission(storeId, userId, 'orders.read', {
+      write: false,
+      allowPlatformPermission: 'platform.stores.read'
+    });
 
     const storeOrders = await this.databaseService.db
       .select()
@@ -262,12 +262,7 @@ export class OrdersService {
     }));
   }
 
-  async getOrderById(
-    orderId: string,
-    userId: string,
-    userRole?: UserRole,
-    systemRole?: SystemRole
-  ): Promise<OrderDetailWithStore> {
+  async getOrderById(orderId: string, userId: string): Promise<OrderDetailWithStore> {
     const [order] = await this.databaseService.db
       .select({
         id: orders.id,
@@ -298,7 +293,10 @@ export class OrdersService {
     // Проверка прав доступа: покупатель, участник магазина (owner, manager, staff) или platform_admin
     const isCustomer = order.customerId === userId;
     if (!isCustomer) {
-      await this.storesService.assertStoreAccess(order.storeId, userId, ['owner', 'manager', 'staff'], systemRole);
+      await this.rbacService.assertStorePermission(order.storeId, userId, 'orders.read', {
+        write: false,
+        allowPlatformPermission: 'platform.stores.read'
+      });
     }
 
     const items = await this.databaseService.db
@@ -315,9 +313,7 @@ export class OrdersService {
   async updateOrderStatus(
     orderId: string,
     userId: string,
-    userRole?: UserRole,
-    dto?: UpdateOrderStatusDto,
-    systemRole?: SystemRole
+    dto?: UpdateOrderStatusDto
   ): Promise<OrderRecord> {
     const [order] = await this.databaseService.db
       .select({
@@ -333,7 +329,7 @@ export class OrdersService {
       throw new NotFoundException('Заказ не найден');
     }
 
-    await this.storesService.assertStoreAccess(order.storeId, userId, ['owner', 'manager', 'staff'], systemRole, { write: true });
+    await this.rbacService.assertStorePermission(order.storeId, userId, 'orders.edit', { write: true });
 
     const [updated] = await this.databaseService.db
       .update(orders)

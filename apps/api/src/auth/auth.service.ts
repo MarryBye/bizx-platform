@@ -13,7 +13,18 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { DatabaseService } from '../database/database.service.js';
-import { users, refreshTokens, stores, eq, and, gt, inArray, isNull } from '@bizx/database';
+import {
+  users,
+  refreshTokens,
+  stores,
+  storeMembers,
+  platformMembers,
+  eq,
+  and,
+  gt,
+  inArray,
+  isNull
+} from '@bizx/database';
 import {
   normalizePhone,
   type RegisterDto,
@@ -37,32 +48,76 @@ export class AuthService {
     return crypto.createHash('sha256').update(token).digest('hex');
   }
 
-  private mapToProfile(user: any): UserProfile {
+  private async isPlatformStaffUser(userId: string): Promise<boolean> {
+    const [row] = await this.databaseService.db
+      .select({ id: platformMembers.id })
+      .from(platformMembers)
+      .where(and(eq(platformMembers.userId, userId), isNull(platformMembers.archivedAt)))
+      .limit(1);
+    return Boolean(row);
+  }
+
+  private async mapToProfile(user: typeof users.$inferSelect): Promise<UserProfile> {
+    const [platformRow, ownedStoreRow, memberStoreRow] = await Promise.all([
+      this.databaseService.db
+        .select({ id: platformMembers.id })
+        .from(platformMembers)
+        .where(and(eq(platformMembers.userId, user.id), isNull(platformMembers.archivedAt)))
+        .limit(1),
+      this.databaseService.db
+        .select({ id: stores.id })
+        .from(stores)
+        .where(and(eq(stores.ownerId, user.id), isNull(stores.archivedAt)))
+        .limit(1),
+      this.databaseService.db
+        .select({ id: storeMembers.id })
+        .from(storeMembers)
+        .innerJoin(stores, eq(storeMembers.storeId, stores.id))
+        .where(
+          and(
+            eq(storeMembers.userId, user.id),
+            isNull(storeMembers.archivedAt),
+            isNull(stores.archivedAt)
+          )
+        )
+        .limit(1)
+    ]);
+
+    const isPlatformStaff = platformRow.length > 0;
+    const isBusinessOwner = ownedStoreRow.length > 0;
+    const hasActiveBizSub =
+      isSubscriptionActive(user) && isBusinessSubscriptionTier(user.subscriptionTier);
+    const hasStoreAccess =
+      isPlatformStaff || isBusinessOwner || hasActiveBizSub || memberStoreRow.length > 0;
+
     return {
       id: user.id,
       email: user.email,
       name: user.name,
-      role: user.role as UserProfile['role'],
-      systemRole: (user.systemRole || 'user') as UserProfile['systemRole'],
+      isPlatformStaff,
+      isBusinessOwner,
+      hasStoreAccess,
       phone: user.phone || null,
       avatarUrl: user.avatarUrl || null,
       preferredLanguage: (user.preferredLanguage || 'uk') as UserProfile['preferredLanguage'],
       status: (user.status || 'active') as UserProfile['status'],
-      subscriptionTier: (user.subscriptionTier || 'free') as any,
-      subscriptionStatus: (user.subscriptionStatus || 'none') as any,
-      subscriptionExpiresAt: user.subscriptionExpiresAt ? (user.subscriptionExpiresAt instanceof Date ? user.subscriptionExpiresAt.toISOString() : user.subscriptionExpiresAt) : null,
+      subscriptionTier: (user.subscriptionTier || 'free') as UserProfile['subscriptionTier'],
+      subscriptionStatus: (user.subscriptionStatus || 'none') as UserProfile['subscriptionStatus'],
+      subscriptionExpiresAt: user.subscriptionExpiresAt
+        ? user.subscriptionExpiresAt instanceof Date
+          ? user.subscriptionExpiresAt.toISOString()
+          : user.subscriptionExpiresAt
+        : null,
       subscriptionDaysLeft: getSubscriptionDaysLeft(user.subscriptionExpiresAt),
       maxAllowedStores: getMaxAllowedStores(user.subscriptionTier),
       createdAt: user.createdAt instanceof Date ? user.createdAt.toISOString() : user.createdAt
     };
   }
 
-  private async generateTokens(user: { id: string; email: string; role: string; systemRole?: string; name: string }) {
+  private async generateTokens(user: { id: string; email: string; name: string }) {
     const payload = {
       sub: user.id,
       email: user.email,
-      role: user.role,
-      systemRole: user.systemRole || 'user',
       name: user.name
     };
 
@@ -84,7 +139,7 @@ export class AuthService {
     metadata: { userAgent?: string; ipAddress?: string }
   ) {
     const tokenHash = this.hashToken(rawRefreshToken);
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 дней
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 днів
 
     await this.databaseService.db.insert(refreshTokens).values({
       userId,
@@ -128,12 +183,11 @@ export class AuthService {
         email: dto.email.toLowerCase(),
         name: dto.name,
         phone: normalizedPhone,
-        passwordHash,
-        role: 'client'
+        passwordHash
       })
       .returning();
 
-    const userProfile = this.mapToProfile(newUser);
+    const userProfile = await this.mapToProfile(newUser);
 
     const tokens = await this.generateTokens(newUser);
     await this.storeRefreshToken(newUser.id, tokens.refreshToken, metadata);
@@ -149,7 +203,7 @@ export class AuthService {
     dto: LoginDto,
     metadata: { userAgent?: string; ipAddress?: string } = {}
   ): Promise<AuthResponse> {
-    let user: any = null;
+    let user: typeof users.$inferSelect | undefined;
 
     const rawIdentifier = dto.identifier?.trim();
     const phoneInput =
@@ -185,7 +239,7 @@ export class AuthService {
     }
 
     const reconciledUser = await this.reconcileExpiredSubscription(user);
-    const userProfile = this.mapToProfile(reconciledUser);
+    const userProfile = await this.mapToProfile(reconciledUser);
 
     const tokens = await this.generateTokens(reconciledUser);
     await this.storeRefreshToken(reconciledUser.id, tokens.refreshToken, metadata);
@@ -225,7 +279,7 @@ export class AuthService {
     }
 
     const reconciledUser = await this.reconcileExpiredSubscription(user);
-    const userProfile = this.mapToProfile(reconciledUser);
+    const userProfile = await this.mapToProfile(reconciledUser);
 
     const tokens = await this.generateTokens(reconciledUser);
     await this.storeRefreshToken(reconciledUser.id, tokens.refreshToken, metadata);
@@ -264,9 +318,10 @@ export class AuthService {
     }
   }
 
-  private async reconcileExpiredSubscription(user: any): Promise<any> {
-    if (!user) return user;
-    const isStaff = user.systemRole === 'platform_admin' || user.role === 'admin';
+  private async reconcileExpiredSubscription(
+    user: typeof users.$inferSelect
+  ): Promise<typeof users.$inferSelect> {
+    const isStaff = await this.isPlatformStaffUser(user.id);
     let currentUser = user;
 
     if (
@@ -302,7 +357,10 @@ export class AuthService {
   }
 
   async getProfile(userId: string): Promise<UserProfile> {
-    const [rawUser] = await this.databaseService.db.select().from(users).where(eq(users.id, userId));
+    const [rawUser] = await this.databaseService.db
+      .select()
+      .from(users)
+      .where(eq(users.id, userId));
 
     if (!rawUser) {
       throw new NotFoundException('Пользователь не найден');

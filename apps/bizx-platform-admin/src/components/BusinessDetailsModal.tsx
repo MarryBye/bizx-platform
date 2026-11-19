@@ -15,6 +15,8 @@ interface BusinessDetailsModalProps {
   onClose: () => void;
   onUpdateStatus: (id: string, newStatus: 'active' | 'pending' | 'suspended' | 'archived') => Promise<void>;
   isUpdating: boolean;
+  canModerate?: boolean;
+  canArchive?: boolean;
 }
 
 export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
@@ -22,7 +24,9 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
   isOpen,
   onClose,
   onUpdateStatus,
-  isUpdating
+  isUpdating,
+  canModerate = false,
+  canArchive = false
 }) => {
   if (!isOpen || !business) return null;
 
@@ -150,66 +154,75 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
           )}
 
           {/* Status Actions Group */}
-          <div className="p-4 border border-slate-200 rounded-xl bg-white space-y-3">
-            <div>
-              <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
-                Керування статусом закладу
-              </h3>
-              <p className="text-[11px] text-slate-500 mt-0.5">
-                Зміна доступності закладу для оформлення замовлень покупцями
-              </p>
+          {canModerate || canArchive ? (
+            <div className="p-4 border border-slate-200 rounded-xl bg-white space-y-3">
+              <div>
+                <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
+                  Керування статусом закладу
+                </h3>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  Зміна доступності закладу для оформлення замовлень покупцями
+                </p>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2.5 pt-1">
+                {canModerate && (
+                  <button
+                    type="button"
+                    disabled={isUpdating || business.status === 'active'}
+                    onClick={() => onUpdateStatus(business.id, 'active')}
+                    className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition-all ${
+                      business.status === 'active'
+                        ? 'border-emerald-500 bg-emerald-50 text-emerald-800 font-bold ring-2 ring-emerald-400/20'
+                        : 'border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/40 text-slate-700'
+                    } disabled:opacity-50`}
+                  >
+                    <CheckCircle2 className="w-5 h-5 text-emerald-600 mb-1" />
+                    <span className="text-xs font-bold">Активувати</span>
+                    <span className="text-[10px] text-slate-400">Працює штатно</span>
+                  </button>
+                )}
+
+                {canModerate && (
+                  <button
+                    type="button"
+                    disabled={isUpdating || business.status === 'suspended'}
+                    onClick={() => onUpdateStatus(business.id, 'suspended')}
+                    className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition-all ${
+                      business.status === 'suspended'
+                        ? 'border-rose-500 bg-rose-50 text-rose-800 font-bold ring-2 ring-rose-400/20'
+                        : 'border-slate-200 hover:border-rose-300 hover:bg-rose-50/40 text-slate-700'
+                    } disabled:opacity-50`}
+                  >
+                    <AlertTriangle className="w-5 h-5 text-rose-500 mb-1" />
+                    <span className="text-xs font-bold">Призупинити</span>
+                    <span className="text-[10px] text-slate-400">Тимчасовий блок</span>
+                  </button>
+                )}
+
+                {canArchive && (
+                  <button
+                    type="button"
+                    disabled={isUpdating || business.status === 'archived'}
+                    onClick={() => onUpdateStatus(business.id, 'archived')}
+                    className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition-all ${
+                      business.status === 'archived'
+                        ? 'border-slate-400 bg-slate-100 text-slate-900 font-bold ring-2 ring-slate-300'
+                        : 'border-slate-200 hover:border-slate-400 hover:bg-slate-50 text-slate-700'
+                    } disabled:opacity-50`}
+                  >
+                    <Archive className="w-5 h-5 text-slate-500 mb-1" />
+                    <span className="text-xs font-bold">Архівувати</span>
+                    <span className="text-[10px] text-slate-400">Приховати в архів</span>
+                  </button>
+                )}
+              </div>
             </div>
-
-            <div className="grid grid-cols-3 gap-2.5 pt-1">
-              {/* Activate */}
-              <button
-                type="button"
-                disabled={isUpdating || business.status === 'active'}
-                onClick={() => onUpdateStatus(business.id, 'active')}
-                className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition-all ${
-                  business.status === 'active'
-                    ? 'border-emerald-500 bg-emerald-50 text-emerald-800 font-bold ring-2 ring-emerald-400/20'
-                    : 'border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/40 text-slate-700'
-                } disabled:opacity-50`}
-              >
-                <CheckCircle2 className="w-5 h-5 text-emerald-600 mb-1" />
-                <span className="text-xs font-bold">Активувати</span>
-                <span className="text-[10px] text-slate-400">Працює штатно</span>
-              </button>
-
-              {/* Suspend */}
-              <button
-                type="button"
-                disabled={isUpdating || business.status === 'suspended'}
-                onClick={() => onUpdateStatus(business.id, 'suspended')}
-                className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition-all ${
-                  business.status === 'suspended'
-                    ? 'border-rose-500 bg-rose-50 text-rose-800 font-bold ring-2 ring-rose-400/20'
-                    : 'border-slate-200 hover:border-rose-300 hover:bg-rose-50/40 text-slate-700'
-                } disabled:opacity-50`}
-              >
-                <AlertTriangle className="w-5 h-5 text-rose-500 mb-1" />
-                <span className="text-xs font-bold">Призупинити</span>
-                <span className="text-[10px] text-slate-400">Тимчасовий блок</span>
-              </button>
-
-              {/* Archive */}
-              <button
-                type="button"
-                disabled={isUpdating || business.status === 'archived'}
-                onClick={() => onUpdateStatus(business.id, 'archived')}
-                className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition-all ${
-                  business.status === 'archived'
-                    ? 'border-slate-400 bg-slate-100 text-slate-900 font-bold ring-2 ring-slate-300'
-                    : 'border-slate-200 hover:border-slate-400 hover:bg-slate-50 text-slate-700'
-                } disabled:opacity-50`}
-              >
-                <Archive className="w-5 h-5 text-slate-500 mb-1" />
-                <span className="text-xs font-bold">Архівувати</span>
-                <span className="text-[10px] text-slate-400">Soft delete</span>
-              </button>
+          ) : (
+            <div className="p-3.5 border border-slate-200 rounded-xl bg-slate-50 text-[11px] text-slate-500">
+              Режим перегляду: у вас немає прав модерації або архівації торгових точок.
             </div>
-          </div>
+          )}
         </div>
 
         {/* Footer */}

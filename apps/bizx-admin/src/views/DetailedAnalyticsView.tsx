@@ -29,10 +29,16 @@ import {
   BarChart3,
   ScatterChart as ScatterIcon,
   Table2,
-  Loader2
+  Loader2,
+  Trophy,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 
 type DataTab = 'daily' | 'monthly' | 'products';
+
+const TOP_LIMIT_OPTIONS = [5, 10, 20, 50, 500] as const;
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const;
 
 const ORDER_STATUSES: OrderStatus[] = [
   'pending',
@@ -43,7 +49,7 @@ const ORDER_STATUSES: OrderStatus[] = [
   'cancelled'
 ];
 
-export const DetailedAnalyticsView: React.FC = () => {
+export const DetailedAnalyticsView: React.FC<{ canExport?: boolean }> = ({ canExport = true }) => {
   const { activeStore } = useBusinessStore();
   const { t, locale } = useTranslation();
 
@@ -59,6 +65,9 @@ export const DetailedAnalyticsView: React.FC = () => {
   const [data, setData] = useState<StoreAnalytics | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [tableTab, setTableTab] = useState<DataTab>('daily');
+  const [topLimit, setTopLimit] = useState<number>(10);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(10);
 
   const fetchFilteredAnalytics = useCallback(async () => {
     if (!activeStore) return;
@@ -70,7 +79,8 @@ export const DetailedAnalyticsView: React.FC = () => {
         endDate: endDate || undefined,
         status: status || undefined,
         minAmount: minAmountUah ? Math.round(Number(minAmountUah) * 100) : undefined,
-        maxAmount: maxAmountUah ? Math.round(Number(maxAmountUah) * 100) : undefined
+        maxAmount: maxAmountUah ? Math.round(Number(maxAmountUah) * 100) : undefined,
+        topLimit
       });
       if (res.success && res.data) {
         setData(res.data);
@@ -80,11 +90,15 @@ export const DetailedAnalyticsView: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [activeStore, period, startDate, endDate, status, minAmountUah, maxAmountUah]);
+  }, [activeStore, period, startDate, endDate, status, minAmountUah, maxAmountUah, topLimit]);
 
   useEffect(() => {
     fetchFilteredAnalytics();
   }, [fetchFilteredAnalytics]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [tableTab, pageSize, period, startDate, endDate, status, minAmountUah, maxAmountUah, minOrdersFilter, topLimit]);
 
   const handleResetFilters = () => {
     setPeriod('month');
@@ -137,13 +151,30 @@ export const DetailedAnalyticsView: React.FC = () => {
     return (data?.topProducts || [])
       .filter((p) => p.totalQuantity >= minOrdersNum)
       .map((p) => ({
+        productId: p.productId,
         name: p.productName,
         quantity: p.totalQuantity,
+        revenueKopecks: p.totalRevenue,
         revenueUah: Number((p.totalRevenue / 100).toFixed(2)),
         avgPriceUah:
           p.totalQuantity > 0 ? Number((p.totalRevenue / p.totalQuantity / 100).toFixed(2)) : 0
       }));
   }, [data, minOrdersNum]);
+
+  const activeRowsCount =
+    tableTab === 'daily'
+      ? dailyChartData.length
+      : tableTab === 'monthly'
+        ? monthlyChartData.length
+        : productsScatterData.length;
+  const totalPages = Math.max(1, Math.ceil(activeRowsCount / pageSize));
+  const safePage = Math.min(currentPage, totalPages);
+  const startIdx = (safePage - 1) * pageSize;
+  const paginatedDaily = dailyChartData.slice(startIdx, startIdx + pageSize);
+  const paginatedMonthly = monthlyChartData.slice(startIdx, startIdx + pageSize);
+  const paginatedProducts = productsScatterData.slice(startIdx, startIdx + pageSize);
+  const rangeFrom = activeRowsCount === 0 ? 0 : startIdx + 1;
+  const rangeTo = Math.min(startIdx + pageSize, activeRowsCount);
 
   const handleExportExcel = () => {
     if (!activeStore || !data) return;
@@ -246,27 +277,29 @@ export const DetailedAnalyticsView: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleExportCsv}
-            disabled={!data}
-            className="inline-flex items-center gap-1.5 text-xs font-bold"
-          >
-            <Download className="w-4 h-4 shrink-0" />
-            <span>{t('analytics.exportCsv')}</span>
-          </Button>
-          <Button
-            size="sm"
-            onClick={handleExportExcel}
-            disabled={!data}
-            className="inline-flex items-center gap-1.5 text-xs font-bold bg-emerald-700 hover:bg-emerald-800 text-white"
-          >
-            <FileSpreadsheet className="w-4 h-4 shrink-0" />
-            <span>{t('analytics.exportExcel')}</span>
-          </Button>
-        </div>
+        {canExport && (
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExportCsv}
+              disabled={!data}
+              className="inline-flex items-center gap-1.5 text-xs font-bold"
+            >
+              <Download className="w-4 h-4 shrink-0" />
+              <span>{t('analytics.exportCsv')}</span>
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleExportExcel}
+              disabled={!data}
+              className="inline-flex items-center gap-1.5 text-xs font-bold bg-emerald-700 hover:bg-emerald-800 text-white"
+            >
+              <FileSpreadsheet className="w-4 h-4 shrink-0" />
+              <span>{t('analytics.exportExcel')}</span>
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Filters Panel */}
@@ -587,7 +620,95 @@ export const DetailedAnalyticsView: React.FC = () => {
             </CardContent>
           </Card>
 
-          {/* Filtered Data Table */}
+          {/* Top Products by Revenue (Configurable Top N) */}
+          <Card className="border-slate-200 shadow-sm">
+            <CardHeader>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Trophy className="w-4 h-4 text-amber-500" />
+                    <span>{t('analytics.topProductsChart')}</span>
+                  </CardTitle>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-slate-500">
+                    {t('analytics.topLimitLabel')}
+                  </span>
+                  <select
+                    value={topLimit}
+                    onChange={(e) => setTopLimit(Number(e.target.value))}
+                    className="text-xs font-bold px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg focus:outline-none focus:border-slate-900 text-slate-800"
+                  >
+                    {TOP_LIMIT_OPTIONS.map((opt) => (
+                      <option key={opt} value={opt}>
+                        {opt === 500
+                          ? t('analytics.topAll')
+                          : t('platform.topCount', { count: opt })}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {productsScatterData.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-200 text-slate-500 font-bold uppercase">
+                        <th className="py-2.5 px-3">{t('admin.productCol')}</th>
+                        <th className="py-2.5 px-3 text-right">{t('admin.soldQtyCol')}</th>
+                        <th className="py-2.5 px-3 text-right">{t('admin.revenueCol')}</th>
+                        <th className="py-2.5 px-3 text-right">{t('analytics.shareOfRevenue')}</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {productsScatterData.map((row, index) => {
+                        const storeTotalRev = data?.totalRevenue || 0;
+                        const share =
+                          storeTotalRev > 0
+                            ? Math.round((row.revenueKopecks / storeTotalRev) * 100)
+                            : 0;
+                        return (
+                          <tr key={`${row.productId}-${index}`} className="hover:bg-slate-50">
+                            <td className="py-2.5 px-3 font-semibold text-slate-900 flex items-center gap-2.5">
+                              <span className="w-5 h-5 rounded bg-slate-900 text-white font-mono text-[10px] font-bold flex items-center justify-center shrink-0">
+                                {index + 1}
+                              </span>
+                              <span>{row.name}</span>
+                            </td>
+                            <td className="py-2.5 px-3 text-right text-slate-600">
+                              {row.quantity} {t('common.pcs')}
+                            </td>
+                            <td className="py-2.5 px-3 text-right font-bold text-emerald-700">
+                              {formatMoney(row.revenueKopecks)} ₴
+                            </td>
+                            <td className="py-2.5 px-3 text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                  <div
+                                    className="h-full bg-slate-900 rounded-full"
+                                    style={{ width: `${Math.min(100, Math.max(4, share))}%` }}
+                                  />
+                                </div>
+                                <span className="font-mono text-slate-500 text-[11px] w-8">
+                                  {share}%
+                                </span>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="text-xs text-slate-400 py-8 text-center">{t('admin.noTopProducts')}</p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Filtered Data Table with Pagination & Page Size Selector */}
           <Card className="border-slate-200 shadow-sm">
             <CardHeader>
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -595,27 +716,43 @@ export const DetailedAnalyticsView: React.FC = () => {
                   <Table2 className="w-4 h-4 text-slate-600" />
                   <span>{t('analytics.tableTitle')}</span>
                 </CardTitle>
-                <div className="inline-flex p-1 bg-slate-100 rounded-lg text-xs font-bold">
-                  {(['daily', 'monthly', 'products'] as const).map((tabKey) => (
-                    <button
-                      key={tabKey}
-                      type="button"
-                      onClick={() => setTableTab(tabKey)}
-                      className={`px-3 py-1 rounded-md transition-colors ${
-                        tableTab === tabKey
-                          ? 'bg-white text-slate-900 shadow-xs'
-                          : 'text-slate-500 hover:text-slate-800'
-                      }`}
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <div className="inline-flex p-1 bg-slate-100 rounded-lg text-xs font-bold">
+                    {(['daily', 'monthly', 'products'] as const).map((tabKey) => (
+                      <button
+                        key={tabKey}
+                        type="button"
+                        onClick={() => setTableTab(tabKey)}
+                        className={`px-3 py-1 rounded-md transition-colors ${
+                          tableTab === tabKey
+                            ? 'bg-white text-slate-900 shadow-xs'
+                            : 'text-slate-500 hover:text-slate-800'
+                        }`}
+                      >
+                        {tabKey === 'daily' && t('analytics.tabDaily')}
+                        {tabKey === 'monthly' && t('analytics.tabMonthly')}
+                        {tabKey === 'products' && t('analytics.tabProducts')}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-1.5 text-xs">
+                    <span className="text-slate-500 font-medium">{t('analytics.rowsPerPage')}</span>
+                    <select
+                      value={pageSize}
+                      onChange={(e) => setPageSize(Number(e.target.value))}
+                      className="text-xs font-bold px-2 py-1.5 bg-white border border-slate-300 rounded-lg focus:outline-none focus:border-slate-900 text-slate-800"
                     >
-                      {tabKey === 'daily' && t('analytics.tabDaily')}
-                      {tabKey === 'monthly' && t('analytics.tabMonthly')}
-                      {tabKey === 'products' && t('analytics.tabProducts')}
-                    </button>
-                  ))}
+                      {PAGE_SIZE_OPTIONS.map((sz) => (
+                        <option key={sz} value={sz}>
+                          {sz}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
               </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
               <div className="overflow-x-auto">
                 {tableTab === 'daily' && (
                   <table className="w-full text-left text-xs">
@@ -628,14 +765,14 @@ export const DetailedAnalyticsView: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {dailyChartData.length === 0 ? (
+                      {paginatedDaily.length === 0 ? (
                         <tr>
                           <td colSpan={4} className="py-6 text-center text-slate-400">
                             {t('common.noData')}
                           </td>
                         </tr>
                       ) : (
-                        dailyChartData.map((row) => (
+                        paginatedDaily.map((row) => (
                           <tr key={row.date} className="hover:bg-slate-50">
                             <td className="py-2.5 px-3 font-medium text-slate-900">{row.date}</td>
                             <td className="py-2.5 px-3 text-right text-slate-600">{row.ordersCount}</td>
@@ -662,14 +799,14 @@ export const DetailedAnalyticsView: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {monthlyChartData.length === 0 ? (
+                      {paginatedMonthly.length === 0 ? (
                         <tr>
                           <td colSpan={3} className="py-6 text-center text-slate-400">
                             {t('common.noData')}
                           </td>
                         </tr>
                       ) : (
-                        monthlyChartData.map((row) => (
+                        paginatedMonthly.map((row) => (
                           <tr key={row.month} className="hover:bg-slate-50">
                             <td className="py-2.5 px-3 font-medium text-slate-900">{row.month}</td>
                             <td className="py-2.5 px-3 text-right text-slate-600">{row.ordersCount}</td>
@@ -693,15 +830,15 @@ export const DetailedAnalyticsView: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {productsScatterData.length === 0 ? (
+                      {paginatedProducts.length === 0 ? (
                         <tr>
                           <td colSpan={3} className="py-6 text-center text-slate-400">
                             {t('common.noData')}
                           </td>
                         </tr>
                       ) : (
-                        productsScatterData.map((row) => (
-                          <tr key={row.name} className="hover:bg-slate-50">
+                        paginatedProducts.map((row, idx) => (
+                          <tr key={`${row.productId}-${idx}`} className="hover:bg-slate-50">
                             <td className="py-2.5 px-3 font-medium text-slate-900">{row.name}</td>
                             <td className="py-2.5 px-3 text-right text-slate-600">{row.quantity}</td>
                             <td className="py-2.5 px-3 text-right font-bold text-emerald-700">
@@ -714,6 +851,42 @@ export const DetailedAnalyticsView: React.FC = () => {
                   </table>
                 )}
               </div>
+
+              {/* Pagination Controls */}
+              {activeRowsCount > 0 && (
+                <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                  <span className="text-slate-500 font-medium">
+                    {t('analytics.showingRange', {
+                      from: rangeFrom,
+                      to: rangeTo,
+                      total: activeRowsCount
+                    })}
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      disabled={safePage <= 1}
+                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 font-semibold hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >
+                      <ChevronLeft className="w-3.5 h-3.5" />
+                      <span>{t('analytics.prevPage')}</span>
+                    </button>
+                    <span className="px-2.5 py-1.5 font-semibold text-slate-700">
+                      {t('analytics.pageOf', { page: safePage, pages: totalPages })}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={safePage >= totalPages}
+                      onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 font-semibold hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >
+                      <span>{t('analytics.nextPage')}</span>
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </>

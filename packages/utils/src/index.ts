@@ -117,6 +117,7 @@ export const uk = {
     cart: 'Кошик',
     profile: 'Профіль',
     settings: 'Налаштування',
+    accountSettings: 'Налаштування акаунту',
     stores: 'Заклади'
   },
   roles: {
@@ -174,8 +175,8 @@ export const uk = {
     clientRole: 'Покупець',
     businessRole: 'Власник бізнесу',
     logoutConfirm: 'Ви дійсно бажаєте вийти з облікового запису?',
-    invalidCredentials: 'Невірний логін або пароль [AUTH_1001]',
-    accessForbidden: 'Доступ до розділу обмежено [AUTH_1002]',
+    invalidCredentials: 'Невірний логін або пароль',
+    accessForbidden: 'Доступ до розділу обмежено',
     loginSuccess: 'Успішний вхід',
     registerSuccess: 'Акаунт успішно зареєстровано',
     loginError: 'Невірні облікові дані або помилка авторизації',
@@ -211,7 +212,7 @@ export const uk = {
     ctaPricing: 'Переглянути тарифи',
     ctaPartner: 'Панель бізнесу',
     statsStores: 'Активних закладів',
-    statsUptime: 'Стабільність API',
+    statsUptime: 'Стабільність роботи',
     statsCommission: 'Комісія платформи',
     statsSetup: 'Швидкий запуск',
     featuresTag: 'МОЖЛИВОСТІ ПЛАТФОРМИ',
@@ -226,8 +227,8 @@ export const uk = {
     feature3Desc: 'Графіки продажів, середній чек, топ-товари та експорт звітів у Excel і CSV.',
     feature4Title: 'Ролі та права команди',
     feature4Desc: 'Додавайте менеджерів і персонал з гнучким розподілом прав доступу до закладу.',
-    feature5Title: 'Медіа-сховище Cloudflare R2',
-    feature5Desc: 'Миттєве завантаження логотипів, банерів та фото товарів із глобальним CDN.',
+    feature5Title: 'Швидке завантаження медіа',
+    feature5Desc: 'Миттєве завантаження логотипів, банерів та фото товарів у високій якості.',
     feature6Title: 'Безпечна авторизація BizX ID',
     feature6Desc: 'Єдиний обліковий запис для всіх сервісів платформи з входом за Email або телефоном.',
     benefitsTag: 'ДЛЯ БІЗНЕСУ',
@@ -294,7 +295,7 @@ export const uk = {
     storeCreated: 'Заклад успішно створено як чернетку',
     storeSubmitted: 'Заклад відправлено на модерацію',
     storeNameLabel: 'Назва закладу',
-    storeSlugLabel: 'URL-ідентифікатор (slug)',
+    storeSlugLabel: 'Адреса сторінки (URL)',
     storeAddressLabel: 'Адреса закладу',
     storePhoneLabel: 'Контактний телефон',
     storeDescLabel: 'Короткий опис',
@@ -317,7 +318,7 @@ export const uk = {
     upgradePlan: 'Перейти на тариф',
     activate30Days: 'Підключити на 30 днів',
     loginToSubscribe: 'Увійдіть, щоб підключити',
-    noCardNeeded: 'Банківська картка не потрібна. Демонстраційне підключення на 30 днів.',
+    noCardNeeded: 'Банківська картка не потрібна. Миттєве підключення тарифу на 30 днів.',
     subscribeSuccess: 'Тариф успішно активовано на 30 днів!',
     subscribeError: 'Не вдалося активувати тарифний план',
     faqTitle: 'Часті запитання про тарифи',
@@ -358,6 +359,9 @@ export const uk = {
     products: 'Товари та меню',
     orders: 'Замовлення',
     staff: 'Команда',
+    roles: 'Ролі та доступи',
+    rolesTitle: 'Ролі та доступи закладу',
+    rolesSubtitle: 'Налаштовуйте ієрархію ролей та гнучкі права доступу для працівників',
     settings: 'Налаштування закладу',
     payouts: 'Виплати',
     payoutsTitle: 'Фінанси та виплати',
@@ -369,7 +373,7 @@ export const uk = {
     successfulPayments: 'Успішні оплати',
     totalOrders: 'Всього замовлень',
     processedBySystem: 'Оброблено системою',
-    averageOrderValue: 'Середній чек (AOV)',
+    averageOrderValue: 'Середній чек',
     perOrder: 'На одне замовлення',
     activeProducts: 'Активні товари',
     inStoreCatalog: 'В каталозі магазину',
@@ -383,7 +387,7 @@ export const uk = {
     noStatusData: 'Немає даних по статусах',
     salesDynamics: 'Динаміка продажів',
     noPeriodData: 'Дані за поточний період відсутні',
-    topProductsTitle: 'Топ найпопулярніших товарів за виручкою',
+    topProductsTitle: 'Топ-10 найпопулярніших товарів за виручкою',
     noTopProducts: 'Топ-товари поки відсутні',
     productCol: 'Товар',
     soldQtyCol: 'Продано шт.',
@@ -438,7 +442,14 @@ export const uk = {
     recordsCount: 'Записів: {count}',
     noChartData: 'Недостатньо даних для побудови графіка за обраними фільтрами',
     shareOfRevenue: 'Частка виторгу',
-    avgCheck: 'Середній чек'
+    avgCheck: 'Середній чек',
+    topLimitLabel: 'Показати:',
+    topAll: 'Усі',
+    rowsPerPage: 'Записів на сторінці:',
+    showingRange: 'Показано {from}–{to} із {total}',
+    pageOf: 'Стор. {page} з {pages}',
+    prevPage: 'Назад',
+    nextPage: 'Далі'
   },
   products: {
     title: 'Товари та каталог',
@@ -510,13 +521,16 @@ export const uk = {
     tabBusinesses: 'Торгові точки',
     tabUsers: 'Користувачі',
     tabStaff: 'Команда BizX',
+    tabRoles: 'Ролі та доступи',
+    rolesTitle: 'Ролі платформи BizX Core',
+    rolesSubtitle: 'Ієрархія ролей та гранулярні права доступу для команди платформи BizX',
     operatorFallback: 'Оператор платформи',
     logoutTitle: 'Вийти з консолі',
     overviewBadge: 'Огляд платформи BizX',
     realtimeBadge: 'Режим реального часу',
     metricsTitle: 'Огляд та системні показники',
     metricsSubtitle: 'Зведений оборот торгівлі, стан підключених бізнесів та навантаження на систему',
-    gmv: 'Оборот GMV',
+    gmv: 'Загальний оборот',
     orders: 'Замовлення',
     processedByPlatform: 'Оброблено платформою',
     avgCheck: 'Середній чек',
@@ -535,8 +549,8 @@ export const uk = {
     ordersCol: 'Замовлень',
     revenueCol: 'Виручка',
     shareCol: 'Частка обороту',
-    infraTitle: 'Стан системного оточення та інфраструктури',
-    infraSubtitle: 'Моніторинг сервісів бекенду, бази даних, сховища та черг',
+    infraTitle: 'Стан сервісів платформи',
+    infraSubtitle: 'Поточний стан основних сервісів BizX',
     allSystemsOperational: 'Всі системи в нормі',
     storeStatusDist: 'Розподіл бізнесів за статусами',
     storeStatusSubtitle: 'Поточний стан підключених торгових закладів',
@@ -577,6 +591,98 @@ export const uk = {
     orderNotes: 'Коментар до замовлення',
     totalToPay: 'До сплати',
     phoneSaved: 'Номер телефону збережено'
+  },
+  permissions: {
+    products: {
+      read: 'Перегляд товарів та категорій',
+      write: 'Створення нових товарів та категорій',
+      edit: 'Редагування даних, цін та фото товарів',
+      status: 'Зміна статусу товару (Активний / Чернетка)',
+      archive: 'Архівація (видалення) товарів та категорій'
+    },
+    orders: {
+      read: 'Перегляд замовлень клієнтів',
+      edit: 'Зміна статусів замовлень та оплати'
+    },
+    analytics: {
+      read: 'Перегляд дашборду та статистики продажів',
+      export: 'Експорт аналітики в Excel / CSV'
+    },
+    store: {
+      admin: 'Адміністратор (повний доступ, крім прав власника)',
+      read: 'Перегляд даних та налаштувань закладу',
+      edit: 'Редагування даних, логотипу та банера',
+      status: {
+        manage: 'Керування статусом закладу (пауза / модерація)'
+      }
+    },
+    staff: {
+      read: 'Перегляд списку працівників',
+      write: 'Додавання нових працівників',
+      edit: 'Зміна ролей та доступів працівників',
+      archive: 'Архівація (видалення) працівників із команди'
+    },
+    roles: {
+      read: 'Перегляд ролей та їх прав',
+      write: 'Створення нових ролей',
+      edit: 'Редагування ролей та зміна пріоритету',
+      archive: 'Архівація (видалення) ролей'
+    },
+    platform: {
+      admin: 'Адміністратор платформи (повний доступ з урахуванням ієрархії)',
+      stores: {
+        read: 'Перегляд усіх торгових точок платформи',
+        moderate: 'Модерація та зміна статусів закладів',
+        archive: 'Архівація (видалення) торгових точок'
+      },
+      categories: {
+        manage: 'Керування категоріями закладів'
+      },
+      users: {
+        read: 'Перегляд реєстру користувачів BizX ID',
+        edit: 'Блокування та відновлення користувачів',
+        archive: 'Архівація облікових записів користувачів'
+      },
+      analytics: {
+        read: 'Перегляд метрик та аналітики платформи',
+        export: 'Експорт платформних звітів у Excel / CSV'
+      },
+      staff: {
+        read: 'Перегляд команди платформи BizX',
+        write: 'Додавання співробітників BizX',
+        edit: 'Редагування ролей співробітників BizX',
+        archive: 'Архівація (видалення) співробітників BizX'
+      },
+      roles: {
+        read: 'Перегляд ролей платформи',
+        write: 'Створення ролей платформи',
+        edit: 'Редагування та пріоритет ролей платформи',
+        archive: 'Архівація (видалення) ролей платформи'
+      }
+    }
+  },
+  permissionCategories: {
+    admin: 'Адміністрування',
+    products: 'Товари та каталог',
+    orders: 'Замовлення',
+    analytics: 'Статистика та аналітика',
+    store: 'Налаштування закладу',
+    staff: 'Команда та працівники',
+    roles: 'Ролі та ієрархія',
+    platform_admin: 'Адміністрування платформи',
+    platform_stores: 'Торгові точки платформи',
+    platform_users: 'Користувачі BizX ID',
+    platform_analytics: 'Аналітика платформи',
+    platform_staff: 'Команда BizX',
+    platform_roles: 'Ролі платформи'
+  },
+  permissionActions: {
+    read: 'Читання',
+    write: 'Створення',
+    edit: 'Редагування',
+    manage: 'Керування',
+    export: 'Експорт',
+    archive: 'Архівація'
   }
 };
 
@@ -650,6 +756,7 @@ export const en: typeof uk = {
     cart: 'Cart',
     profile: 'Profile',
     settings: 'Settings',
+    accountSettings: 'Account Settings',
     stores: 'Stores'
   },
   roles: {
@@ -707,8 +814,8 @@ export const en: typeof uk = {
     clientRole: 'Customer',
     businessRole: 'Business Owner',
     logoutConfirm: 'Are you sure you want to sign out?',
-    invalidCredentials: 'Invalid login or password [AUTH_1001]',
-    accessForbidden: 'Access restricted [AUTH_1002]',
+    invalidCredentials: 'Invalid login or password',
+    accessForbidden: 'Access restricted',
     loginSuccess: 'Successfully signed in',
     registerSuccess: 'Account successfully registered',
     loginError: 'Invalid credentials or authentication error',
@@ -744,7 +851,7 @@ export const en: typeof uk = {
     ctaPricing: 'View pricing',
     ctaPartner: 'Business Panel',
     statsStores: 'Active stores',
-    statsUptime: 'API reliability',
+    statsUptime: 'Platform uptime',
     statsCommission: 'Platform commission',
     statsSetup: 'Quick setup',
     featuresTag: 'PLATFORM FEATURES',
@@ -759,8 +866,8 @@ export const en: typeof uk = {
     feature3Desc: 'Sales charts, average order value, top products, and Excel/CSV report exports.',
     feature4Title: 'Team Roles & Permissions',
     feature4Desc: 'Invite managers and staff with flexible access controls for every store.',
-    feature5Title: 'Cloudflare R2 Media Storage',
-    feature5Desc: 'Instant upload for logos, banners, and product photos backed by global CDN.',
+    feature5Title: 'Fast Media Hosting',
+    feature5Desc: 'Instant upload and crisp delivery for logos, banners, and product photos.',
     feature6Title: 'Secure BizX ID Auth',
     feature6Desc: 'Single sign-on across all platform services using Email or Phone number.',
     benefitsTag: 'FOR BUSINESS',
@@ -827,7 +934,7 @@ export const en: typeof uk = {
     storeCreated: 'Store created as a draft',
     storeSubmitted: 'Store submitted for moderation',
     storeNameLabel: 'Store name',
-    storeSlugLabel: 'URL slug',
+    storeSlugLabel: 'Page web address (URL)',
     storeAddressLabel: 'Store address',
     storePhoneLabel: 'Contact phone',
     storeDescLabel: 'Short description',
@@ -850,7 +957,7 @@ export const en: typeof uk = {
     upgradePlan: 'Upgrade plan',
     activate30Days: 'Activate for 30 days',
     loginToSubscribe: 'Sign in to subscribe',
-    noCardNeeded: 'No credit card required. 30-day demonstration activation.',
+    noCardNeeded: 'No credit card required. Instant 30-day plan activation.',
     subscribeSuccess: 'Plan successfully activated for 30 days!',
     subscribeError: 'Failed to activate subscription plan',
     faqTitle: 'Frequently Asked Questions',
@@ -891,6 +998,9 @@ export const en: typeof uk = {
     products: 'Products & Menu',
     orders: 'Orders',
     staff: 'Team',
+    roles: 'Roles & Permissions',
+    rolesTitle: 'Store Roles & Permissions',
+    rolesSubtitle: 'Configure role priority hierarchy and flexible employee access',
     settings: 'Store Settings',
     payouts: 'Payouts',
     payoutsTitle: 'Finance & Payouts',
@@ -902,7 +1012,7 @@ export const en: typeof uk = {
     successfulPayments: 'Successful payments',
     totalOrders: 'Total Orders',
     processedBySystem: 'Processed by system',
-    averageOrderValue: 'Average Order Value (AOV)',
+    averageOrderValue: 'Average Order Value',
     perOrder: 'Per order',
     activeProducts: 'Active Products',
     inStoreCatalog: 'In store catalog',
@@ -916,7 +1026,7 @@ export const en: typeof uk = {
     noStatusData: 'No status data yet',
     salesDynamics: 'Recent Sales Dynamics',
     noPeriodData: 'No data for the selected period',
-    topProductsTitle: 'Top Products by Revenue',
+    topProductsTitle: 'Top 10 Most Popular Products by Revenue',
     noTopProducts: 'No top products yet',
     productCol: 'Product',
     soldQtyCol: 'Sold qty',
@@ -971,7 +1081,14 @@ export const en: typeof uk = {
     recordsCount: 'Records: {count}',
     noChartData: 'Not enough data to render this chart for the selected filters',
     shareOfRevenue: 'Revenue share',
-    avgCheck: 'Avg check'
+    avgCheck: 'Avg check',
+    topLimitLabel: 'Show:',
+    topAll: 'All',
+    rowsPerPage: 'Rows per page:',
+    showingRange: 'Showing {from}–{to} of {total}',
+    pageOf: 'Page {page} of {pages}',
+    prevPage: 'Prev',
+    nextPage: 'Next'
   },
   products: {
     title: 'Products & Catalog',
@@ -1043,13 +1160,16 @@ export const en: typeof uk = {
     tabBusinesses: 'Stores',
     tabUsers: 'Users',
     tabStaff: 'BizX Team',
+    tabRoles: 'Roles & Permissions',
+    rolesTitle: 'BizX Core Platform Roles',
+    rolesSubtitle: 'Role priority hierarchy and granular permissions for BizX Platform staff',
     operatorFallback: 'Platform Operator',
     logoutTitle: 'Sign out of console',
     overviewBadge: 'BizX Platform Overview',
     realtimeBadge: 'Real-time',
     metricsTitle: 'Overview & System Metrics',
-    metricsSubtitle: 'Platform-wide GMV, connected business health, and infrastructure status',
-    gmv: 'GMV Volume',
+    metricsSubtitle: 'Platform-wide sales volume, connected business status, and service health',
+    gmv: 'Total Volume',
     orders: 'Orders',
     processedByPlatform: 'Processed by platform',
     avgCheck: 'Avg Order Value',
@@ -1068,8 +1188,8 @@ export const en: typeof uk = {
     ordersCol: 'Orders',
     revenueCol: 'Revenue',
     shareCol: 'Revenue share',
-    infraTitle: 'System Environment & Infrastructure Health',
-    infraSubtitle: 'Monitoring backend API, database, object storage, and queues',
+    infraTitle: 'Platform Service Status',
+    infraSubtitle: 'Live status of core BizX services',
     allSystemsOperational: 'All systems operational',
     storeStatusDist: 'Stores by Status',
     storeStatusSubtitle: 'Current lifecycle distribution of connected stores',
@@ -1110,6 +1230,98 @@ export const en: typeof uk = {
     orderNotes: 'Order notes',
     totalToPay: 'Total to pay',
     phoneSaved: 'Phone number saved'
+  },
+  permissions: {
+    products: {
+      read: 'View products & categories',
+      write: 'Create new products & categories',
+      edit: 'Edit product details, prices & photos',
+      status: 'Toggle product status (Active / Draft)',
+      archive: 'Archive (remove) products & categories'
+    },
+    orders: {
+      read: 'View customer orders',
+      edit: 'Update order & payment statuses'
+    },
+    analytics: {
+      read: 'View dashboard & sales analytics',
+      export: 'Export analytics to Excel / CSV'
+    },
+    store: {
+      admin: 'Administrator (full access except owner-only rights)',
+      read: 'View store settings & details',
+      edit: 'Edit store info, logo & banner',
+      status: {
+        manage: 'Manage store status (pause / submit review)'
+      }
+    },
+    staff: {
+      read: 'View store team members',
+      write: 'Add new team members',
+      edit: 'Edit member roles & permissions',
+      archive: 'Archive (remove) team members'
+    },
+    roles: {
+      read: 'View roles & permissions',
+      write: 'Create new roles',
+      edit: 'Edit roles & change priority order',
+      archive: 'Archive (remove) roles'
+    },
+    platform: {
+      admin: 'Platform Administrator (full console access respecting hierarchy)',
+      stores: {
+        read: 'View all platform stores',
+        moderate: 'Moderate & change store statuses',
+        archive: 'Archive (remove) platform stores'
+      },
+      categories: {
+        manage: 'Manage store categories'
+      },
+      users: {
+        read: 'View BizX ID users registry',
+        edit: 'Suspend & restore user accounts',
+        archive: 'Archive user accounts'
+      },
+      analytics: {
+        read: 'View platform metrics & analytics',
+        export: 'Export platform reports to Excel / CSV'
+      },
+      staff: {
+        read: 'View BizX platform team',
+        write: 'Add BizX platform staff',
+        edit: 'Edit BizX staff roles',
+        archive: 'Archive (remove) BizX staff'
+      },
+      roles: {
+        read: 'View platform roles',
+        write: 'Create platform roles',
+        edit: 'Edit & reorder platform roles',
+        archive: 'Archive (remove) platform roles'
+      }
+    }
+  },
+  permissionCategories: {
+    admin: 'Administration',
+    products: 'Products & Catalog',
+    orders: 'Orders',
+    analytics: 'Analytics & Reports',
+    store: 'Store Settings',
+    staff: 'Team & Staff',
+    roles: 'Roles & Hierarchy',
+    platform_admin: 'Platform Administration',
+    platform_stores: 'Platform Stores',
+    platform_users: 'BizX ID Users',
+    platform_analytics: 'Platform Analytics',
+    platform_staff: 'BizX Staff',
+    platform_roles: 'Platform Roles'
+  },
+  permissionActions: {
+    read: 'Read',
+    write: 'Create',
+    edit: 'Edit',
+    manage: 'Manage',
+    export: 'Export',
+    archive: 'Archive'
   }
 };
 

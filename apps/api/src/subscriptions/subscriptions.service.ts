@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service.js';
-import { users, stores, eq, and, isNull, inArray } from '@bizx/database';
+import { users, stores, storeMembers, platformMembers, eq, and, isNull, inArray } from '@bizx/database';
 import type {
   SubscriptionPlan,
   SubscribeDto,
@@ -41,7 +41,12 @@ export class SubscriptionsService {
       throw new NotFoundException('Користувач не знайдений');
     }
 
-    const isStaff = user.systemRole === 'platform_admin' || user.role === 'admin';
+    const [platRow] = await this.databaseService.db
+      .select({ id: platformMembers.id })
+      .from(platformMembers)
+      .where(and(eq(platformMembers.userId, userId), isNull(platformMembers.archivedAt)))
+      .limit(1);
+    const isStaff = Boolean(platRow);
     let currentStatus = user.subscriptionStatus;
 
     // 1. Перевірка терміну дії: якщо дата минула, переводимо в 'expired'
@@ -124,8 +129,22 @@ export class SubscriptionsService {
       suspendedStoresCount > 0 &&
       activeStoresCount < maxAllowed;
 
-    // Доступ до бізнес-адмінки: є активна бізнес-підписка АБО є хоча б 1 власний заклад (для read-only перегляду)
-    const canAccessBusinessAdmin = isStaff || hasActiveBizSub || totalStoresCount > 0;
+    const [memberRow] = await this.databaseService.db
+      .select({ id: storeMembers.id })
+      .from(storeMembers)
+      .innerJoin(stores, eq(storeMembers.storeId, stores.id))
+      .where(
+        and(
+          eq(storeMembers.userId, userId),
+          isNull(storeMembers.archivedAt),
+          isNull(stores.archivedAt)
+        )
+      )
+      .limit(1);
+
+    // Доступ до бізнес-адмінки: є активна бізнес-підписка АБО є власний/робочий заклад
+    const canAccessBusinessAdmin =
+      isStaff || hasActiveBizSub || totalStoresCount > 0 || Boolean(memberRow);
 
     return {
       tier: (user.subscriptionTier ?? 'free') as SubscriptionTier,
@@ -181,7 +200,6 @@ export class SubscriptionsService {
           subscriptionTier: dto.tier,
           subscriptionStatus: newStatus,
           subscriptionExpiresAt: newExpiresAt,
-          role: isBiz ? 'business_owner' : user.role === 'admin' ? 'admin' : 'client',
           updatedAt: new Date()
         })
         .where(eq(users.id, userId));

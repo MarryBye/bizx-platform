@@ -267,7 +267,11 @@ export default function AccountPage() {
         await loadData();
         return;
       }
-      setCreateStoreError('Не вдалося зареєструвати бізнес. Перевірте унікальність slug.');
+      setCreateStoreError(
+        locale === 'en'
+          ? 'Failed to create store. Please choose a different page URL.'
+          : 'Не вдалося створити заклад. Перевірте унікальність адреси сторінки.'
+      );
     } catch (err: unknown) {
       const errObj = err as { data?: { message?: string }; message?: string };
       setCreateStoreError(errObj.data?.message || errObj.message || 'Помилка створення бізнесу');
@@ -355,9 +359,9 @@ export default function AccountPage() {
     return val.slice(0, 2).toUpperCase();
   };
 
-  const isBusinessUser = user?.role === 'business_owner' || myStores.length > 0;
+  const isBusinessUser = Boolean(user?.hasStoreAccess || user?.isBusinessOwner || myStores.length > 0);
 
-  const isPlatformStaff = user?.role === 'admin' || user?.systemRole === 'platform_admin';
+  const isPlatformStaff = Boolean(user?.isPlatformStaff);
 
   const menuItems = [
     { id: 'profile' as const, label: t('account.profileTab'), desc: t('account.profileTabDesc'), icon: User },
@@ -409,8 +413,7 @@ export default function AccountPage() {
                       name: data.name || '',
                       email: data.email,
                       phone: data.phone || undefined,
-                      password: data.password,
-                      role: 'client'
+                      password: data.password
                     });
                     if (res.success && res.data) {
                       await loadData();

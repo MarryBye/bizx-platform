@@ -119,8 +119,8 @@ export const SiteHeader: React.FC = () => {
     window.location.reload();
   };
 
-  const isBusinessUser = user?.role === 'business_owner' || stores.length > 0;
-  const isPlatformStaff = user?.systemRole === 'platform_admin';
+  const isBusinessUser = Boolean(user?.hasStoreAccess || user?.isBusinessOwner || stores.length > 0);
+  const isPlatformStaff = Boolean(user?.isPlatformStaff);
 
   const getInitials = (name?: string) => {
     if (!name) return 'U';
@@ -221,23 +221,23 @@ export const SiteHeader: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="px-4 py-1.5 flex items-center gap-1.5 flex-wrap">
+                    <div className="px-4 py-2 flex items-center gap-1.5 flex-wrap">
                       {isPlatformStaff ? (
-                        <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800">
+                        <span className="inline-flex items-center h-5 px-2 rounded text-[10px] font-bold leading-none bg-blue-100 text-blue-800 border border-blue-200">
                           {t('roles.platformAdmin')}
                         </span>
                       ) : isBusinessUser ? (
-                        <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                        <span className="inline-flex items-center h-5 px-2 rounded text-[10px] font-bold leading-none bg-emerald-100 text-emerald-800 border border-emerald-200">
                           {t('roles.businessPartner')}
                         </span>
                       ) : (
-                        <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700">
+                        <span className="inline-flex items-center h-5 px-2 rounded text-[10px] font-bold leading-none bg-slate-100 text-slate-700 border border-slate-200">
                           {t('auth.clientRole')}
                         </span>
                       )}
 
                       {user.subscriptionTier && user.subscriptionTier !== 'free' && (
-                        <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-200 uppercase">
+                        <span className="inline-flex items-center h-5 px-2 rounded text-[10px] font-bold leading-none bg-amber-100 text-amber-900 border border-amber-200 uppercase">
                           {user.subscriptionTier === 'client_premium' && 'Premium'}
                           {user.subscriptionTier === 'business_starter' && 'Starter'}
                           {user.subscriptionTier === 'business_pro' && 'Pro'}

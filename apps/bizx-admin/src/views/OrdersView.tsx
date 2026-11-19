@@ -5,7 +5,7 @@ import { Card, CardContent, Badge, Select, Button, Modal } from '@bizx/ui';
 import { ShoppingBag, Phone, MapPin, Pencil, Check, X } from 'lucide-react';
 import type { OrderStatus } from '@bizx/common-types';
 
-export const OrdersView: React.FC = () => {
+export const OrdersView: React.FC<{ canEdit?: boolean }> = ({ canEdit = true }) => {
   const { orders, activeStore, updateOrderStatus, isLoading } = useBusinessStore();
   const { t, locale } = useTranslation();
 
@@ -97,8 +97,8 @@ export const OrdersView: React.FC = () => {
                       </span>
                     </div>
 
-                    {/* Status Action: Edit Button or Form */}
-                    {isEditing ? (
+                    {/* Status Action: Edit Button or Form (only if orders.edit) */}
+                    {canEdit && (isEditing ? (
                       <div className="flex items-center gap-1.5">
                         <div className="w-40">
                           <Select
@@ -156,7 +156,7 @@ export const OrdersView: React.FC = () => {
                         <Pencil className="w-3.5 h-3.5 text-slate-500" />
                         <span>Змінити статус</span>
                       </Button>
-                    )}
+                    ))}
                   </div>
                 </div>
 
