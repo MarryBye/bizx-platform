@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useBusinessStore } from '../store/useBusinessStore';
+import { useTranslation } from '../hooks/useTranslation';
 import { Button, Input, Textarea, Card, CardContent, Badge, Modal, ProductPlaceholder, Select } from '@bizx/ui';
 import { Plus, Search, Archive, Image as ImageIcon, Upload, AlertCircle, Pencil } from 'lucide-react';
 import { resolveMediaUrl } from '../lib/media';
@@ -8,6 +9,7 @@ import type { Product } from '@bizx/common-types';
 export const ProductsView: React.FC = () => {
   const { products, categories, activeStore, createProduct, updateProduct, deleteProduct, isLoading } =
     useBusinessStore();
+  const { t, locale } = useTranslation();
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -27,7 +29,7 @@ export const ProductsView: React.FC = () => {
   const [formError, setFormError] = useState<string | null>(null);
 
   const formatPrice = (kopecks: number) => {
-    return (kopecks / 100).toLocaleString('uk-UA', {
+    return (kopecks / 100).toLocaleString(locale === 'en' ? 'en-US' : 'uk-UA', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2
     });
@@ -150,14 +152,14 @@ export const ProductsView: React.FC = () => {
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Каталог товарів</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">{t('products.title')}</h1>
           <p className="text-sm text-slate-500 mt-1">
-            Керуйте асортиментом, завантажуйте фотографії в R2 та встановлюйте ціни
+            {t('products.subtitle')}
           </p>
         </div>
 
         <Button onClick={openCreateModal} className="flex items-center gap-1.5 shrink-0">
-          <Plus className="w-4 h-4" /> Додати товар
+          <Plus className="w-4 h-4" /> {t('products.addProduct')}
         </Button>
       </div>
 
@@ -167,7 +169,7 @@ export const ProductsView: React.FC = () => {
           <div className="relative flex-1">
             <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
             <Input
-              placeholder="Пошук за назвою або артикулом (SKU)..."
+              placeholder={t('products.searchPlaceholder')}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9"
@@ -179,10 +181,10 @@ export const ProductsView: React.FC = () => {
               value={selectedCategory}
               onChange={(val) => setSelectedCategory(val)}
               options={[
-                { value: 'all', label: 'Усі категорії' },
+                { value: 'all', label: t('products.allCategories') },
                 ...categories.map((c) => ({ value: c.id, label: c.name }))
               ]}
-              placeholder="Усі категорії"
+              placeholder={t('products.allCategories')}
             />
           </div>
         </div>

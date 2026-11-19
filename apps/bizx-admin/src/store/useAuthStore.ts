@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { api } from '../lib/api';
-import { i18n } from '@bizx/utils';
+import { i18n, translateApiError } from '@bizx/utils';
 import type { UserProfile, LoginDto } from '@bizx/common-types';
 
 interface AuthState {
@@ -43,14 +43,16 @@ export const useAuthStore = create<AuthState>((set) => ({
           api.client.setAccessToken(null);
           set({
             user: null,
-            error:
-              'Доступ обмежено: для входу в панель бізнесу необхідна активна бізнес-підписка. Оформіть тарифний план у кабінеті BizX.',
+            error: i18n.t('subscriptions.needBusinessSub'),
             isLoading: false
           });
           return;
         }
 
-        if (res.data.preferredLanguage && (res.data.preferredLanguage === 'uk' || res.data.preferredLanguage === 'en')) {
+        if (
+          res.data.preferredLanguage &&
+          (res.data.preferredLanguage === 'uk' || res.data.preferredLanguage === 'en')
+        ) {
           i18n.setLocale(res.data.preferredLanguage);
           if (typeof window !== 'undefined') {
             localStorage.setItem('bizx_locale', res.data.preferredLanguage);
@@ -75,19 +77,27 @@ export const useAuthStore = create<AuthState>((set) => ({
           api.client.setAccessToken(null);
           set({
             user: null,
-            error:
-              'Доступ обмежено: для входу в панель бізнесу необхідна активна бізнес-підписка. Будь ласка, активуйте тарифний план у кабінеті BizX.',
+            error: i18n.t('subscriptions.needBusinessSub'),
             isLoading: false
           });
           return false;
         }
+        if (
+          res.data.user.preferredLanguage &&
+          (res.data.user.preferredLanguage === 'uk' || res.data.user.preferredLanguage === 'en')
+        ) {
+          i18n.setLocale(res.data.user.preferredLanguage);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('bizx_locale', res.data.user.preferredLanguage);
+          }
+        }
         set({ user: res.data.user, isLoading: false });
         return true;
       }
-      set({ error: 'Невірний логін або пароль [AUTH_1001]', isLoading: false });
+      set({ error: i18n.t('errors.invalidCredentials'), isLoading: false });
       return false;
     } catch (err: any) {
-      const message = err.data?.message || err.message || 'Помилка авторизації [AUTH_1000]';
+      const message = translateApiError(err.data?.message || err.message, 'auth.loginError');
       set({ error: message, isLoading: false });
       return false;
     }
@@ -130,10 +140,10 @@ export const useAuthStore = create<AuthState>((set) => ({
         set({ user: res.data, isLoading: false });
         return true;
       }
-      set({ error: 'Не вдалося оновити профіль', isLoading: false });
+      set({ error: i18n.t('errors.saveFailed'), isLoading: false });
       return false;
     } catch (err: any) {
-      const message = err.data?.message || err.message || 'Помилка оновлення профілю';
+      const message = translateApiError(err.data?.message || err.message, 'errors.saveFailed');
       set({ error: message, isLoading: false });
       return false;
     }

@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useBusinessStore } from '../store/useBusinessStore';
-import { Card, CardHeader, CardTitle, CardContent, Button, Input, Textarea } from '@bizx/ui';
+import { useTranslation } from '../hooks/useTranslation';
+import { Card, CardHeader, CardTitle, CardContent, Button, Input, Textarea, PhoneInput } from '@bizx/ui';
 import { Upload, Check, AlertCircle, Building, Image as ImageIcon } from 'lucide-react';
 import { StoreMediaImage } from '../components/StoreMediaImage';
 
 export const StoreSettingsView: React.FC = () => {
   const { activeStore, uploadStoreMedia, updateStore, isLoading } = useBusinessStore();
+  const { t, locale } = useTranslation();
 
   const [name, setName] = useState(activeStore?.name || '');
   const [description, setDescription] = useState(activeStore?.description || '');
@@ -134,10 +136,10 @@ export const StoreSettingsView: React.FC = () => {
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-          Налаштування магазину та медіа
+          {t('storeSettings.title')}
         </h1>
         <p className="text-sm text-slate-500 mt-1">
-          Керуйте візуальним оформленням, логотипом, банером та контактними даними
+          {t('storeSettings.subtitle')}
         </p>
       </div>
 
@@ -258,11 +260,11 @@ export const StoreSettingsView: React.FC = () => {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-700">Контактний телефон</label>
-                <Input
+                <label className="text-xs font-semibold text-slate-700">{t('account.storePhoneLabel')}</label>
+                <PhoneInput
                   value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="+380..."
+                  onChange={setPhone}
+                  locale={locale}
                 />
               </div>
 
