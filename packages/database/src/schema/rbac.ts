@@ -23,9 +23,7 @@ export const permissions = pgTable('permissions', {
   scope: varchar('scope', { length: 20 }).notNull(), // 'store' | 'platform'
   category: varchar('category', { length: 40 }).notNull(),
   action: varchar('action', { length: 20 }).notNull(),
-  ownerOnly: boolean('owner_only').default(false).notNull(),
-  descriptionUk: varchar('description_uk', { length: 255 }).notNull(),
-  descriptionEn: varchar('description_en', { length: 255 }).notNull()
+  ownerOnly: boolean('owner_only').default(false).notNull()
 });
 
 /**
@@ -38,7 +36,7 @@ export const roles = pgTable(
     scope: varchar('scope', { length: 20 }).notNull(), // 'store' | 'platform'
     storeId: uuid('store_id').references(() => stores.id, { onDelete: 'cascade' }),
     name: varchar('name', { length: 100 }).notNull(),
-    icon: varchar('icon', { length: 40 }).default('🛡️').notNull(),
+    icon: varchar('icon', { length: 50 }), // ключ иконки lucide-react или NULL (без иконки)
     color: varchar('color', { length: 20 }).default('#334155').notNull(),
     priority: integer('priority').default(100).notNull(),
     isSystem: boolean('is_system').default(false).notNull(),

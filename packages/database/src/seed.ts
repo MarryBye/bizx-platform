@@ -63,38 +63,38 @@ import { sql } from 'drizzle-orm';
 const OWNER_ROLE_PRIORITY = 10000;
 
 const STORE_PERMISSIONS = [
-  { id: 101, code: 'products.read', scope: 'store', category: 'products', action: 'read', ownerOnly: false, descriptionUk: 'Перегляд товарів та категорій', descriptionEn: 'View products & categories' },
-  { id: 102, code: 'products.write', scope: 'store', category: 'products', action: 'write', ownerOnly: false, descriptionUk: 'Додавання нових товарів та категорій', descriptionEn: 'Create products & categories' },
-  { id: 103, code: 'products.edit', scope: 'store', category: 'products', action: 'edit', ownerOnly: false, descriptionUk: 'Редагування та архівація товарів', descriptionEn: 'Edit & archive products' },
-  { id: 111, code: 'orders.read', scope: 'store', category: 'orders', action: 'read', ownerOnly: false, descriptionUk: 'Перегляд замовлень клієнтів', descriptionEn: 'View customer orders' },
-  { id: 112, code: 'orders.edit', scope: 'store', category: 'orders', action: 'edit', ownerOnly: false, descriptionUk: 'Зміна статусів замовлень та оплати', descriptionEn: 'Update order & payment statuses' },
-  { id: 121, code: 'analytics.read', scope: 'store', category: 'analytics', action: 'read', ownerOnly: false, descriptionUk: 'Перегляд дашборду та статистики продажів', descriptionEn: 'View dashboard & sales analytics' },
-  { id: 122, code: 'analytics.export', scope: 'store', category: 'analytics', action: 'export', ownerOnly: false, descriptionUk: 'Експорт аналітики в Excel / CSV', descriptionEn: 'Export analytics to Excel / CSV' },
-  { id: 131, code: 'store.read', scope: 'store', category: 'store', action: 'read', ownerOnly: false, descriptionUk: 'Перегляд даних та налаштувань закладу', descriptionEn: 'View store settings & details' },
-  { id: 132, code: 'store.edit', scope: 'store', category: 'store', action: 'edit', ownerOnly: false, descriptionUk: 'Редагування даних, логотипу та банера', descriptionEn: 'Edit store info, logo & banner' },
-  { id: 133, code: 'store.status.manage', scope: 'store', category: 'store', action: 'manage', ownerOnly: true, descriptionUk: 'Керування статусом закладу (пауза / модерація)', descriptionEn: 'Manage store status (pause / submit review)' },
-  { id: 141, code: 'staff.read', scope: 'store', category: 'staff', action: 'read', ownerOnly: false, descriptionUk: 'Перегляд списку працівників', descriptionEn: 'View store team members' },
-  { id: 142, code: 'staff.write', scope: 'store', category: 'staff', action: 'write', ownerOnly: false, descriptionUk: 'Додавання нових працівників', descriptionEn: 'Add new team members' },
-  { id: 143, code: 'staff.edit', scope: 'store', category: 'staff', action: 'edit', ownerOnly: false, descriptionUk: 'Редагування ролей та архівація працівників', descriptionEn: 'Edit roles & archive team members' },
-  { id: 151, code: 'roles.read', scope: 'store', category: 'roles', action: 'read', ownerOnly: false, descriptionUk: 'Перегляд ролей та їх прав', descriptionEn: 'View roles & permissions' },
-  { id: 152, code: 'roles.write', scope: 'store', category: 'roles', action: 'write', ownerOnly: false, descriptionUk: 'Створення нових ролей', descriptionEn: 'Create new roles' },
-  { id: 153, code: 'roles.edit', scope: 'store', category: 'roles', action: 'edit', ownerOnly: false, descriptionUk: 'Редагування, пріоритет та архівація ролей', descriptionEn: 'Edit, reorder & archive roles' }
+  { id: 101, code: 'products.read', scope: 'store', category: 'products', action: 'read', ownerOnly: false },
+  { id: 102, code: 'products.write', scope: 'store', category: 'products', action: 'write', ownerOnly: false },
+  { id: 103, code: 'products.edit', scope: 'store', category: 'products', action: 'edit', ownerOnly: false },
+  { id: 111, code: 'orders.read', scope: 'store', category: 'orders', action: 'read', ownerOnly: false },
+  { id: 112, code: 'orders.edit', scope: 'store', category: 'orders', action: 'edit', ownerOnly: false },
+  { id: 121, code: 'analytics.read', scope: 'store', category: 'analytics', action: 'read', ownerOnly: false },
+  { id: 122, code: 'analytics.export', scope: 'store', category: 'analytics', action: 'export', ownerOnly: false },
+  { id: 131, code: 'store.read', scope: 'store', category: 'store', action: 'read', ownerOnly: false },
+  { id: 132, code: 'store.edit', scope: 'store', category: 'store', action: 'edit', ownerOnly: false },
+  { id: 133, code: 'store.status.manage', scope: 'store', category: 'store', action: 'manage', ownerOnly: true },
+  { id: 141, code: 'staff.read', scope: 'store', category: 'staff', action: 'read', ownerOnly: false },
+  { id: 142, code: 'staff.write', scope: 'store', category: 'staff', action: 'write', ownerOnly: false },
+  { id: 143, code: 'staff.edit', scope: 'store', category: 'staff', action: 'edit', ownerOnly: false },
+  { id: 151, code: 'roles.read', scope: 'store', category: 'roles', action: 'read', ownerOnly: false },
+  { id: 152, code: 'roles.write', scope: 'store', category: 'roles', action: 'write', ownerOnly: false },
+  { id: 153, code: 'roles.edit', scope: 'store', category: 'roles', action: 'edit', ownerOnly: false }
 ];
 
 const PLATFORM_PERMISSIONS = [
-  { id: 201, code: 'platform.stores.read', scope: 'platform', category: 'platform_stores', action: 'read', ownerOnly: false, descriptionUk: 'Перегляд усіх торгових точок платформи', descriptionEn: 'View all platform stores' },
-  { id: 202, code: 'platform.stores.moderate', scope: 'platform', category: 'platform_stores', action: 'manage', ownerOnly: false, descriptionUk: 'Модерація та зміна статусів закладів', descriptionEn: 'Moderate & change store statuses' },
-  { id: 203, code: 'platform.categories.manage', scope: 'platform', category: 'platform_stores', action: 'edit', ownerOnly: false, descriptionUk: 'Керування категоріями закладів', descriptionEn: 'Manage store categories' },
-  { id: 211, code: 'platform.users.read', scope: 'platform', category: 'platform_users', action: 'read', ownerOnly: false, descriptionUk: 'Перегляд реєстру користувачів BizX ID', descriptionEn: 'View BizX ID users registry' },
-  { id: 212, code: 'platform.users.edit', scope: 'platform', category: 'platform_users', action: 'edit', ownerOnly: false, descriptionUk: 'Блокування та керування користувачами', descriptionEn: 'Suspend & manage users' },
-  { id: 221, code: 'platform.analytics.read', scope: 'platform', category: 'platform_analytics', action: 'read', ownerOnly: false, descriptionUk: 'Перегляд метрик та аналітики платформи', descriptionEn: 'View platform metrics & analytics' },
-  { id: 222, code: 'platform.analytics.export', scope: 'platform', category: 'platform_analytics', action: 'export', ownerOnly: false, descriptionUk: 'Експорт платформних звітів у Excel / CSV', descriptionEn: 'Export platform reports to Excel / CSV' },
-  { id: 231, code: 'platform.staff.read', scope: 'platform', category: 'platform_staff', action: 'read', ownerOnly: false, descriptionUk: 'Перегляд команди платформи BizX', descriptionEn: 'View BizX platform team' },
-  { id: 232, code: 'platform.staff.write', scope: 'platform', category: 'platform_staff', action: 'write', ownerOnly: false, descriptionUk: 'Додавання співробітників BizX', descriptionEn: 'Add BizX platform staff' },
-  { id: 233, code: 'platform.staff.edit', scope: 'platform', category: 'platform_staff', action: 'edit', ownerOnly: false, descriptionUk: 'Редагування ролей та архівація команди BizX', descriptionEn: 'Edit roles & archive BizX staff' },
-  { id: 241, code: 'platform.roles.read', scope: 'platform', category: 'platform_roles', action: 'read', ownerOnly: false, descriptionUk: 'Перегляд ролей платформи', descriptionEn: 'View platform roles' },
-  { id: 242, code: 'platform.roles.write', scope: 'platform', category: 'platform_roles', action: 'write', ownerOnly: false, descriptionUk: 'Створення ролей платформи', descriptionEn: 'Create platform roles' },
-  { id: 243, code: 'platform.roles.edit', scope: 'platform', category: 'platform_roles', action: 'edit', ownerOnly: false, descriptionUk: 'Редагування, пріоритет та архівація ролей', descriptionEn: 'Edit, reorder & archive platform roles' }
+  { id: 201, code: 'platform.stores.read', scope: 'platform', category: 'platform_stores', action: 'read', ownerOnly: false },
+  { id: 202, code: 'platform.stores.moderate', scope: 'platform', category: 'platform_stores', action: 'manage', ownerOnly: false },
+  { id: 203, code: 'platform.categories.manage', scope: 'platform', category: 'platform_stores', action: 'edit', ownerOnly: false },
+  { id: 211, code: 'platform.users.read', scope: 'platform', category: 'platform_users', action: 'read', ownerOnly: false },
+  { id: 212, code: 'platform.users.edit', scope: 'platform', category: 'platform_users', action: 'edit', ownerOnly: false },
+  { id: 221, code: 'platform.analytics.read', scope: 'platform', category: 'platform_analytics', action: 'read', ownerOnly: false },
+  { id: 222, code: 'platform.analytics.export', scope: 'platform', category: 'platform_analytics', action: 'export', ownerOnly: false },
+  { id: 231, code: 'platform.staff.read', scope: 'platform', category: 'platform_staff', action: 'read', ownerOnly: false },
+  { id: 232, code: 'platform.staff.write', scope: 'platform', category: 'platform_staff', action: 'write', ownerOnly: false },
+  { id: 233, code: 'platform.staff.edit', scope: 'platform', category: 'platform_staff', action: 'edit', ownerOnly: false },
+  { id: 241, code: 'platform.roles.read', scope: 'platform', category: 'platform_roles', action: 'read', ownerOnly: false },
+  { id: 242, code: 'platform.roles.write', scope: 'platform', category: 'platform_roles', action: 'write', ownerOnly: false },
+  { id: 243, code: 'platform.roles.edit', scope: 'platform', category: 'platform_roles', action: 'edit', ownerOnly: false }
 ];
 
 const ALL_PERMISSIONS = [...STORE_PERMISSIONS, ...PLATFORM_PERMISSIONS];
@@ -333,8 +333,6 @@ async function seed() {
           email: 'admin@bizx.ua',
           name: 'Олександр Коваленко',
           passwordHash: PASSWORD_HASH,
-          role: 'admin',
-          systemRole: 'platform_admin',
           phone: '+380501234567',
           preferredLanguage: 'uk',
           subscriptionTier: 'business_enterprise',
@@ -346,8 +344,6 @@ async function seed() {
           email: 'ops.bizx@bizx.ua',
           name: 'Олена Сидоренко',
           passwordHash: PASSWORD_HASH,
-          role: 'admin',
-          systemRole: 'platform_admin',
           phone: '+380502223344',
           preferredLanguage: 'uk',
           subscriptionTier: 'free',
@@ -358,8 +354,6 @@ async function seed() {
           email: 'support.bizx@bizx.ua',
           name: 'Дмитро Поліщук',
           passwordHash: PASSWORD_HASH,
-          role: 'admin',
-          systemRole: 'platform_admin',
           phone: '+380503334455',
           preferredLanguage: 'uk',
           subscriptionTier: 'free',
@@ -370,8 +364,6 @@ async function seed() {
           email: 'analyst.bizx@bizx.ua',
           name: 'Наталія Лисенко',
           passwordHash: PASSWORD_HASH,
-          role: 'admin',
-          systemRole: 'platform_admin',
           phone: '+380504445566',
           preferredLanguage: 'uk',
           subscriptionTier: 'free',
@@ -390,7 +382,7 @@ async function seed() {
           scope: 'platform',
           storeId: null,
           name: 'Власник платформи',
-          icon: '👑',
+          icon: 'crown',
           color: '#0f172a',
           priority: OWNER_ROLE_PRIORITY,
           isSystem: true
@@ -399,7 +391,7 @@ async function seed() {
           scope: 'platform',
           storeId: null,
           name: 'Операційний менеджер',
-          icon: '⚡',
+          icon: 'zap',
           color: '#2563eb',
           priority: 500,
           isSystem: false
@@ -408,7 +400,7 @@ async function seed() {
           scope: 'platform',
           storeId: null,
           name: 'Підтримка та модерація',
-          icon: '🎧',
+          icon: 'headphones',
           color: '#059669',
           priority: 100,
           isSystem: false
@@ -489,7 +481,6 @@ async function seed() {
           email: 'owner.coffee@bizx.ua',
           name: 'Тарас Шевчук',
           passwordHash: PASSWORD_HASH,
-          role: 'business_owner',
           phone: '+380671112233',
           preferredLanguage: 'uk',
           subscriptionTier: 'business_pro',
@@ -501,7 +492,6 @@ async function seed() {
           email: 'owner.tech@bizx.ua',
           name: 'Ірина Мельник',
           passwordHash: PASSWORD_HASH,
-          role: 'business_owner',
           phone: '+380934445566',
           preferredLanguage: 'uk',
           subscriptionTier: 'business_starter',
@@ -513,7 +503,6 @@ async function seed() {
           email: 'owner.bakery@bizx.ua',
           name: 'Богдан Кравченко',
           passwordHash: PASSWORD_HASH,
-          role: 'business_owner',
           phone: '+380667778899',
           preferredLanguage: 'uk',
           subscriptionTier: 'business_starter',
@@ -544,7 +533,6 @@ async function seed() {
           email: 'manager.coffee@bizx.ua',
           name: 'Андрій Гнатюк',
           passwordHash: PASSWORD_HASH,
-          role: 'client',
           phone: '+380672223301',
           preferredLanguage: 'uk',
           subscriptionTier: 'free',
@@ -555,7 +543,6 @@ async function seed() {
           email: 'barista.coffee@bizx.ua',
           name: 'Софія Романюк',
           passwordHash: PASSWORD_HASH,
-          role: 'client',
           phone: '+380672223302',
           preferredLanguage: 'uk',
           subscriptionTier: 'free',
@@ -566,7 +553,6 @@ async function seed() {
           email: 'cashier.coffee@bizx.ua',
           name: 'Максим Ткачук',
           passwordHash: PASSWORD_HASH,
-          role: 'client',
           phone: '+380672223303',
           preferredLanguage: 'uk',
           subscriptionTier: 'free',
@@ -577,7 +563,6 @@ async function seed() {
           email: 'analyst.coffee@bizx.ua',
           name: 'Вікторія Савченко',
           passwordHash: PASSWORD_HASH,
-          role: 'client',
           phone: '+380672223304',
           preferredLanguage: 'uk',
           subscriptionTier: 'free',
@@ -589,7 +574,6 @@ async function seed() {
           email: 'manager.tech@bizx.ua',
           name: 'Владислав Мороз',
           passwordHash: PASSWORD_HASH,
-          role: 'client',
           phone: '+380935556601',
           preferredLanguage: 'uk',
           subscriptionTier: 'free',
@@ -600,7 +584,6 @@ async function seed() {
           email: 'content.tech@bizx.ua',
           name: 'Аліна Козак',
           passwordHash: PASSWORD_HASH,
-          role: 'client',
           phone: '+380935556602',
           preferredLanguage: 'uk',
           subscriptionTier: 'free',
@@ -611,7 +594,6 @@ async function seed() {
           email: 'sales.tech@bizx.ua',
           name: 'Артем Захарченко',
           passwordHash: PASSWORD_HASH,
-          role: 'client',
           phone: '+380935556603',
           preferredLanguage: 'uk',
           subscriptionTier: 'free',
@@ -623,7 +605,6 @@ async function seed() {
           email: 'manager.bakery@bizx.ua',
           name: 'Катерина Литвин',
           passwordHash: PASSWORD_HASH,
-          role: 'client',
           phone: '+380668889901',
           preferredLanguage: 'uk',
           subscriptionTier: 'free',
@@ -634,7 +615,6 @@ async function seed() {
           email: 'baker.bakery@bizx.ua',
           name: 'Роман Дорошенко',
           passwordHash: PASSWORD_HASH,
-          role: 'client',
           phone: '+380668889902',
           preferredLanguage: 'uk',
           subscriptionTier: 'free',
@@ -645,7 +625,6 @@ async function seed() {
           email: 'courier.bakery@bizx.ua',
           name: 'Юрій Петренко',
           passwordHash: PASSWORD_HASH,
-          role: 'client',
           phone: '+380668889903',
           preferredLanguage: 'uk',
           subscriptionTier: 'free',
@@ -663,7 +642,6 @@ async function seed() {
           email: 'client@bizx.ua',
           name: 'Марія Бондаренко',
           passwordHash: PASSWORD_HASH,
-          role: 'client',
           phone: '+380991239876',
           preferredLanguage: 'uk',
           subscriptionTier: 'free',
@@ -674,7 +652,6 @@ async function seed() {
           email: 'user1@bizx.ua',
           name: 'Іван Ковальчук',
           passwordHash: PASSWORD_HASH,
-          role: 'client',
           phone: '+380991110001',
           preferredLanguage: 'uk',
           subscriptionTier: 'free',
@@ -685,7 +662,6 @@ async function seed() {
           email: 'user2@bizx.ua',
           name: 'Ольга Савчук',
           passwordHash: PASSWORD_HASH,
-          role: 'client',
           phone: '+380991110002',
           preferredLanguage: 'uk',
           subscriptionTier: 'free',
@@ -696,7 +672,6 @@ async function seed() {
           email: 'user3@bizx.ua',
           name: 'Денис Марченко',
           passwordHash: PASSWORD_HASH,
-          role: 'client',
           phone: '+380991110003',
           preferredLanguage: 'en',
           subscriptionTier: 'free',
@@ -707,7 +682,6 @@ async function seed() {
           email: 'user4@bizx.ua',
           name: 'Анастасія Павленко',
           passwordHash: PASSWORD_HASH,
-          role: 'client',
           phone: '+380991110004',
           preferredLanguage: 'uk',
           subscriptionTier: 'free',
@@ -718,7 +692,6 @@ async function seed() {
           email: 'user5@bizx.ua',
           name: 'Павло Тимошенко',
           passwordHash: PASSWORD_HASH,
-          role: 'client',
           phone: '+380991110005',
           preferredLanguage: 'uk',
           subscriptionTier: 'free',
@@ -729,7 +702,6 @@ async function seed() {
           email: 'user6@bizx.ua',
           name: 'Дарина Климчук',
           passwordHash: PASSWORD_HASH,
-          role: 'client',
           phone: '+380991110006',
           preferredLanguage: 'uk',
           subscriptionTier: 'free',
@@ -740,7 +712,6 @@ async function seed() {
           email: 'user7@bizx.ua',
           name: 'Сергій Гриценко',
           passwordHash: PASSWORD_HASH,
-          role: 'client',
           phone: '+380991110007',
           preferredLanguage: 'uk',
           subscriptionTier: 'free',
@@ -751,7 +722,6 @@ async function seed() {
           email: 'user8@bizx.ua',
           name: 'Тетяна Олійник',
           passwordHash: PASSWORD_HASH,
-          role: 'client',
           phone: '+380991110008',
           preferredLanguage: 'uk',
           subscriptionTier: 'free',
@@ -762,7 +732,6 @@ async function seed() {
           email: 'user9@bizx.ua',
           name: 'Євгеній Білоус',
           passwordHash: PASSWORD_HASH,
-          role: 'client',
           phone: '+380991110009',
           preferredLanguage: 'en',
           subscriptionTier: 'free',
@@ -773,7 +742,6 @@ async function seed() {
           email: 'user10@bizx.ua',
           name: 'Христина Василенко',
           passwordHash: PASSWORD_HASH,
-          role: 'client',
           phone: '+380991110010',
           preferredLanguage: 'uk',
           subscriptionTier: 'free',
@@ -887,7 +855,7 @@ async function seed() {
       storeId: string,
       extraRole: {
         name: string;
-        icon: string;
+        icon: string | null;
         color: string;
         priority: number;
         permCodes: string[];
@@ -900,7 +868,7 @@ async function seed() {
             scope: 'store',
             storeId,
             name: 'Власник',
-            icon: '👑',
+            icon: 'crown',
             color: '#0f172a',
             priority: OWNER_ROLE_PRIORITY,
             isSystem: true
@@ -909,7 +877,7 @@ async function seed() {
             scope: 'store',
             storeId,
             name: 'Керуючий',
-            icon: '💼',
+            icon: 'briefcase',
             color: '#2563eb',
             priority: 500,
             isSystem: false
@@ -927,7 +895,7 @@ async function seed() {
             scope: 'store',
             storeId,
             name: 'Персонал',
-            icon: '🛒',
+            icon: 'shopping-bag',
             color: '#475569',
             priority: 100,
             isSystem: false
@@ -974,7 +942,7 @@ async function seed() {
 
     const coffeeRoles = await seedStoreRoles(storeCoffee.id, {
       name: 'Старший бариста',
-      icon: '☕',
+      icon: 'coffee',
       color: '#d97706',
       priority: 300,
       permCodes: ['products.read', 'products.write', 'orders.read', 'orders.edit', 'store.read']
@@ -982,7 +950,7 @@ async function seed() {
 
     const techRoles = await seedStoreRoles(storeTech.id, {
       name: 'Контент-менеджер',
-      icon: '📦',
+      icon: 'package',
       color: '#7c3aed',
       priority: 250,
       permCodes: ['products.read', 'products.write', 'products.edit', 'store.read']
@@ -990,7 +958,7 @@ async function seed() {
 
     const bakeryRoles = await seedStoreRoles(storeBakery.id, {
       name: 'Пекар-технолог',
-      icon: '🔥',
+      icon: 'flame',
       color: '#b45309',
       priority: 250,
       permCodes: ['products.read', 'products.write', 'products.edit', 'orders.read', 'store.read']
@@ -1003,35 +971,30 @@ async function seed() {
         {
           storeId: storeCoffee.id,
           userId: coffeeOwner.id,
-          role: 'owner',
           roleId: coffeeRoles.ownerRoleId,
           isCustom: false
         },
         {
           storeId: storeCoffee.id,
           userId: coffeeManagerUser.id,
-          role: 'manager',
           roleId: coffeeRoles.managerRoleId,
           isCustom: false
         },
         {
           storeId: storeCoffee.id,
           userId: coffeeBaristaUser.id,
-          role: 'staff',
           roleId: coffeeRoles.extraRoleId,
           isCustom: false
         },
         {
           storeId: storeCoffee.id,
           userId: coffeeCashierUser.id,
-          role: 'staff',
           roleId: coffeeRoles.staffRoleId,
           isCustom: false
         },
         {
           storeId: storeCoffee.id,
           userId: coffeeAnalystUser.id,
-          role: 'custom',
           roleId: null,
           isCustom: true,
           customPriority: 50
@@ -1041,28 +1004,24 @@ async function seed() {
         {
           storeId: storeTech.id,
           userId: techOwner.id,
-          role: 'owner',
           roleId: techRoles.ownerRoleId,
           isCustom: false
         },
         {
           storeId: storeTech.id,
           userId: techManagerUser.id,
-          role: 'manager',
           roleId: techRoles.managerRoleId,
           isCustom: false
         },
         {
           storeId: storeTech.id,
           userId: techContentUser.id,
-          role: 'staff',
           roleId: techRoles.extraRoleId,
           isCustom: false
         },
         {
           storeId: storeTech.id,
           userId: techSalesUser.id,
-          role: 'staff',
           roleId: techRoles.staffRoleId,
           isCustom: false
         },
@@ -1071,28 +1030,24 @@ async function seed() {
         {
           storeId: storeBakery.id,
           userId: bakeryOwner.id,
-          role: 'owner',
           roleId: bakeryRoles.ownerRoleId,
           isCustom: false
         },
         {
           storeId: storeBakery.id,
           userId: bakeryManagerUser.id,
-          role: 'manager',
           roleId: bakeryRoles.managerRoleId,
           isCustom: false
         },
         {
           storeId: storeBakery.id,
           userId: bakeryBakerUser.id,
-          role: 'staff',
           roleId: bakeryRoles.extraRoleId,
           isCustom: false
         },
         {
           storeId: storeBakery.id,
           userId: bakeryCourierUser.id,
-          role: 'custom',
           roleId: null,
           isCustom: true,
           customPriority: 50

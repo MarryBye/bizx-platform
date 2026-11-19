@@ -50,6 +50,13 @@
       "when": 1795091000000,
       "tag": "0006_add_rbac_roles_and_permissions",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1795094000000,
+      "tag": "0007_normalize_rbac_and_icons",
+      "breakpoints": true
     }
   ]
 }

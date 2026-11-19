@@ -24,7 +24,6 @@ export const storeMembers = pgTable(
     userId: uuid('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
-    role: varchar('role', { length: 50 }).default('staff').notNull(), // legacy summary: 'owner' | 'manager' | 'staff' | 'custom'
     roleId: uuid('role_id').references(() => roles.id, { onDelete: 'set null' }),
     isCustom: boolean('is_custom').default(false).notNull(),
     customPriority: integer('custom_priority').default(0).notNull(),
