@@ -149,15 +149,19 @@ export interface PermissionDefinition {
   code: string;
   scope: PermissionScope;
   category: string;
-  action: 'read' | 'write' | 'edit' | 'manage' | 'export';
+  action: 'read' | 'write' | 'edit' | 'manage' | 'export' | 'archive';
   ownerOnly: boolean;
 }
 
 export const STORE_PERMISSIONS: PermissionDefinition[] = [
+  // Адміністрування (повний доступ однією галочкою, крім ownerOnly та ієрархії)
+  { id: 100, code: 'store.admin', scope: 'store', category: 'admin', action: 'manage', ownerOnly: false },
   // Товари та каталог
   { id: 101, code: 'products.read', scope: 'store', category: 'products', action: 'read', ownerOnly: false },
   { id: 102, code: 'products.write', scope: 'store', category: 'products', action: 'write', ownerOnly: false },
   { id: 103, code: 'products.edit', scope: 'store', category: 'products', action: 'edit', ownerOnly: false },
+  { id: 104, code: 'products.status', scope: 'store', category: 'products', action: 'manage', ownerOnly: false },
+  { id: 105, code: 'products.archive', scope: 'store', category: 'products', action: 'archive', ownerOnly: false },
   // Замовлення
   { id: 111, code: 'orders.read', scope: 'store', category: 'orders', action: 'read', ownerOnly: false },
   { id: 112, code: 'orders.edit', scope: 'store', category: 'orders', action: 'edit', ownerOnly: false },
@@ -172,20 +176,26 @@ export const STORE_PERMISSIONS: PermissionDefinition[] = [
   { id: 141, code: 'staff.read', scope: 'store', category: 'staff', action: 'read', ownerOnly: false },
   { id: 142, code: 'staff.write', scope: 'store', category: 'staff', action: 'write', ownerOnly: false },
   { id: 143, code: 'staff.edit', scope: 'store', category: 'staff', action: 'edit', ownerOnly: false },
+  { id: 144, code: 'staff.archive', scope: 'store', category: 'staff', action: 'archive', ownerOnly: false },
   // Ролі
   { id: 151, code: 'roles.read', scope: 'store', category: 'roles', action: 'read', ownerOnly: false },
   { id: 152, code: 'roles.write', scope: 'store', category: 'roles', action: 'write', ownerOnly: false },
-  { id: 153, code: 'roles.edit', scope: 'store', category: 'roles', action: 'edit', ownerOnly: false }
+  { id: 153, code: 'roles.edit', scope: 'store', category: 'roles', action: 'edit', ownerOnly: false },
+  { id: 154, code: 'roles.archive', scope: 'store', category: 'roles', action: 'archive', ownerOnly: false }
 ];
 
 export const PLATFORM_PERMISSIONS: PermissionDefinition[] = [
+  // Адміністрування платформи (повний доступ однією галочкою з урахуванням ієрархії)
+  { id: 200, code: 'platform.admin', scope: 'platform', category: 'platform_admin', action: 'manage', ownerOnly: false },
   // Торгові точки
   { id: 201, code: 'platform.stores.read', scope: 'platform', category: 'platform_stores', action: 'read', ownerOnly: false },
   { id: 202, code: 'platform.stores.moderate', scope: 'platform', category: 'platform_stores', action: 'manage', ownerOnly: false },
   { id: 203, code: 'platform.categories.manage', scope: 'platform', category: 'platform_stores', action: 'edit', ownerOnly: false },
+  { id: 204, code: 'platform.stores.archive', scope: 'platform', category: 'platform_stores', action: 'archive', ownerOnly: false },
   // Користувачі BizX
   { id: 211, code: 'platform.users.read', scope: 'platform', category: 'platform_users', action: 'read', ownerOnly: false },
   { id: 212, code: 'platform.users.edit', scope: 'platform', category: 'platform_users', action: 'edit', ownerOnly: false },
+  { id: 213, code: 'platform.users.archive', scope: 'platform', category: 'platform_users', action: 'archive', ownerOnly: false },
   // Аналітика платформи
   { id: 221, code: 'platform.analytics.read', scope: 'platform', category: 'platform_analytics', action: 'read', ownerOnly: false },
   { id: 222, code: 'platform.analytics.export', scope: 'platform', category: 'platform_analytics', action: 'export', ownerOnly: false },
@@ -193,10 +203,12 @@ export const PLATFORM_PERMISSIONS: PermissionDefinition[] = [
   { id: 231, code: 'platform.staff.read', scope: 'platform', category: 'platform_staff', action: 'read', ownerOnly: false },
   { id: 232, code: 'platform.staff.write', scope: 'platform', category: 'platform_staff', action: 'write', ownerOnly: false },
   { id: 233, code: 'platform.staff.edit', scope: 'platform', category: 'platform_staff', action: 'edit', ownerOnly: false },
+  { id: 234, code: 'platform.staff.archive', scope: 'platform', category: 'platform_staff', action: 'archive', ownerOnly: false },
   // Ролі платформи
   { id: 241, code: 'platform.roles.read', scope: 'platform', category: 'platform_roles', action: 'read', ownerOnly: false },
   { id: 242, code: 'platform.roles.write', scope: 'platform', category: 'platform_roles', action: 'write', ownerOnly: false },
-  { id: 243, code: 'platform.roles.edit', scope: 'platform', category: 'platform_roles', action: 'edit', ownerOnly: false }
+  { id: 243, code: 'platform.roles.edit', scope: 'platform', category: 'platform_roles', action: 'edit', ownerOnly: false },
+  { id: 244, code: 'platform.roles.archive', scope: 'platform', category: 'platform_roles', action: 'archive', ownerOnly: false }
 ];
 
 export const ALL_PERMISSIONS: PermissionDefinition[] = [
@@ -205,9 +217,12 @@ export const ALL_PERMISSIONS: PermissionDefinition[] = [
 ];
 
 export type StorePermissionCode =
+  | 'store.admin'
   | 'products.read'
   | 'products.write'
   | 'products.edit'
+  | 'products.status'
+  | 'products.archive'
   | 'orders.read'
   | 'orders.edit'
   | 'analytics.read'
@@ -218,24 +233,31 @@ export type StorePermissionCode =
   | 'staff.read'
   | 'staff.write'
   | 'staff.edit'
+  | 'staff.archive'
   | 'roles.read'
   | 'roles.write'
-  | 'roles.edit';
+  | 'roles.edit'
+  | 'roles.archive';
 
 export type PlatformPermissionCode =
+  | 'platform.admin'
   | 'platform.stores.read'
   | 'platform.stores.moderate'
   | 'platform.categories.manage'
+  | 'platform.stores.archive'
   | 'platform.users.read'
   | 'platform.users.edit'
+  | 'platform.users.archive'
   | 'platform.analytics.read'
   | 'platform.analytics.export'
   | 'platform.staff.read'
   | 'platform.staff.write'
   | 'platform.staff.edit'
+  | 'platform.staff.archive'
   | 'platform.roles.read'
   | 'platform.roles.write'
-  | 'platform.roles.edit';
+  | 'platform.roles.edit'
+  | 'platform.roles.archive';
 
 export const OWNER_ROLE_PRIORITY = 10000;
 
