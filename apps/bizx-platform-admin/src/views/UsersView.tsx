@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import type { PlatformUserRecord } from '../components/UserDetailsModal';
 import { useTranslation } from '../hooks/useTranslation';
+import { StatusBadge, Button } from '@bizx/ui';
 import {
   Users,
   Search,
@@ -58,23 +59,24 @@ export const UsersView: React.FC<UsersViewProps> = ({ users, onSelectUser, isLoa
   const getAccountTypeBadge = (u: PlatformUserRecord) => {
     if (u.isPlatformStaff) {
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-200 whitespace-nowrap">
-          <ShieldCheck className="w-3 h-3 shrink-0" />
-          <span className="truncate max-w-[115px]">{u.platformRoleName || t('roles.platformAdmin')}</span>
-        </span>
+        <StatusBadge tone="blue" size="xs" icon={<ShieldCheck className="w-3 h-3" />}>
+          <span className="truncate max-w-[115px] inline-block align-bottom">
+            {u.platformRoleName || t('roles.platformAdmin')}
+          </span>
+        </StatusBadge>
       );
     }
     if (u.isBusinessOwner) {
       return (
-        <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 whitespace-nowrap">
+        <StatusBadge tone="emerald" size="xs">
           {t('auth.businessRole')} ({u.storesCount})
-        </span>
+        </StatusBadge>
       );
     }
     return (
-      <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200 whitespace-nowrap">
+      <StatusBadge tone="slate" size="xs">
         {t('auth.clientRole')}
-      </span>
+      </StatusBadge>
     );
   };
 
@@ -85,16 +87,14 @@ export const UsersView: React.FC<UsersViewProps> = ({ users, onSelectUser, isLoa
 
     return (
       <div className="inline-flex flex-col items-start gap-0.5">
-        <span
-          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold border whitespace-nowrap ${
-            isActive
-              ? 'bg-amber-50 text-amber-900 border-amber-200'
-              : 'bg-slate-50 text-slate-500 border-slate-200'
-          }`}
+        <StatusBadge
+          tone={isActive ? 'amber' : 'slate'}
+          size="xs"
+          icon={<CreditCard className="w-2.5 h-2.5" />}
+          className="rounded"
         >
-          <CreditCard className="w-2.5 h-2.5 shrink-0" />
-          <span>{label}</span>
-        </span>
+          {label}
+        </StatusBadge>
         {isActive && u.subscriptionExpiresAt && (
           <span className="text-[10px] text-slate-400 font-mono whitespace-nowrap">
             до {new Date(u.subscriptionExpiresAt).toLocaleDateString('uk-UA')}
@@ -109,18 +109,16 @@ export const UsersView: React.FC<UsersViewProps> = ({ users, onSelectUser, isLoa
     switch (u.status) {
       case 'active':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-            <span>{label}</span>
-          </span>
+          <StatusBadge tone="emerald" dot>
+            {label}
+          </StatusBadge>
         );
       case 'suspended':
         return (
           <div className="inline-flex flex-col items-start gap-0.5">
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200 whitespace-nowrap">
-              <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
-              <span>{label}</span>
-            </span>
+            <StatusBadge tone="rose" dot>
+              {label}
+            </StatusBadge>
             <span className="text-[10px] text-rose-600/80 font-medium pl-1 whitespace-nowrap">
               {u.suspendedUntil
                 ? `до ${new Date(u.suspendedUntil).toLocaleDateString('uk-UA')}`
@@ -130,17 +128,12 @@ export const UsersView: React.FC<UsersViewProps> = ({ users, onSelectUser, isLoa
         );
       case 'archived':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-500 border border-slate-200 whitespace-nowrap">
-            <Archive className="w-3 h-3 shrink-0" />
-            <span>{label}</span>
-          </span>
+          <StatusBadge tone="slate" icon={<Archive className="w-3 h-3" />}>
+            {label}
+          </StatusBadge>
         );
       default:
-        return (
-          <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-700 whitespace-nowrap">
-            {label}
-          </span>
-        );
+        return <StatusBadge tone="slate">{label}</StatusBadge>;
     }
   };
 
@@ -248,15 +241,15 @@ export const UsersView: React.FC<UsersViewProps> = ({ users, onSelectUser, isLoa
                     </td>
 
                     <td className="py-3.5 px-4 text-right align-middle whitespace-nowrap">
-                      <button
-                        type="button"
+                      <Button
+                        variant="neutral"
+                        size="sm"
                         title="Керування акаунтом"
                         onClick={() => onSelectUser(u)}
-                        className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-900 hover:text-white hover:border-slate-900 text-slate-700 font-bold text-xs transition-all shadow-2xs"
                       >
                         <SlidersHorizontal className="w-3.5 h-3.5" />
                         <span className="hidden lg:inline">Керування</span>
-                      </button>
+                      </Button>
                     </td>
                   </tr>
                 ))

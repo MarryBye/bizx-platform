@@ -5,15 +5,20 @@ import type {
   SubscriptionTier
 } from '@bizx/common-types';
 import {
-  X,
+  Modal,
+  ConfirmModal,
+  DurationPicker,
+  StatusBadge,
+  AlertBanner,
+  Button
+} from '@bizx/ui';
+import {
   ShieldCheck,
   CheckCircle2,
   AlertTriangle,
   Archive,
   CreditCard,
-  ShieldAlert,
   Calendar,
-  Send,
   Lock,
   SlidersHorizontal
 } from 'lucide-react';
@@ -50,15 +55,6 @@ interface UserDetailsModalProps {
   canArchive?: boolean;
   canManageSubscriptions?: boolean;
 }
-
-const DURATION_PRESETS: Array<{ value: number | null; label: string }> = [
-  { value: 3, label: '3 дні' },
-  { value: 7, label: '7 днів' },
-  { value: 14, label: '14 днів' },
-  { value: 30, label: '30 днів' },
-  { value: 90, label: '90 днів' },
-  { value: null, label: 'Назавжди (до ручного зняття)' }
-];
 
 const TIER_OPTIONS: Array<{ value: SubscriptionTier; label: string; limit: string }> = [
   { value: 'free', label: 'Базовий (Free)', limit: '0 бізнесів' },
@@ -100,13 +96,10 @@ export const UserDetailsModal: React.FC<UserDetailsModalProps> = ({
 }) => {
   const [confirmType, setConfirmType] = useState<UserConfirmType>(null);
   const [reasonInput, setReasonInput] = useState('');
-  const [durationMode, setDurationMode] = useState<'preset' | 'custom'>('preset');
   const [selectedDays, setSelectedDays] = useState<number | null>(7);
-  const [customDaysInput, setCustomDaysInput] = useState('14');
   const [isBusy, setIsBusy] = useState(false);
   const [modalError, setModalError] = useState<string | null>(null);
 
-  // Subscription editor state
   const [isEditingSub, setIsEditingSub] = useState(false);
   const [subTier, setSubTier] = useState<SubscriptionTier>('free');
   const [subStatus, setSubStatus] = useState<'none' | 'active' | 'expired' | 'cancelled'>('none');
@@ -151,25 +144,14 @@ export const UserDetailsModal: React.FC<UserDetailsModalProps> = ({
     if (subStatus !== 'active') setSubStatus('active');
   };
 
-  const resolveChosenDays = (): number | null => {
-    if (durationMode === 'custom') {
-      const parsed = parseInt(customDaysInput, 10);
-      return Number.isFinite(parsed) && parsed >= 1 ? Math.min(3650, parsed) : 7;
-    }
-    return selectedDays;
-  };
-
   const openConfirm = (type: UserConfirmType) => {
     setConfirmType(type);
     setReasonInput('');
-    setDurationMode('preset');
     setSelectedDays(7);
-    setCustomDaysInput('14');
     setModalError(null);
   };
 
-  const handleExecuteConfirm = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleExecuteConfirm = async () => {
     if (!confirmType) return;
     setModalError(null);
     setIsBusy(true);
@@ -183,7 +165,7 @@ export const UserDetailsModal: React.FC<UserDetailsModalProps> = ({
         }
         await onUpdateStatus(user.id, {
           status: 'suspended',
-          suspensionDays: resolveChosenDays(),
+          suspensionDays: selectedDays,
           suspensionReason: reasonInput.trim()
         });
       } else if (confirmType === 'archive') {
@@ -227,77 +209,75 @@ export const UserDetailsModal: React.FC<UserDetailsModalProps> = ({
   const renderAccountBadge = (u: PlatformUserRecord) => {
     if (u.isPlatformStaff) {
       return (
-        <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800">
+        <StatusBadge tone="blue" size="xs">
           {u.platformRoleName || 'BizX Staff'}
-        </span>
+        </StatusBadge>
       );
     }
     if (u.isBusinessOwner) {
       return (
-        <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
+        <StatusBadge tone="emerald" size="xs">
           Власник бізнесу ({u.storesCount})
-        </span>
+        </StatusBadge>
       );
     }
     return (
-      <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700">
+      <StatusBadge tone="slate" size="xs">
         Клієнт
-      </span>
+      </StatusBadge>
     );
   };
 
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-xl bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="p-5 border-b border-slate-100 bg-slate-50/70 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-full bg-slate-900 text-white font-bold flex items-center justify-center text-sm shrink-0">
-              {getInitials(user.name || 'U')}
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-base font-black text-slate-900 truncate">{user.name}</h2>
-                {renderAccountBadge(user)}
-              </div>
-              <p className="text-xs text-slate-500 font-mono truncate">{user.email}</p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 transition-colors shrink-0"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
+  const confirmMeta = (() => {
+    switch (confirmType) {
+      case 'activate':
+        return { title: 'Розблокування користувача', tone: 'success' as const };
+      case 'suspend':
+        return { title: 'Блокування користувача', tone: 'warning' as const };
+      case 'archive':
+        return { title: 'Архівація облікового запису', tone: 'warning' as const };
+      case 'subscription':
+        return { title: 'Підтвердження змін підписки', tone: 'info' as const };
+      default:
+        return null;
+    }
+  })();
 
-        {/* Content */}
-        <div className="p-6 space-y-5 overflow-y-auto">
+  return (
+    <>
+      <Modal
+        isOpen={isOpen}
+        onClose={onClose}
+        size="xl"
+        icon={<span className="text-xs font-bold">{getInitials(user.name || 'U')}</span>}
+        title={user.name}
+        badge={renderAccountBadge(user)}
+        subtitle={<span className="font-mono">{user.email}</span>}
+        footer={
+          <div className="w-full flex justify-end">
+            <Button variant="primary" onClick={onClose}>
+              Закрити
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-5">
           {/* Active Block Banner */}
           {user.status === 'suspended' && (
-            <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl space-y-1 text-xs">
-              <div className="font-black text-rose-900 flex items-center gap-1.5">
-                <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0" />
-                <span>
-                  Обліковий запис заблоковано{' '}
-                  {user.suspendedUntil
-                    ? `до ${new Date(user.suspendedUntil).toLocaleDateString('uk-UA')}`
-                    : 'безстроково'}
-                </span>
-              </div>
+            <AlertBanner
+              tone="danger"
+              title={`Обліковий запис заблоковано ${
+                user.suspendedUntil
+                  ? `до ${new Date(user.suspendedUntil).toLocaleDateString('uk-UA')}`
+                  : 'безстроково'
+              }`}
+            >
               {user.suspensionReason && (
-                <p className="text-rose-800 leading-relaxed">
+                <p>
                   <strong>Причина:</strong> {user.suspensionReason}
                 </p>
               )}
-            </div>
+            </AlertBanner>
           )}
 
           {/* Info Grid */}
@@ -346,9 +326,9 @@ export const UserDetailsModal: React.FC<UserDetailsModalProps> = ({
           {/* Subscription Management Section */}
           <div className="p-4 border border-slate-200 rounded-xl bg-white space-y-3">
             <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 min-w-0">
                 <CreditCard className="w-4 h-4 text-amber-600 shrink-0" />
-                <div>
+                <div className="min-w-0">
                   <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">
                     Підписка та тарифний план
                   </h3>
@@ -373,14 +353,10 @@ export const UserDetailsModal: React.FC<UserDetailsModalProps> = ({
               </div>
 
               {canManageSubscriptions && (
-                <button
-                  type="button"
-                  onClick={() => setIsEditingSub((v) => !v)}
-                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-900 hover:text-white hover:border-slate-900 text-slate-800 text-[11px] font-bold transition-colors shrink-0"
-                >
+                <Button variant="neutral" size="xs" onClick={() => setIsEditingSub((v) => !v)}>
                   <SlidersHorizontal className="w-3.5 h-3.5" />
                   <span>{isEditingSub ? 'Згорнути' : 'Налаштувати'}</span>
-                </button>
+                </Button>
               )}
             </div>
 
@@ -395,7 +371,9 @@ export const UserDetailsModal: React.FC<UserDetailsModalProps> = ({
               <div className="pt-3 border-t border-slate-100 space-y-3 text-xs">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1">
-                    <label className="text-[11px] font-bold text-slate-700 block">Тарифний план</label>
+                    <label className="text-[11px] font-bold text-slate-700 block">
+                      Тарифний план
+                    </label>
                     <select
                       value={subTier}
                       onChange={(e) => {
@@ -419,7 +397,9 @@ export const UserDetailsModal: React.FC<UserDetailsModalProps> = ({
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-[11px] font-bold text-slate-700 block">Статус підписки</label>
+                    <label className="text-[11px] font-bold text-slate-700 block">
+                      Статус підписки
+                    </label>
                     <select
                       value={subStatus}
                       onChange={(e) =>
@@ -443,49 +423,33 @@ export const UserDetailsModal: React.FC<UserDetailsModalProps> = ({
                     <Calendar className="w-3.5 h-3.5 text-slate-400" />
                     <span>Дата закінчення підписки</span>
                   </label>
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-1.5">
                     <input
                       type="date"
                       value={subExpiresDate}
                       onChange={(e) => setSubExpiresDate(e.target.value)}
                       className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg font-mono text-xs text-slate-800 focus:outline-none focus:border-slate-900"
                     />
-                    <button
-                      type="button"
-                      onClick={() => addDaysPreset(7)}
-                      className="px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-[11px] font-bold text-slate-700"
-                    >
+                    <Button variant="secondary" size="xs" onClick={() => addDaysPreset(7)}>
                       +7 дн.
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => addDaysPreset(30)}
-                      className="px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-[11px] font-bold text-slate-700"
-                    >
+                    </Button>
+                    <Button variant="secondary" size="xs" onClick={() => addDaysPreset(30)}>
                       +30 дн.
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => addDaysPreset(90)}
-                      className="px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-[11px] font-bold text-slate-700"
-                    >
+                    </Button>
+                    <Button variant="secondary" size="xs" onClick={() => addDaysPreset(90)}>
                       +90 дн.
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => addDaysPreset(365)}
-                      className="px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-[11px] font-bold text-slate-700"
-                    >
+                    </Button>
+                    <Button variant="secondary" size="xs" onClick={() => addDaysPreset(365)}>
                       +1 рік
-                    </button>
+                    </Button>
                     {subExpiresDate && (
-                      <button
-                        type="button"
+                      <Button
+                        variant="dangerOutline"
+                        size="xs"
                         onClick={() => setSubExpiresDate('')}
-                        className="px-2 py-1 rounded bg-rose-50 hover:bg-rose-100 text-[11px] font-bold text-rose-700"
                       >
                         Очистити
-                      </button>
+                      </Button>
                     )}
                   </div>
                 </div>
@@ -504,14 +468,10 @@ export const UserDetailsModal: React.FC<UserDetailsModalProps> = ({
                 </div>
 
                 <div className="flex justify-end pt-1">
-                  <button
-                    type="button"
-                    onClick={() => openConfirm('subscription')}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold"
-                  >
+                  <Button variant="primary" onClick={() => openConfirm('subscription')}>
                     <CreditCard className="w-3.5 h-3.5" />
                     <span>Застосувати зміни підписки</span>
-                  </button>
+                  </Button>
                 </div>
               </div>
             )}
@@ -534,10 +494,10 @@ export const UserDetailsModal: React.FC<UserDetailsModalProps> = ({
                   type="button"
                   disabled={user.status === 'active' || !canActivateUser}
                   onClick={() => openConfirm('activate')}
-                  className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition-all ${
+                  className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition-all cursor-pointer ${
                     user.status === 'active'
                       ? 'border-emerald-500 bg-emerald-50 text-emerald-800 font-bold ring-2 ring-emerald-400/20'
-                      : 'border-slate-200 hover:border-emerald-400 hover:bg-emerald-50/40 text-slate-700'
+                      : 'border-slate-200 hover:border-slate-900 hover:bg-slate-50 text-slate-700'
                   } disabled:opacity-45 disabled:cursor-not-allowed`}
                 >
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 mb-1" />
@@ -554,10 +514,10 @@ export const UserDetailsModal: React.FC<UserDetailsModalProps> = ({
                     type="button"
                     disabled={user.status === 'suspended'}
                     onClick={() => openConfirm('suspend')}
-                    className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition-all ${
+                    className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition-all cursor-pointer ${
                       user.status === 'suspended'
                         ? 'border-rose-500 bg-rose-50 text-rose-800 font-bold ring-2 ring-rose-400/20'
-                        : 'border-slate-200 hover:border-rose-400 hover:bg-rose-50/40 text-slate-700'
+                        : 'border-slate-200 hover:border-slate-900 hover:bg-slate-50 text-slate-700'
                     } disabled:opacity-45 disabled:cursor-not-allowed`}
                   >
                     <AlertTriangle className="w-4 h-4 text-rose-500 mb-1" />
@@ -571,10 +531,10 @@ export const UserDetailsModal: React.FC<UserDetailsModalProps> = ({
                     type="button"
                     disabled={user.status === 'archived'}
                     onClick={() => openConfirm('archive')}
-                    className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition-all ${
+                    className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition-all cursor-pointer ${
                       user.status === 'archived'
                         ? 'border-slate-400 bg-slate-100 text-slate-900 font-bold ring-2 ring-slate-300'
-                        : 'border-slate-200 hover:border-slate-400 hover:bg-slate-50 text-slate-700'
+                        : 'border-slate-200 hover:border-slate-900 hover:bg-slate-50 text-slate-700'
                     } disabled:opacity-45 disabled:cursor-not-allowed`}
                   >
                     <Archive className="w-4 h-4 text-slate-500 mb-1" />
@@ -595,206 +555,92 @@ export const UserDetailsModal: React.FC<UserDetailsModalProps> = ({
             <strong className="text-slate-900">«Команда BizX»</strong> з урахуванням ієрархії ролей.
           </div>
         </div>
+      </Modal>
 
-        {/* Footer */}
-        <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 bg-slate-900 text-white text-xs font-bold rounded-lg hover:bg-slate-800 transition-colors"
-          >
-            Закрити
-          </button>
-        </div>
-      </div>
-
-      {/* Confirmation Sub-Modal */}
-      {confirmType && (
-        <div
-          className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-sm"
-          onClick={() => setConfirmType(null)}
+      {/* Unified Light-Header Nested Confirmation Modal */}
+      {confirmType && confirmMeta && (
+        <ConfirmModal
+          isOpen={Boolean(confirmType)}
+          onClose={() => setConfirmType(null)}
+          onConfirm={handleExecuteConfirm}
+          title={confirmMeta.title}
+          tone={confirmMeta.tone}
+          confirmLabel="Підтвердити"
+          isLoading={isBusy}
+          error={modalError}
         >
-          <div
-            className="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="px-5 py-4 bg-slate-900 text-white flex items-center justify-between">
-              <h3 className="text-sm font-black flex items-center gap-2">
-                <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0" />
-                <span>
-                  {confirmType === 'activate' && 'Розблокування користувача'}
-                  {confirmType === 'suspend' && 'Блокування користувача'}
-                  {confirmType === 'archive' && 'Архівація облікового запису'}
-                  {confirmType === 'subscription' && 'Підтвердження змін підписки'}
-                </span>
-              </h3>
-              <button
-                type="button"
-                onClick={() => setConfirmType(null)}
-                className="text-slate-400 hover:text-white"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
+          {confirmType === 'activate' && (
+            <p className="text-slate-700 leading-relaxed">
+              Ви підтверджуєте розблокування користувача <strong>{user.name}</strong> ({user.email})?
+              Доступ до всіх сервісів BizX буде відновлено, а користувачу надійде сповіщення.
+            </p>
+          )}
 
-            <form onSubmit={handleExecuteConfirm} className="p-5 space-y-4 text-xs">
-              {modalError && (
-                <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-rose-700 font-medium">
-                  {modalError}
-                </div>
-              )}
+          {confirmType === 'archive' && (
+            <AlertBanner tone="warning" title="Увага! Архівація акаунту">
+              Обліковий запис <strong>{user.name}</strong> буде архівовано, а всі активні сесії
+              розірвано. Відновити його зможе лише співробітник із правом розблокування користувачів.
+            </AlertBanner>
+          )}
 
-              {confirmType === 'activate' && (
-                <p className="text-slate-700 leading-relaxed">
-                  Ви підтверджуєте розблокування користувача <strong>{user.name}</strong> ({user.email})?
-                  Доступ до всіх сервісів BizX буде відновлено, а користувачу надійде сповіщення.
-                </p>
-              )}
+          {confirmType === 'suspend' && (
+            <>
+              <AlertBanner tone="warning" title="Увага перед блокуванням">
+                Достроково розблокувати користувача зможе{' '}
+                <strong>
+                  лише співробітник BizX із окремим правом «Розблокування користувачів»
+                </strong>
+                . Усі активні сесії користувача буде завершено.
+              </AlertBanner>
 
-              {confirmType === 'archive' && (
-                <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-300 text-amber-950 space-y-1.5 leading-relaxed">
-                  <p className="font-bold flex items-center gap-1.5">
-                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-                    <span>Увага! Архівація акаунту</span>
-                  </p>
-                  <p>
-                    Обліковий запис <strong>{user.name}</strong> буде архівовано, а всі активні сесії
-                    розірвано. Відновити його зможе лише співробітник із правом розблокування користувачів.
-                  </p>
-                </div>
-              )}
+              <DurationPicker
+                value={selectedDays}
+                onChange={setSelectedDays}
+                label="Термін блокування:"
+              />
 
-              {confirmType === 'suspend' && (
-                <>
-                  <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-300 text-amber-950 space-y-1.5 leading-relaxed">
-                    <p className="font-bold flex items-center gap-1.5">
-                      <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-                      <span>Увага перед блокуванням</span>
-                    </p>
-                    <p>
-                      Достроково розблокувати користувача зможе{' '}
-                      <strong>
-                        лише співробітник BizX із окремим правом «Розблокування користувачів»
-                      </strong>
-                      . Усі активні сесії користувача буде завершено.
-                    </p>
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-800 block">
-                      Термін блокування:
-                    </label>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
-                      {DURATION_PRESETS.map((opt) => {
-                        const active = durationMode === 'preset' && selectedDays === opt.value;
-                        return (
-                          <button
-                            key={String(opt.value)}
-                            type="button"
-                            onClick={() => {
-                              setDurationMode('preset');
-                              setSelectedDays(opt.value);
-                            }}
-                            className={`px-2.5 py-2 rounded-lg border text-xs font-semibold transition-all text-center ${
-                              active
-                                ? 'border-slate-900 bg-slate-900 text-white'
-                                : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-                            }`}
-                          >
-                            {opt.label}
-                          </button>
-                        );
-                      })}
-                      <button
-                        type="button"
-                        onClick={() => setDurationMode('custom')}
-                        className={`px-2.5 py-2 rounded-lg border text-xs font-semibold transition-all text-center ${
-                          durationMode === 'custom'
-                            ? 'border-slate-900 bg-slate-900 text-white'
-                            : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-                        }`}
-                      >
-                        Свій термін
-                      </button>
-                    </div>
-                    {durationMode === 'custom' && (
-                      <div className="flex items-center gap-2 pt-1">
-                        <input
-                          type="number"
-                          min={1}
-                          max={3650}
-                          value={customDaysInput}
-                          onChange={(e) => setCustomDaysInput(e.target.value)}
-                          className="w-28 px-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:bg-white focus:border-slate-900 font-bold"
-                        />
-                        <span className="text-xs text-slate-500">днів</span>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-800 block">
-                      Причина блокування (обовʼязково) *
-                    </label>
-                    <textarea
-                      required
-                      minLength={5}
-                      rows={3}
-                      value={reasonInput}
-                      onChange={(e) => setReasonInput(e.target.value)}
-                      placeholder="Опишіть причину блокування користувача..."
-                      className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:bg-white focus:border-slate-900 resize-none"
-                    />
-                  </div>
-                </>
-              )}
-
-              {confirmType === 'subscription' && (
-                <div className="space-y-2 text-slate-700 leading-relaxed">
-                  <p>
-                    Оновити підписку користувача <strong>{user.name}</strong>?
-                  </p>
-                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
-                    <div>
-                      Тариф: <strong>{TIER_OPTIONS.find((t) => t.value === subTier)?.label}</strong>
-                    </div>
-                    <div>
-                      Статус:{' '}
-                      <strong>
-                        {SUB_STATUS_OPTIONS.find((s) => s.value === subStatus)?.label}
-                      </strong>
-                    </div>
-                    <div>
-                      Діє до: <strong>{subExpiresDate || 'Не встановлено'}</strong>
-                    </div>
-                  </div>
-                  <p className="text-[11px] text-slate-500">
-                    Ліміт активних закладів користувача синхронізується автоматично, а в Пошту надійде офіційне сповіщення.
-                  </p>
-                </div>
-              )}
-
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setConfirmType(null)}
-                  className="px-4 py-2 rounded-lg border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50"
-                >
-                  Скасувати
-                </button>
-                <button
-                  type="submit"
-                  disabled={isBusy}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold disabled:opacity-50"
-                >
-                  <Send className="w-3.5 h-3.5" />
-                  <span>{isBusy ? 'Збереження...' : 'Підтвердити'}</span>
-                </button>
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-800 block">
+                  Причина блокування (обовʼязково) *
+                </label>
+                <textarea
+                  required
+                  minLength={5}
+                  rows={3}
+                  value={reasonInput}
+                  onChange={(e) => setReasonInput(e.target.value)}
+                  placeholder="Опишіть причину блокування користувача..."
+                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:bg-white focus:border-slate-900 resize-none"
+                />
               </div>
-            </form>
-          </div>
-        </div>
+            </>
+          )}
+
+          {confirmType === 'subscription' && (
+            <div className="space-y-2 text-slate-700 leading-relaxed">
+              <p>
+                Оновити підписку користувача <strong>{user.name}</strong>?
+              </p>
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
+                <div>
+                  Тариф: <strong>{TIER_OPTIONS.find((t) => t.value === subTier)?.label}</strong>
+                </div>
+                <div>
+                  Статус:{' '}
+                  <strong>{SUB_STATUS_OPTIONS.find((s) => s.value === subStatus)?.label}</strong>
+                </div>
+                <div>
+                  Діє до: <strong>{subExpiresDate || 'Не встановлено'}</strong>
+                </div>
+              </div>
+              <p className="text-[11px] text-slate-500">
+                Ліміт активних закладів користувача синхронізується автоматично, а в Пошту надійде
+                офіційне сповіщення.
+              </p>
+            </div>
+          )}
+        </ConfirmModal>
       )}
-    </div>
+    </>
   );
 };

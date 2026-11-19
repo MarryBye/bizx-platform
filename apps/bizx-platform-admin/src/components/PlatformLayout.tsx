@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { platformApi } from '../lib/api';
 import { useTranslation } from '../hooks/useTranslation';
-import { formatCompactCount, type UserProfile } from '@bizx/common-types';
-import { LanguageSelector, SidebarAccountMenu } from '@bizx/ui';
+import type { UserProfile } from '@bizx/common-types';
+import { LanguageSelector, SidebarAccountMenu, CountBadge } from '@bizx/ui';
 import {
   LayoutDashboard,
   BarChart3,
@@ -242,10 +242,8 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({
                       </span>
 
                       <span className="flex items-center gap-1.5 shrink-0">
-                        {businessAttentionTotal > 0 && !isBusinessesOpen && (
-                          <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full text-[10px] font-bold bg-amber-500 text-white">
-                            {formatCompactCount(businessAttentionTotal)}
-                          </span>
+                        {!isBusinessesOpen && (
+                          <CountBadge count={businessAttentionTotal} tone="amber" />
                         )}
                         <ChevronDown
                           className={`w-3.5 h-3.5 transition-transform ${
@@ -304,17 +302,11 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({
                               />
                               <span className="truncate">{t('platform.tabBusinessesPending')}</span>
                             </span>
-                            {pendingStoresCount > 0 && (
-                              <span
-                                className={`inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full text-[10px] font-bold shrink-0 ${
-                                  currentTab === 'businesses_pending'
-                                    ? 'bg-white text-slate-900'
-                                    : 'bg-amber-500 text-white'
-                                }`}
-                              >
-                                {formatCompactCount(pendingStoresCount)}
-                              </span>
-                            )}
+                            <CountBadge
+                              count={pendingStoresCount}
+                              tone="amber"
+                              inverted={currentTab === 'businesses_pending'}
+                            />
                           </button>
                         )}
 
@@ -339,17 +331,11 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({
                               />
                               <span className="truncate">{t('platform.tabDisputes')}</span>
                             </span>
-                            {pendingDisputesCount > 0 && (
-                              <span
-                                className={`inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full text-[10px] font-bold shrink-0 ${
-                                  currentTab === 'disputes'
-                                    ? 'bg-white text-slate-900'
-                                    : 'bg-red-600 text-white'
-                                }`}
-                              >
-                                {formatCompactCount(pendingDisputesCount)}
-                              </span>
-                            )}
+                            <CountBadge
+                              count={pendingDisputesCount}
+                              tone="red"
+                              inverted={currentTab === 'disputes'}
+                            />
                           </button>
                         )}
                       </div>

@@ -2,7 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { platformApi } from '../lib/api';
 import type { Store, StoreStrikeItem } from '@bizx/common-types';
 import {
-  X,
+  Modal,
+  ConfirmModal,
+  DurationPicker,
+  StatusBadge,
+  AlertBanner,
+  Button
+} from '@bizx/ui';
+import {
   Building2,
   CheckCircle2,
   AlertTriangle,
@@ -12,9 +19,7 @@ import {
   RotateCcw,
   Eye,
   XCircle,
-  Send,
   Plus,
-  ShieldAlert,
   Clock,
   Lock
 } from 'lucide-react';
@@ -51,15 +56,6 @@ interface BusinessDetailsModalProps {
   onRefresh?: () => Promise<void>;
 }
 
-const DURATION_PRESETS: Array<{ value: number | null; label: string }> = [
-  { value: 3, label: '3 дні' },
-  { value: 7, label: '7 днів' },
-  { value: 14, label: '14 днів' },
-  { value: 30, label: '30 днів' },
-  { value: 90, label: '90 днів' },
-  { value: null, label: 'Назавжди (до ручного зняття)' }
-];
-
 type ConfirmDialogType =
   | null
   | { type: 'approve' }
@@ -90,9 +86,7 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
   const [strikes, setStrikes] = useState<StoreStrikeItem[]>([]);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogType>(null);
   const [reasonInput, setReasonInput] = useState('');
-  const [durationMode, setDurationMode] = useState<'preset' | 'custom'>('preset');
   const [selectedDays, setSelectedDays] = useState<number | null>(7);
-  const [customDaysInput, setCustomDaysInput] = useState('10');
   const [modalError, setModalError] = useState<string | null>(null);
   const [isDialogBusy, setIsDialogBusy] = useState(false);
 
@@ -128,25 +122,14 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
       ? canUnblock || canArchive
       : canModerate;
 
-  const resolveChosenDays = (): number | null => {
-    if (durationMode === 'custom') {
-      const parsed = parseInt(customDaysInput, 10);
-      return Number.isFinite(parsed) && parsed >= 1 ? Math.min(3650, parsed) : 7;
-    }
-    return selectedDays;
-  };
-
   const openDialog = (next: ConfirmDialogType) => {
     setConfirmDialog(next);
     setReasonInput('');
-    setDurationMode('preset');
     setSelectedDays(7);
-    setCustomDaysInput('10');
     setModalError(null);
   };
 
-  const handleConfirmAction = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleConfirmAction = async () => {
     if (!confirmDialog || !business) return;
     setModalError(null);
     setIsDialogBusy(true);
@@ -169,7 +152,7 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
         }
         await onUpdateStatus(business.id, {
           status: 'suspended',
-          suspensionDays: resolveChosenDays(),
+          suspensionDays: selectedDays,
           suspensionReason: reasonInput.trim()
         });
       } else if (confirmDialog.type === 'archive') {
@@ -182,7 +165,7 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
         const willBeThird = activeStrikesCount >= 2;
         const res = await platformApi.orders.issueStoreStrike(business.id, {
           reason: reasonInput.trim(),
-          suspensionDays: willBeThird ? resolveChosenDays() : undefined
+          suspensionDays: willBeThird ? selectedDays : undefined
         });
         if (!res.success) {
           setModalError(res.error || 'Не вдалося видати страйк');
@@ -216,154 +199,115 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
     }
   };
 
-  const getStatusBadge = (status: string) => {
+  const renderStatusBadge = (status: string) => {
     switch (status) {
       case 'active':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap">
-            <CheckCircle2 className="w-3.5 h-3.5" />
-            <span>Активний</span>
-          </span>
+          <StatusBadge tone="emerald" dot>
+            Активний
+          </StatusBadge>
         );
       case 'pending':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 whitespace-nowrap">
-            <Clock className="w-3.5 h-3.5" />
-            <span>На перевірці</span>
-          </span>
+          <StatusBadge tone="amber" icon={<Clock className="w-3 h-3" />}>
+            На перевірці
+          </StatusBadge>
         );
       case 'suspended':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200 whitespace-nowrap">
-            <AlertTriangle className="w-3.5 h-3.5" />
-            <span>Призупинено</span>
-          </span>
+          <StatusBadge tone="rose" dot>
+            Призупинено
+          </StatusBadge>
         );
       case 'archived':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold bg-slate-100 text-slate-600 border border-slate-200 whitespace-nowrap">
-            <Archive className="w-3.5 h-3.5" />
-            <span>В архіві</span>
-          </span>
+          <StatusBadge tone="slate" icon={<Archive className="w-3 h-3" />}>
+            В архіві
+          </StatusBadge>
         );
       default:
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold bg-slate-100 text-slate-700 whitespace-nowrap">
+          <StatusBadge tone="slate" dot>
             {status === 'draft' ? 'В розробці' : status}
-          </span>
+          </StatusBadge>
         );
     }
   };
 
-  const renderDurationPicker = () => (
-    <div className="space-y-2">
-      <label className="text-xs font-bold text-slate-800 block">
-        Термін блокування закладу:
-      </label>
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
-        {DURATION_PRESETS.map((opt) => {
-          const active = durationMode === 'preset' && selectedDays === opt.value;
-          return (
-            <button
-              key={String(opt.value)}
-              type="button"
-              onClick={() => {
-                setDurationMode('preset');
-                setSelectedDays(opt.value);
-              }}
-              className={`px-2.5 py-2 rounded-lg border text-xs font-semibold transition-all text-center ${
-                active
-                  ? 'border-slate-900 bg-slate-900 text-white'
-                  : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-              }`}
-            >
-              {opt.label}
-            </button>
-          );
-        })}
-        <button
-          type="button"
-          onClick={() => setDurationMode('custom')}
-          className={`px-2.5 py-2 rounded-lg border text-xs font-semibold transition-all text-center ${
-            durationMode === 'custom'
-              ? 'border-slate-900 bg-slate-900 text-white'
-              : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-          }`}
-        >
-          Свій термін
-        </button>
-      </div>
-      {durationMode === 'custom' && (
-        <div className="flex items-center gap-2 pt-1">
-          <input
-            type="number"
-            min={1}
-            max={3650}
-            value={customDaysInput}
-            onChange={(e) => setCustomDaysInput(e.target.value)}
-            className="w-28 px-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:bg-white focus:border-slate-900 font-bold"
-          />
-          <span className="text-xs text-slate-500">днів</span>
-        </div>
-      )}
-    </div>
-  );
+  const confirmMeta = (() => {
+    if (!confirmDialog) return null;
+    switch (confirmDialog.type) {
+      case 'approve':
+        return { title: 'Підтвердження публікації закладу', tone: 'success' as const };
+      case 'reject':
+        return { title: 'Відхилення заявки закладу', tone: 'danger' as const };
+      case 'activate':
+        return { title: 'Підтвердження активації закладу', tone: 'success' as const };
+      case 'suspend':
+        return { title: 'Призупинення роботи закладу', tone: 'warning' as const };
+      case 'archive':
+        return { title: 'Архівація закладу', tone: 'warning' as const };
+      case 'issue_strike':
+        return {
+          title:
+            activeStrikesCount >= 2
+              ? 'Видача 3-го страйку та блокування'
+              : `Видача страйку (${activeStrikesCount + 1}/3)`,
+          tone: activeStrikesCount >= 2 ? ('danger' as const) : ('warning' as const)
+        };
+      case 'revoke_strike':
+        return { title: 'Зняття страйку закладу', tone: 'default' as const };
+    }
+  })();
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-2xl bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
-        onClick={(e) => e.stopPropagation()}
+    <>
+      <Modal
+        isOpen={isOpen}
+        onClose={onClose}
+        size="2xl"
+        icon={<Building2 className="w-5 h-5" />}
+        title={business.name}
+        badge={renderStatusBadge(business.status)}
+        subtitle={
+          <span className="font-mono">
+            {business.slug}.bizx.ua
+            {typeof business.productsCount === 'number' && ` · Товарів: ${business.productsCount}`}
+          </span>
+        }
+        footer={
+          <>
+            <div>
+              {onPreviewStore && (
+                <Button variant="neutral" onClick={() => onPreviewStore(business)}>
+                  <Eye className="w-3.5 h-3.5" />
+                  <span>Переглянути вітрину</span>
+                </Button>
+              )}
+            </div>
+            <Button variant="primary" onClick={onClose}>
+              Закрити
+            </Button>
+          </>
+        }
       >
-        {/* Header */}
-        <div className="p-5 border-b border-slate-100 bg-slate-50/70 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-xl bg-slate-900 text-white flex items-center justify-center font-bold text-sm shrink-0">
-              <Building2 className="w-5 h-5" />
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-base font-black text-slate-900 truncate">{business.name}</h2>
-                {getStatusBadge(business.status)}
-              </div>
-              <p className="text-xs text-slate-500 font-mono truncate">
-                {business.slug}.bizx.ua
-                {typeof business.productsCount === 'number' && ` · Товарів: ${business.productsCount}`}
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 transition-colors shrink-0"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Content */}
-        <div className="p-6 space-y-5 overflow-y-auto">
+        <div className="space-y-5">
           {/* Active Suspension Banner */}
           {business.status === 'suspended' && (
-            <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl space-y-1 text-xs">
-              <div className="font-black text-rose-900 flex items-center gap-1.5">
-                <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0" />
-                <span>
-                  Заклад призупинено{' '}
-                  {business.suspendedUntil
-                    ? `до ${new Date(business.suspendedUntil).toLocaleDateString('uk-UA')}`
-                    : 'безстроково'}
-                </span>
-              </div>
+            <AlertBanner
+              tone="danger"
+              title={`Заклад призупинено ${
+                business.suspendedUntil
+                  ? `до ${new Date(business.suspendedUntil).toLocaleDateString('uk-UA')}`
+                  : 'безстроково'
+              }`}
+            >
               {business.suspensionReason && (
-                <p className="text-rose-800 leading-relaxed">
+                <p>
                   <strong>Причина:</strong> {business.suspensionReason}
                 </p>
               )}
-            </div>
+            </AlertBanner>
           )}
 
           {/* Info Grid */}
@@ -398,22 +342,19 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
                 Рейтинг та страйки
               </span>
-              <div className="flex items-center gap-3 text-xs font-bold text-slate-800">
+              <div className="flex items-center gap-2.5 text-xs font-bold text-slate-800">
                 <span className="inline-flex items-center gap-1">
                   <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-400" />
                   <span>{(business.ratingAvg ?? 0).toFixed(1)}</span>
                   <span className="text-slate-400 font-normal">({business.ratingCount ?? 0})</span>
                 </span>
-                <span
-                  className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] border ${
-                    activeStrikesCount >= 2
-                      ? 'bg-rose-100 text-rose-800 border-rose-200'
-                      : 'bg-slate-100 text-slate-600 border-slate-200'
-                  }`}
+                <StatusBadge
+                  tone={activeStrikesCount >= 2 ? 'rose' : 'slate'}
+                  size="xs"
+                  icon={<Zap className="w-2.5 h-2.5" />}
                 >
-                  <Zap className="w-3 h-3" />
-                  <span>{activeStrikesCount}/3</span>
-                </span>
+                  {activeStrikesCount}/3
+                </StatusBadge>
               </div>
             </div>
 
@@ -435,7 +376,6 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
             </div>
           </div>
 
-          {/* Description */}
           {business.description && (
             <div className="p-3.5 bg-slate-50/60 border border-slate-200 rounded-xl space-y-1">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
@@ -459,24 +399,26 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
 
               {canApprove ? (
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
-                  <button
-                    type="button"
+                  <Button
+                    variant="primary"
+                    size="lg"
+                    className="flex-1"
                     disabled={isUpdating}
                     onClick={() => openDialog({ type: 'approve' })}
-                    className="flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 px-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-colors disabled:opacity-50"
                   >
                     <CheckCircle2 className="w-4 h-4 shrink-0" />
                     <span>Підтвердити та опублікувати</span>
-                  </button>
-                  <button
-                    type="button"
+                  </Button>
+                  <Button
+                    variant="dangerOutline"
+                    size="lg"
+                    className="flex-1"
                     disabled={isUpdating}
                     onClick={() => openDialog({ type: 'reject' })}
-                    className="flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 px-3.5 rounded-xl bg-white border border-rose-300 hover:bg-rose-600 text-rose-700 hover:text-white text-xs font-bold transition-colors disabled:opacity-50"
                   >
                     <XCircle className="w-4 h-4 shrink-0" />
                     <span>Відхилити з причиною</span>
-                  </button>
+                  </Button>
                 </div>
               ) : (
                 <div className="text-[11px] text-amber-900 bg-white/70 border border-amber-200 rounded-lg p-2.5 flex items-center gap-2">
@@ -501,15 +443,14 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
 
               {canModerate || canArchive || canUnblock || canRevokeStrikes ? (
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
-                  {/* Activate / Unblock */}
                   <button
                     type="button"
                     disabled={isUpdating || business.status === 'active' || !canActivateCurrent}
                     onClick={() => openDialog({ type: 'activate' })}
-                    className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition-all ${
+                    className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition-all cursor-pointer ${
                       business.status === 'active'
                         ? 'border-emerald-500 bg-emerald-50 text-emerald-800 font-bold ring-2 ring-emerald-400/20'
-                        : 'border-slate-200 hover:border-emerald-400 hover:bg-emerald-50/40 text-slate-700'
+                        : 'border-slate-200 hover:border-slate-900 hover:bg-slate-50 text-slate-700'
                     } disabled:opacity-45 disabled:cursor-not-allowed`}
                   >
                     <CheckCircle2 className="w-5 h-5 text-emerald-600 mb-1" />
@@ -518,21 +459,20 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
                     </span>
                     <span className="text-[10px] text-slate-400">
                       {!canActivateCurrent && business.status === 'suspended'
-                        ? 'Потрібне право розблокування'
+                        ? 'Потрібне право'
                         : 'Працює штатно'}
                     </span>
                   </button>
 
-                  {/* Suspend */}
                   {canModerate && (
                     <button
                       type="button"
                       disabled={isUpdating || business.status === 'suspended'}
                       onClick={() => openDialog({ type: 'suspend' })}
-                      className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition-all ${
+                      className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition-all cursor-pointer ${
                         business.status === 'suspended'
                           ? 'border-rose-500 bg-rose-50 text-rose-800 font-bold ring-2 ring-rose-400/20'
-                          : 'border-slate-200 hover:border-rose-400 hover:bg-rose-50/40 text-slate-700'
+                          : 'border-slate-200 hover:border-slate-900 hover:bg-slate-50 text-slate-700'
                       } disabled:opacity-45 disabled:cursor-not-allowed`}
                     >
                       <AlertTriangle className="w-5 h-5 text-rose-500 mb-1" />
@@ -541,16 +481,15 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
                     </button>
                   )}
 
-                  {/* Archive */}
                   {canArchive && (
                     <button
                       type="button"
                       disabled={isUpdating || business.status === 'archived'}
                       onClick={() => openDialog({ type: 'archive' })}
-                      className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition-all ${
+                      className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition-all cursor-pointer ${
                         business.status === 'archived'
                           ? 'border-slate-400 bg-slate-100 text-slate-900 font-bold ring-2 ring-slate-300'
-                          : 'border-slate-200 hover:border-slate-400 hover:bg-slate-50 text-slate-700'
+                          : 'border-slate-200 hover:border-slate-900 hover:bg-slate-50 text-slate-700'
                       } disabled:opacity-45 disabled:cursor-not-allowed`}
                     >
                       <Archive className="w-5 h-5 text-slate-500 mb-1" />
@@ -577,14 +516,14 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
               </div>
 
               {canIssueStrikes && (
-                <button
-                  type="button"
+                <Button
+                  variant="neutral"
+                  size="xs"
                   onClick={() => openDialog({ type: 'issue_strike' })}
-                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-900 hover:text-white hover:border-slate-900 text-slate-800 text-[11px] font-bold transition-colors"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>Видати страйк</span>
-                </button>
+                </Button>
               )}
             </div>
 
@@ -603,15 +542,9 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
                   >
                     <div className="min-w-0 space-y-0.5">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span
-                          className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${
-                            st.isActive
-                              ? 'bg-rose-600 text-white'
-                              : 'bg-slate-200 text-slate-600'
-                          }`}
-                        >
+                        <StatusBadge tone={st.isActive ? 'rose' : 'slate'} size="xs">
                           {st.isActive ? 'Активний' : 'Знято'}
-                        </span>
+                        </StatusBadge>
                         <span className="text-[10px] text-slate-400">
                           {new Date(st.createdAt).toLocaleDateString('uk-UA')}
                           {st.issuedByName ? ` • ${st.issuedByName}` : ''}
@@ -619,21 +552,19 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
                       </div>
                       <p className="font-semibold text-slate-800">{st.reason}</p>
                       {st.revokeReason && (
-                        <p className="text-[11px] text-emerald-700">
-                          Знято: {st.revokeReason}
-                        </p>
+                        <p className="text-[11px] text-emerald-700">Знято: {st.revokeReason}</p>
                       )}
                     </div>
 
                     {st.isActive && canRevokeStrikes && (
-                      <button
-                        type="button"
+                      <Button
+                        variant="neutral"
+                        size="xs"
                         onClick={() => openDialog({ type: 'revoke_strike', strike: st })}
-                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-900 hover:text-white text-[11px] font-bold text-slate-700 transition-colors shrink-0"
                       >
                         <RotateCcw className="w-3 h-3" />
                         <span>Зняти</span>
-                      </button>
+                      </Button>
                     )}
                   </div>
                 ))}
@@ -641,230 +572,147 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
             )}
           </div>
         </div>
+      </Modal>
 
-        {/* Clean Footer (No broken Business Panel link) */}
-        <div className="p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between gap-3">
-          <div>
-            {onPreviewStore && (
-              <button
-                type="button"
-                onClick={() => onPreviewStore(business)}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-white border border-slate-300 text-xs font-bold text-slate-800 hover:bg-slate-900 hover:text-white hover:border-slate-900 transition-colors"
-              >
-                <Eye className="w-3.5 h-3.5" />
-                <span>Переглянути вітрину</span>
-              </button>
-            )}
-          </div>
-
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 bg-slate-900 text-white text-xs font-bold rounded-lg hover:bg-slate-800 transition-colors"
-          >
-            Закрити
-          </button>
-        </div>
-      </div>
-
-      {/* Sub-Confirmation Modal (for every status change & strike operation) */}
-      {confirmDialog && (
-        <div
-          className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-sm"
-          onClick={() => setConfirmDialog(null)}
+      {/* Unified Light-Header Nested Confirmation Modal */}
+      {confirmDialog && confirmMeta && (
+        <ConfirmModal
+          isOpen={Boolean(confirmDialog)}
+          onClose={() => setConfirmDialog(null)}
+          onConfirm={handleConfirmAction}
+          title={confirmMeta.title}
+          tone={confirmMeta.tone}
+          confirmLabel="Підтвердити дію"
+          isLoading={isDialogBusy || isUpdating}
+          error={modalError}
         >
-          <div
-            className="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="px-5 py-4 bg-slate-900 text-white flex items-center justify-between">
-              <h3 className="text-sm font-black flex items-center gap-2">
-                <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0" />
-                <span>
-                  {confirmDialog.type === 'approve' && 'Підтвердження публікації закладу'}
-                  {confirmDialog.type === 'reject' && 'Відхилення заявки закладу'}
-                  {confirmDialog.type === 'activate' && 'Підтвердження активації закладу'}
-                  {confirmDialog.type === 'suspend' && 'Призупинення роботи закладу'}
-                  {confirmDialog.type === 'archive' && 'Архівація закладу'}
-                  {confirmDialog.type === 'issue_strike' &&
-                    (activeStrikesCount >= 2
-                      ? 'Видача 3-го страйку та блокування'
-                      : `Видача страйку (${activeStrikesCount + 1}/3)`)}
-                  {confirmDialog.type === 'revoke_strike' && 'Зняття страйку закладу'}
-                </span>
-              </h3>
-              <button
-                type="button"
-                onClick={() => setConfirmDialog(null)}
-                className="text-slate-400 hover:text-white"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
+          {confirmDialog.type === 'approve' && (
+            <p className="text-slate-700 leading-relaxed">
+              Ви підтверджуєте публікацію закладу <strong>«{business.name}»</strong>? Після
+              підтвердження сторінка стане видимою покупцям, а власнику надійде лист у Пошту BizX.
+            </p>
+          )}
 
-            <form onSubmit={handleConfirmAction} className="p-5 space-y-4 text-xs">
-              {modalError && (
-                <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-rose-700 font-medium">
-                  {modalError}
-                </div>
-              )}
+          {confirmDialog.type === 'activate' && (
+            <p className="text-slate-700 leading-relaxed">
+              Ви дійсно хочете активувати (розблокувати) заклад <strong>«{business.name}»</strong>?
+              Поточні обмеження статусу буде знято.
+            </p>
+          )}
 
-              {confirmDialog.type === 'approve' && (
-                <p className="text-slate-700 leading-relaxed">
-                  Ви підтверджуєте публікацію закладу <strong>«{business.name}»</strong>? Після
-                  підтвердження сторінка стане видимою покупцям, а власнику надійде лист у Пошту BizX.
-                </p>
-              )}
+          {confirmDialog.type === 'archive' && (
+            <AlertBanner tone="warning" title="Увага! Критична дія">
+              Заклад <strong>«{business.name}»</strong> буде приховано з каталогу та переведено в
+              архів. Відновити архівований заклад зможе лише співробітник із правом архівації або
+              розблокування закладів.
+            </AlertBanner>
+          )}
 
-              {confirmDialog.type === 'activate' && (
-                <p className="text-slate-700 leading-relaxed">
-                  Ви дійсно хочете активувати (розблокувати) заклад{' '}
-                  <strong>«{business.name}»</strong>? Поточні обмеження статусу буде знято.
-                </p>
-              )}
-
-              {confirmDialog.type === 'archive' && (
-                <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-300 text-amber-950 space-y-1.5 leading-relaxed">
-                  <p className="font-bold flex items-center gap-1.5">
-                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-                    <span>Увага! Критична дія</span>
-                  </p>
-                  <p>
-                    Заклад <strong>«{business.name}»</strong> буде приховано з каталогу та
-                    переведено в архів. Відновити архівований заклад зможе лише співробітник із
-                    правом архівації або розблокування закладів.
-                  </p>
-                </div>
-              )}
-
-              {confirmDialog.type === 'suspend' && (
-                <>
-                  <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-300 text-amber-950 space-y-1.5 leading-relaxed">
-                    <p className="font-bold flex items-center gap-1.5">
-                      <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-                      <span>Увага перед блокуванням</span>
-                    </p>
-                    <p>
-                      Достроково розблокувати заклад зможе{' '}
-                      <strong>
-                        лише співробітник BizX із окремим правом «Розблокування закладів»
-                      </strong>
-                      . Власник отримає лист із вашою причиною у Пошту BizX.
-                    </p>
-                  </div>
-                  {renderDurationPicker()}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-800 block">
-                      Причина призупинення (обовʼязково) *
-                    </label>
-                    <textarea
-                      required
-                      minLength={5}
-                      rows={3}
-                      value={reasonInput}
-                      onChange={(e) => setReasonInput(e.target.value)}
-                      placeholder="Детально опишіть причину блокування..."
-                      className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:bg-white focus:border-slate-900 resize-none"
-                    />
-                  </div>
-                </>
-              )}
-
-              {confirmDialog.type === 'reject' && (
-                <div className="space-y-1.5">
-                  <p className="text-slate-600 leading-relaxed mb-2">
-                    Заклад повернеться в чернетку, а вказана нижче причина надійде власнику офіційним листом у Пошту BizX.
-                  </p>
-                  <label className="text-xs font-bold text-slate-800 block">
-                    Причина відхилення (обовʼязково) *
-                  </label>
-                  <textarea
-                    required
-                    minLength={5}
-                    rows={4}
-                    value={reasonInput}
-                    onChange={(e) => setReasonInput(e.target.value)}
-                    placeholder="Наприклад: додайте логотип, опис та щонайменше 3 активні товари..."
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:bg-white focus:border-slate-900 resize-none"
-                  />
-                </div>
-              )}
-
-              {confirmDialog.type === 'issue_strike' && (
-                <>
-                  {activeStrikesCount >= 2 && (
-                    <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-300 text-rose-950 space-y-1.5 leading-relaxed">
-                      <p className="font-bold flex items-center gap-1.5">
-                        <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-                        <span>Увага: це буде 3-й страйк!</span>
-                      </p>
-                      <p>
-                        Заклад <strong>«{business.name}»</strong> буде автоматично призупинено.
-                        Зняти страйк і розблокувати його достроково зможе лише співробітник із
-                        правом «Зняття страйків».
-                      </p>
-                    </div>
-                  )}
-                  {activeStrikesCount >= 2 && renderDurationPicker()}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-800 block">
-                      Причина видачі страйку (обовʼязково) *
-                    </label>
-                    <textarea
-                      required
-                      minLength={5}
-                      rows={3}
-                      value={reasonInput}
-                      onChange={(e) => setReasonInput(e.target.value)}
-                      placeholder="Вкажіть порушення або підставу для видачі страйку..."
-                      className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:bg-white focus:border-slate-900 resize-none"
-                    />
-                  </div>
-                </>
-              )}
-
-              {confirmDialog.type === 'revoke_strike' && (
-                <div className="space-y-2">
-                  <p className="text-slate-600 leading-relaxed">
-                    Зняття страйку: <strong>«{confirmDialog.strike.reason}»</strong>. Якщо після
-                    зняття залишиться менше 3 активних страйків, блокування буде знято автоматично.
-                  </p>
-                  <label className="text-xs font-bold text-slate-800 block">
-                    Причина зняття страйку (обовʼязково) *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    minLength={3}
-                    value={reasonInput}
-                    onChange={(e) => setReasonInput(e.target.value)}
-                    placeholder="Наприклад: Апеляцію задоволено / помилковий страйк..."
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:bg-white focus:border-slate-900"
-                  />
-                </div>
-              )}
-
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setConfirmDialog(null)}
-                  className="px-4 py-2 rounded-lg border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50"
-                >
-                  Скасувати
-                </button>
-                <button
-                  type="submit"
-                  disabled={isDialogBusy || isUpdating}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold disabled:opacity-50"
-                >
-                  <Send className="w-3.5 h-3.5" />
-                  <span>{isDialogBusy || isUpdating ? 'Збереження...' : 'Підтвердити дію'}</span>
-                </button>
+          {confirmDialog.type === 'suspend' && (
+            <>
+              <AlertBanner tone="warning" title="Увага перед блокуванням">
+                Достроково розблокувати заклад зможе{' '}
+                <strong>лише співробітник BizX із окремим правом «Розблокування закладів»</strong>.
+                Власник отримає лист із вашою причиною у Пошту BizX.
+              </AlertBanner>
+              <DurationPicker
+                value={selectedDays}
+                onChange={setSelectedDays}
+                label="Термін блокування закладу:"
+              />
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-800 block">
+                  Причина призупинення (обовʼязково) *
+                </label>
+                <textarea
+                  required
+                  minLength={5}
+                  rows={3}
+                  value={reasonInput}
+                  onChange={(e) => setReasonInput(e.target.value)}
+                  placeholder="Детально опишіть причину блокування..."
+                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:bg-white focus:border-slate-900 resize-none"
+                />
               </div>
-            </form>
-          </div>
-        </div>
+            </>
+          )}
+
+          {confirmDialog.type === 'reject' && (
+            <div className="space-y-2">
+              <p className="text-slate-600 leading-relaxed">
+                Заклад повернеться в чернетку, а вказана нижче причина надійде власнику офіційним
+                листом у Пошту BizX.
+              </p>
+              <label className="text-xs font-bold text-slate-800 block">
+                Причина відхилення (обовʼязково) *
+              </label>
+              <textarea
+                required
+                minLength={5}
+                rows={4}
+                value={reasonInput}
+                onChange={(e) => setReasonInput(e.target.value)}
+                placeholder="Наприклад: додайте логотип, опис та щонайменше 3 активні товари..."
+                className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:bg-white focus:border-slate-900 resize-none"
+              />
+            </div>
+          )}
+
+          {confirmDialog.type === 'issue_strike' && (
+            <>
+              {activeStrikesCount >= 2 && (
+                <AlertBanner tone="danger" title="Увага: це буде 3-й страйк!">
+                  Заклад <strong>«{business.name}»</strong> буде автоматично призупинено. Зняти
+                  страйк і розблокувати його достроково зможе лише співробітник із правом «Зняття
+                  страйків».
+                </AlertBanner>
+              )}
+              {activeStrikesCount >= 2 && (
+                <DurationPicker
+                  value={selectedDays}
+                  onChange={setSelectedDays}
+                  label="Термін блокування закладу:"
+                />
+              )}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-800 block">
+                  Причина видачі страйку (обовʼязково) *
+                </label>
+                <textarea
+                  required
+                  minLength={5}
+                  rows={3}
+                  value={reasonInput}
+                  onChange={(e) => setReasonInput(e.target.value)}
+                  placeholder="Вкажіть порушення або підставу для видачі страйку..."
+                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:bg-white focus:border-slate-900 resize-none"
+                />
+              </div>
+            </>
+          )}
+
+          {confirmDialog.type === 'revoke_strike' && (
+            <div className="space-y-2">
+              <p className="text-slate-600 leading-relaxed">
+                Зняття страйку: <strong>«{confirmDialog.strike.reason}»</strong>. Якщо після зняття
+                залишиться менше 3 активних страйків, блокування буде знято автоматично.
+              </p>
+              <label className="text-xs font-bold text-slate-800 block">
+                Причина зняття страйку (обовʼязково) *
+              </label>
+              <input
+                type="text"
+                required
+                minLength={3}
+                value={reasonInput}
+                onChange={(e) => setReasonInput(e.target.value)}
+                placeholder="Наприклад: Апеляцію задоволено / помилковий страйк..."
+                className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:bg-white focus:border-slate-900"
+              />
+            </div>
+          )}
+        </ConfirmModal>
       )}
-    </div>
+    </>
   );
 };

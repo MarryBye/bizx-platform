@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import type { Store } from '@bizx/common-types';
+import { StatusBadge, Button } from '@bizx/ui';
 import { platformApi } from '../lib/api';
 import {
   Building2,
@@ -117,32 +118,28 @@ export const BusinessesView: React.FC<BusinessesViewProps> = ({
     switch (b.status) {
       case 'draft':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-300 whitespace-nowrap">
-            <span className="w-1.5 h-1.5 rounded-full bg-slate-500 shrink-0" />
-            <span>В розробці</span>
-          </span>
+          <StatusBadge tone="slate" dot>
+            В розробці
+          </StatusBadge>
         );
       case 'active':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-            <span>Активний</span>
-          </span>
+          <StatusBadge tone="emerald" dot>
+            Активний
+          </StatusBadge>
         );
       case 'pending':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200 whitespace-nowrap">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
-            <span>На перевірці</span>
-          </span>
+          <StatusBadge tone="amber" dot>
+            На перевірці
+          </StatusBadge>
         );
       case 'suspended':
         return (
           <div className="inline-flex flex-col items-start gap-0.5">
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200 whitespace-nowrap">
-              <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
-              <span>Призупинено</span>
-            </span>
+            <StatusBadge tone="rose" dot>
+              Призупинено
+            </StatusBadge>
             <span className="text-[10px] text-rose-600/80 font-medium pl-1 whitespace-nowrap">
               {b.suspendedUntil
                 ? `до ${new Date(b.suspendedUntil).toLocaleDateString('uk-UA')}`
@@ -152,17 +149,12 @@ export const BusinessesView: React.FC<BusinessesViewProps> = ({
         );
       case 'archived':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-500 border border-slate-200 whitespace-nowrap">
-            <Archive className="w-3 h-3 shrink-0" />
-            <span>В архіві</span>
-          </span>
+          <StatusBadge tone="slate" icon={<Archive className="w-3 h-3" />}>
+            В архіві
+          </StatusBadge>
         );
       default:
-        return (
-          <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-700 whitespace-nowrap">
-            {b.status}
-          </span>
-        );
+        return <StatusBadge tone="slate">{b.status}</StatusBadge>;
     }
   };
 
@@ -182,15 +174,16 @@ export const BusinessesView: React.FC<BusinessesViewProps> = ({
           </p>
         </div>
 
-        <button
-          type="button"
+        <Button
+          variant="outline"
+          size="sm"
           onClick={onRefresh}
           disabled={isLoading}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 hover:border-slate-300 rounded-lg text-xs font-bold text-slate-700 transition-colors shadow-sm self-start sm:self-auto"
+          className="self-start sm:self-auto"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
           <span>Оновити дані</span>
-        </button>
+        </Button>
       </div>
 
       {/* Pending shortcut banner */}
@@ -360,16 +353,13 @@ export const BusinessesView: React.FC<BusinessesViewProps> = ({
                             <span>{(b.ratingAvg ?? 0).toFixed(1)}</span>
                           </span>
                           {strikes > 0 && (
-                            <span
-                              className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold border whitespace-nowrap ${
-                                strikes >= 2
-                                  ? 'bg-rose-50 text-rose-700 border-rose-200'
-                                  : 'bg-amber-50 text-amber-700 border-amber-200'
-                              }`}
+                            <StatusBadge
+                              tone={strikes >= 2 ? 'rose' : 'amber'}
+                              size="xs"
+                              icon={<Zap className="w-2.5 h-2.5" />}
                             >
-                              <Zap className="w-2.5 h-2.5 shrink-0" />
-                              <span>{strikes}/3</span>
-                            </span>
+                              {strikes}/3
+                            </StatusBadge>
                           )}
                         </div>
                       </td>
@@ -388,23 +378,23 @@ export const BusinessesView: React.FC<BusinessesViewProps> = ({
                       <td className="py-3.5 px-4 text-right align-middle whitespace-nowrap">
                         <div className="inline-flex items-center gap-1.5">
                           {onPreviewStore && (
-                            <button
-                              type="button"
+                            <Button
+                              variant="outline"
+                              size="icon"
                               title="Попередній перегляд вітрини"
                               onClick={() => onPreviewStore(b)}
-                              className="inline-flex items-center justify-center p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-blue-50 hover:border-blue-300 text-slate-600 hover:text-blue-700 transition-all"
                             >
                               <Eye className="w-3.5 h-3.5" />
-                            </button>
+                            </Button>
                           )}
-                          <button
-                            type="button"
+                          <Button
+                            variant="neutral"
+                            size="icon"
                             title="Керування закладом"
                             onClick={() => onSelectBusiness(b)}
-                            className="inline-flex items-center justify-center p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-900 hover:text-white hover:border-slate-900 text-slate-700 transition-all shadow-2xs"
                           >
                             <SlidersHorizontal className="w-3.5 h-3.5" />
-                          </button>
+                          </Button>
                         </div>
                       </td>
                     </tr>

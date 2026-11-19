@@ -5,13 +5,21 @@ import { api } from '../lib/api';
 import { resolveMediaUrl } from '../lib/media';
 import type { EnrichedOrderResponse } from '@bizx/api-client';
 import {
-  formatCompactCount,
   STORE_QUICK_REPLIES,
   type OrderStatus,
   type OrderMessageItem,
   type OrderMessageAttachmentDto
 } from '@bizx/common-types';
-import { Card, Badge, Select, Button, OrderChatBox } from '@bizx/ui';
+import {
+  Card,
+  Select,
+  Button,
+  OrderChatBox,
+  Modal,
+  StatusBadge,
+  CountBadge,
+  AlertBanner
+} from '@bizx/ui';
 import {
   ShoppingBag,
   Phone,
@@ -19,10 +27,8 @@ import {
   MessageSquare,
   AlertTriangle,
   Eye,
-  X,
   RotateCcw,
   Star,
-  CheckCircle2,
   Clock,
   ShieldAlert
 } from 'lucide-react';
@@ -61,17 +67,33 @@ export const OrdersView: React.FC<{ canEdit?: boolean; canRefund?: boolean }> = 
     const label = t(`statuses.order.${status}`);
     switch (status) {
       case 'delivered':
-        return <Badge variant="success">{label}</Badge>;
+        return (
+          <StatusBadge tone="emerald" size="xs" dot>
+            {label}
+          </StatusBadge>
+        );
       case 'confirmed':
       case 'processing':
       case 'shipped':
       case 'paid':
-        return <Badge variant="default">{label}</Badge>;
+        return (
+          <StatusBadge tone="blue" size="xs" dot>
+            {label}
+          </StatusBadge>
+        );
       case 'cancelled':
-        return <Badge variant="destructive">{label}</Badge>;
+        return (
+          <StatusBadge tone="rose" size="xs" dot>
+            {label}
+          </StatusBadge>
+        );
       case 'pending':
       default:
-        return <Badge variant="warning">{label}</Badge>;
+        return (
+          <StatusBadge tone="amber" size="xs" dot>
+            {label}
+          </StatusBadge>
+        );
     }
   };
 
@@ -79,29 +101,29 @@ export const OrdersView: React.FC<{ canEdit?: boolean; canRefund?: boolean }> = 
     if (!payoutStatus) return null;
     if (payoutStatus === 'released') {
       return (
-        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+        <StatusBadge tone="emerald" size="xs" className="rounded">
           {locale === 'en' ? 'Released to payout' : 'Зараховано до виплат'}
-        </span>
+        </StatusBadge>
       );
     }
     if (payoutStatus === 'refunded') {
       return (
-        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+        <StatusBadge tone="slate" size="xs" className="rounded">
           {locale === 'en' ? 'Refunded from hold' : 'Повернено з резерву'}
-        </span>
+        </StatusBadge>
       );
     }
     if (payoutStatus === 'clawback') {
       return (
-        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+        <StatusBadge tone="rose" size="xs" className="rounded">
           {locale === 'en' ? 'Deducted from payout' : 'Утримано з виплат'}
-        </span>
+        </StatusBadge>
       );
     }
     return (
-      <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+      <StatusBadge tone="amber" size="xs" className="rounded">
         {locale === 'en' ? 'Held until delivery' : 'Утримано до завершення'}
-      </span>
+      </StatusBadge>
     );
   };
 
@@ -276,34 +298,36 @@ export const OrdersView: React.FC<{ canEdit?: boolean; canRefund?: boolean }> = 
                       {getStatusBadge(order.status)}
 
                       {hasDispute && (
-                        <span className="inline-flex items-center gap-1 h-5 px-2 rounded text-[10px] font-black uppercase tracking-wide bg-red-600 text-white animate-pulse">
-                          <AlertTriangle className="w-3 h-3 shrink-0" />
-                          <span>
-                            {isEscalated
-                              ? locale === 'en'
-                                ? 'Escalated to BizX'
-                                : 'Скарга в BizX'
-                              : locale === 'en'
-                                ? 'Urgent Dispute'
-                                : 'Спір • Терміново'}
-                          </span>
-                        </span>
+                        <StatusBadge
+                          tone="rose"
+                          size="xs"
+                          icon={<AlertTriangle className="w-3 h-3" />}
+                          className="animate-pulse"
+                        >
+                          {isEscalated
+                            ? locale === 'en'
+                              ? 'Escalated to BizX'
+                              : 'Скарга в BizX'
+                            : locale === 'en'
+                              ? 'Urgent Dispute'
+                              : 'Спір • Терміново'}
+                        </StatusBadge>
                       )}
 
                       {order.refundOfferStatus === 'pending_customer' && (
-                        <span className="inline-flex items-center gap-1 h-5 px-2 rounded text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-200">
-                          <Clock className="w-3 h-3 shrink-0" />
-                          <span>
-                            {locale === 'en' ? 'Refund pending' : 'Очікує підтвердження повернення'}
-                          </span>
-                        </span>
+                        <StatusBadge tone="amber" size="xs" icon={<Clock className="w-3 h-3" />}>
+                          {locale === 'en' ? 'Refund pending' : 'Очікує підтвердження повернення'}
+                        </StatusBadge>
                       )}
 
                       {order.review && (
-                        <span className="inline-flex items-center gap-0.5 h-5 px-1.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
-                          <Star className="w-3 h-3 fill-amber-400 text-amber-500" />
-                          <span>{order.review.rating}</span>
-                        </span>
+                        <StatusBadge
+                          tone="amber"
+                          size="xs"
+                          icon={<Star className="w-3 h-3 fill-amber-400 text-amber-500" />}
+                        >
+                          {order.review.rating}
+                        </StatusBadge>
                       )}
                     </div>
 
@@ -332,33 +356,27 @@ export const OrdersView: React.FC<{ canEdit?: boolean; canRefund?: boolean }> = 
                     {formatPrice(order.totalAmount)} ₴
                   </span>
 
-                  {unread > 0 && (
-                    <span
-                      title={
-                        locale === 'en'
-                          ? `${unread} unread message(s)`
-                          : `Непрочитаних повідомлень: ${unread}`
-                      }
-                      className="inline-flex items-center gap-1 h-6 px-2 rounded-full bg-blue-600 text-white text-[11px] font-bold shadow-2xs"
-                    >
-                      <MessageSquare className="w-3 h-3 shrink-0" />
-                      <span>{formatCompactCount(unread)}</span>
-                    </span>
-                  )}
+                  <CountBadge
+                    count={unread}
+                    tone="blue"
+                    icon={<MessageSquare className="w-3 h-3 shrink-0" />}
+                    title={
+                      locale === 'en'
+                        ? `${unread} unread message(s)`
+                        : `Непрочитаних повідомлень: ${unread}`
+                    }
+                    className="h-6 px-2 text-[11px]"
+                  />
 
-                  <button
-                    type="button"
+                  <Button
+                    variant={hasDispute ? 'destructive' : 'neutral'}
+                    size="sm"
                     onClick={() => setSelectedOrderId(order.id)}
                     title={locale === 'en' ? 'Order details & chat' : 'Деталі замовлення та чат'}
-                    className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-bold transition-colors ${
-                      hasDispute
-                        ? 'bg-red-600 hover:bg-red-700 border-red-600 text-white'
-                        : 'bg-white hover:bg-slate-900 hover:text-white border-slate-200 hover:border-slate-900 text-slate-700'
-                    }`}
                   >
                     <Eye className="w-3.5 h-3.5 shrink-0" />
                     <span className="hidden sm:inline">{t('common.details')}</span>
-                  </button>
+                  </Button>
                 </div>
               </div>
             );
@@ -376,62 +394,46 @@ export const OrdersView: React.FC<{ canEdit?: boolean; canRefund?: boolean }> = 
         </Card>
       )}
 
-      {/* Order Details + Messenger Modal */}
-      {selectedOrder && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-900/60 backdrop-blur-sm"
-          onClick={() => setSelectedOrderId(null)}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-3xl max-h-[92vh] bg-white border border-slate-200 rounded-2xl shadow-2xl flex flex-col overflow-hidden"
-          >
-            {/* Modal Header */}
-            <div className="px-5 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between gap-3 shrink-0">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h2 className="text-base font-black text-slate-900 font-mono">
-                    {selectedOrder.orderNumber}
-                  </h2>
-                  {getStatusBadge(selectedOrder.status)}
-                  {getPayoutBadge(selectedOrder.payoutStatus)}
-                </div>
-                <p className="text-[11px] text-slate-500 mt-0.5">
-                  {new Date(selectedOrder.createdAt).toLocaleString(
-                    locale === 'en' ? 'en-US' : 'uk-UA'
-                  )}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSelectedOrderId(null)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-800 hover:bg-slate-200/60 transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
+      {/* Order Details + Messenger Modal — Unified Light Header */}
+      <Modal
+        isOpen={Boolean(selectedOrder)}
+        onClose={() => setSelectedOrderId(null)}
+        size="3xl"
+        tone={selectedOrder?.activeDispute ? 'danger' : 'default'}
+        icon={<ShoppingBag className="w-4 h-4" />}
+        title={selectedOrder ? <span className="font-mono">{selectedOrder.orderNumber}</span> : undefined}
+        badge={
+          selectedOrder ? (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {getStatusBadge(selectedOrder.status)}
+              {getPayoutBadge(selectedOrder.payoutStatus)}
             </div>
+          ) : undefined
+        }
+        subtitle={
+          selectedOrder
+            ? new Date(selectedOrder.createdAt).toLocaleString(
+                locale === 'en' ? 'en-US' : 'uk-UA'
+              )
+            : undefined
+        }
+      >
+        {selectedOrder && (
+          <div className="space-y-5">
+            {modalNotice && (
+              <AlertBanner tone={modalNotice.isError ? 'danger' : 'success'}>
+                {modalNotice.text}
+              </AlertBanner>
+            )}
 
-            {/* Scrollable Body: Order Details + Quick Actions + Chat */}
-            <div className="flex-1 overflow-y-auto p-5 space-y-5">
-              {modalNotice && (
-                <div
-                  className={`p-3 rounded-xl text-xs flex items-center gap-2 border ${
-                    modalNotice.isError
-                      ? 'bg-red-50 border-red-200 text-red-700'
-                      : 'bg-emerald-50 border-emerald-200 text-emerald-800'
-                  }`}
-                >
-                  <CheckCircle2 className="w-4 h-4 shrink-0" />
-                  <span>{modalNotice.text}</span>
-                </div>
-              )}
-
-              {/* Urgent Dispute Banner */}
-              {selectedOrder.activeDispute && (
-                <div className="p-4 rounded-xl bg-red-50 border border-red-200 space-y-1.5">
-                  <div className="flex items-center justify-between gap-2 flex-wrap">
-                    <span className="inline-flex items-center gap-1.5 text-xs font-black text-red-800 uppercase">
-                      <ShieldAlert className="w-4 h-4 text-red-600 shrink-0" />
+            {/* Urgent Dispute Banner */}
+            {selectedOrder.activeDispute && (
+              <AlertBanner
+                tone="danger"
+                title={
+                  <div className="flex items-center justify-between gap-2 flex-wrap w-full">
+                    <span className="inline-flex items-center gap-1.5 uppercase">
+                      <ShieldAlert className="w-4 h-4 shrink-0" />
                       {selectedOrder.activeDispute.status === 'escalated_platform'
                         ? locale === 'en'
                           ? 'Dispute Escalated to BizX Arbitration'
@@ -440,15 +442,15 @@ export const OrdersView: React.FC<{ canEdit?: boolean; canRefund?: boolean }> = 
                           ? 'High Priority: Customer Opened a Dispute'
                           : 'Високий пріоритет: клієнт відкрив спір'}
                     </span>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-red-100 text-red-800 border border-red-200">
+                    <StatusBadge tone="rose" size="xs" className="rounded">
                       {t(`disputes.categories.${selectedOrder.activeDispute.category}`)}
-                    </span>
+                    </StatusBadge>
                   </div>
-                  <p className="text-xs text-red-900 leading-relaxed">
-                    {selectedOrder.activeDispute.description}
-                  </p>
-                </div>
-              )}
+                }
+              >
+                {selectedOrder.activeDispute.description}
+              </AlertBanner>
+            )}
 
               {/* Customer Info + Items */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -675,10 +677,9 @@ export const OrdersView: React.FC<{ canEdit?: boolean; canRefund?: boolean }> = 
                   onUploadAttachment={canEdit ? handleUploadAttachment : undefined}
                 />
               </div>
-            </div>
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
     </div>
   );
 };
