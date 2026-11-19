@@ -7,8 +7,8 @@
  * 1. КОМАНДА ПЛАТФОРМИ BIZX (вхід у BizX Core Admin):
  * ────────────────────────────────────────────────────────────────────────────
  * • admin@bizx.ua           | +380501234567 | Власник платформи (priority 10000, isOwner)
- * • ops.bizx@bizx.ua        | +380502223344 | Операційний менеджер (priority 500, керує ролями/командою < 500)
- * • support.bizx@bizx.ua    | +380503334455 | Підтримка та модерація (priority 100)
+ * • ops.bizx@bizx.ua        | +380502223344 | Операційний менеджер (priority 500, керує закладами/ролями/командою < 500, без *.archive)
+ * • support.bizx@bizx.ua    | +380503334455 | Підтримка (priority 100, лише перегляд закладів/користувачів/аналітики)
  * • analyst.bizx@bizx.ua    | +380504445566 | Custom (лише аналітика, експорт та перегляд закладів)
  *
  * 2. ВЛАСНИКИ БІЗНЕСІВ (вхід у BizX Business Admin та Landing):
@@ -20,20 +20,20 @@
  * 3. ПРАЦІВНИКИ БІЗНЕСІВ (без власної підписки, доступ лише до свого бізнесу):
  * ────────────────────────────────────────────────────────────────────────────
  * [Львівська Кавова Мануфактура]
- * • manager.coffee@bizx.ua  | +380672223301 | Керуючий (priority 500, ролі/персонал < 500, без store.status.manage)
- * • barista.coffee@bizx.ua  | +380672223302 | Старший бариста (priority 300, товари + замовлення)
- * • cashier.coffee@bizx.ua  | +380672223303 | Персонал (priority 100, перегляд товарів + замовлення)
- * • analyst.coffee@bizx.ua  | +380672223304 | Custom (analytics.read, analytics.export, orders.read, store.read)
+ * • manager.coffee@bizx.ua  | +380672223301 | Керуючий (priority 500, 1 галочка store.admin — повний доступ крім ownerOnly)
+ * • barista.coffee@bizx.ua  | +380672223302 | Старший бариста (priority 300, products.read/write + orders.read/edit)
+ * • cashier.coffee@bizx.ua  | +380672223303 | Персонал (priority 100, products.read + orders.read/edit, БЕЗ store.read)
+ * • analyst.coffee@bizx.ua  | +380672223304 | Custom (analytics.read, analytics.export, orders.read)
  *
  * [CyberTech Ukraine]
- * • manager.tech@bizx.ua    | +380935556601 | Керуючий (priority 500)
- * • content.tech@bizx.ua    | +380935556602 | Контент-менеджер (priority 250, товари read/write/edit)
- * • sales.tech@bizx.ua      | +380935556603 | Персонал (priority 100, замовлення + перегляд товарів)
+ * • manager.tech@bizx.ua    | +380935556601 | Керуючий (priority 500, явні права БЕЗ store.admin та *.archive команди/ролей)
+ * • content.tech@bizx.ua    | +380935556602 | Контент-менеджер (priority 250, товари read/write/edit/status, БЕЗ archive)
+ * • sales.tech@bizx.ua      | +380935556603 | Персонал (priority 100, замовлення + перегляд товарів, БЕЗ store.read)
  *
  * [Хлібна Майстерня]
- * • manager.bakery@bizx.ua  | +380668889901 | Керуючий (priority 500)
- * • baker.bakery@bizx.ua    | +380668889902 | Пекар-технолог (priority 250, товари + перегляд замовлень)
- * • courier.bakery@bizx.ua  | +380668889903 | Custom (orders.read, orders.edit, store.read)
+ * • manager.bakery@bizx.ua  | +380668889901 | Керуючий (priority 500, повні явні права)
+ * • baker.bakery@bizx.ua    | +380668889902 | Пекар-технолог (priority 250, товари read/write/edit без status/archive + orders.read)
+ * • courier.bakery@bizx.ua  | +380668889903 | Custom (orders.read, orders.edit — без store.read і без товарів)
  *
  * 4. ЗВИЧАЙНІ КОРИСТУВАЧІ (без підписок, без бізнесів, без адмін-доступів):
  *    Зручно використовувати для тестування додавання працівників по Email/Телефону
@@ -63,9 +63,12 @@ import { sql } from 'drizzle-orm';
 const OWNER_ROLE_PRIORITY = 10000;
 
 const STORE_PERMISSIONS = [
+  { id: 100, code: 'store.admin', scope: 'store', category: 'admin', action: 'manage', ownerOnly: false },
   { id: 101, code: 'products.read', scope: 'store', category: 'products', action: 'read', ownerOnly: false },
   { id: 102, code: 'products.write', scope: 'store', category: 'products', action: 'write', ownerOnly: false },
   { id: 103, code: 'products.edit', scope: 'store', category: 'products', action: 'edit', ownerOnly: false },
+  { id: 104, code: 'products.status', scope: 'store', category: 'products', action: 'manage', ownerOnly: false },
+  { id: 105, code: 'products.archive', scope: 'store', category: 'products', action: 'archive', ownerOnly: false },
   { id: 111, code: 'orders.read', scope: 'store', category: 'orders', action: 'read', ownerOnly: false },
   { id: 112, code: 'orders.edit', scope: 'store', category: 'orders', action: 'edit', ownerOnly: false },
   { id: 121, code: 'analytics.read', scope: 'store', category: 'analytics', action: 'read', ownerOnly: false },
@@ -76,25 +79,32 @@ const STORE_PERMISSIONS = [
   { id: 141, code: 'staff.read', scope: 'store', category: 'staff', action: 'read', ownerOnly: false },
   { id: 142, code: 'staff.write', scope: 'store', category: 'staff', action: 'write', ownerOnly: false },
   { id: 143, code: 'staff.edit', scope: 'store', category: 'staff', action: 'edit', ownerOnly: false },
+  { id: 144, code: 'staff.archive', scope: 'store', category: 'staff', action: 'archive', ownerOnly: false },
   { id: 151, code: 'roles.read', scope: 'store', category: 'roles', action: 'read', ownerOnly: false },
   { id: 152, code: 'roles.write', scope: 'store', category: 'roles', action: 'write', ownerOnly: false },
-  { id: 153, code: 'roles.edit', scope: 'store', category: 'roles', action: 'edit', ownerOnly: false }
+  { id: 153, code: 'roles.edit', scope: 'store', category: 'roles', action: 'edit', ownerOnly: false },
+  { id: 154, code: 'roles.archive', scope: 'store', category: 'roles', action: 'archive', ownerOnly: false }
 ];
 
 const PLATFORM_PERMISSIONS = [
+  { id: 200, code: 'platform.admin', scope: 'platform', category: 'platform_admin', action: 'manage', ownerOnly: false },
   { id: 201, code: 'platform.stores.read', scope: 'platform', category: 'platform_stores', action: 'read', ownerOnly: false },
   { id: 202, code: 'platform.stores.moderate', scope: 'platform', category: 'platform_stores', action: 'manage', ownerOnly: false },
   { id: 203, code: 'platform.categories.manage', scope: 'platform', category: 'platform_stores', action: 'edit', ownerOnly: false },
+  { id: 204, code: 'platform.stores.archive', scope: 'platform', category: 'platform_stores', action: 'archive', ownerOnly: false },
   { id: 211, code: 'platform.users.read', scope: 'platform', category: 'platform_users', action: 'read', ownerOnly: false },
   { id: 212, code: 'platform.users.edit', scope: 'platform', category: 'platform_users', action: 'edit', ownerOnly: false },
+  { id: 213, code: 'platform.users.archive', scope: 'platform', category: 'platform_users', action: 'archive', ownerOnly: false },
   { id: 221, code: 'platform.analytics.read', scope: 'platform', category: 'platform_analytics', action: 'read', ownerOnly: false },
   { id: 222, code: 'platform.analytics.export', scope: 'platform', category: 'platform_analytics', action: 'export', ownerOnly: false },
   { id: 231, code: 'platform.staff.read', scope: 'platform', category: 'platform_staff', action: 'read', ownerOnly: false },
   { id: 232, code: 'platform.staff.write', scope: 'platform', category: 'platform_staff', action: 'write', ownerOnly: false },
   { id: 233, code: 'platform.staff.edit', scope: 'platform', category: 'platform_staff', action: 'edit', ownerOnly: false },
+  { id: 234, code: 'platform.staff.archive', scope: 'platform', category: 'platform_staff', action: 'archive', ownerOnly: false },
   { id: 241, code: 'platform.roles.read', scope: 'platform', category: 'platform_roles', action: 'read', ownerOnly: false },
   { id: 242, code: 'platform.roles.write', scope: 'platform', category: 'platform_roles', action: 'write', ownerOnly: false },
-  { id: 243, code: 'platform.roles.edit', scope: 'platform', category: 'platform_roles', action: 'edit', ownerOnly: false }
+  { id: 243, code: 'platform.roles.edit', scope: 'platform', category: 'platform_roles', action: 'edit', ownerOnly: false },
+  { id: 244, code: 'platform.roles.archive', scope: 'platform', category: 'platform_roles', action: 'archive', ownerOnly: false }
 ];
 
 const ALL_PERMISSIONS = [...STORE_PERMISSIONS, ...PLATFORM_PERMISSIONS];
@@ -202,7 +212,7 @@ async function seed() {
     `);
 
     // 1b. Довідник прав доступу (RBAC Permissions)
-    console.info('🔐 Наповнення довідника прав доступу (29 permissions)...');
+    console.info(`🔐 Наповнення довідника прав доступу (${ALL_PERMISSIONS.length} permissions)...`);
     await db.insert(schema.permissions).values(ALL_PERMISSIONS).onConflictDoNothing();
     const permByCode = new Map(ALL_PERMISSIONS.map((p) => [p.code, p.id]));
 
@@ -853,6 +863,7 @@ async function seed() {
     console.info('👥 Створення ролей (включно з кастомними) та наповнення команд кожного бізнесу...');
     const seedStoreRoles = async (
       storeId: string,
+      managerPermCodes: string[],
       extraRole: {
         name: string;
         icon: string | null;
@@ -905,28 +916,12 @@ async function seed() {
 
       await db.insert(schema.rolePermissions).values([
         ...STORE_PERMISSIONS.map((p) => ({ roleId: ownerR.id, permissionId: p.id })),
-        ...[
-          'products.read',
-          'products.write',
-          'products.edit',
-          'orders.read',
-          'orders.edit',
-          'analytics.read',
-          'analytics.export',
-          'store.read',
-          'store.edit',
-          'staff.read',
-          'staff.write',
-          'staff.edit',
-          'roles.read',
-          'roles.write',
-          'roles.edit'
-        ].map((c) => ({ roleId: managerR.id, permissionId: permByCode.get(c)! })),
+        ...managerPermCodes.map((c) => ({ roleId: managerR.id, permissionId: permByCode.get(c)! })),
         ...extraRole.permCodes.map((c) => ({
           roleId: customTierR.id,
           permissionId: permByCode.get(c)!
         })),
-        ...['products.read', 'orders.read', 'orders.edit', 'store.read'].map((c) => ({
+        ...['products.read', 'orders.read', 'orders.edit'].map((c) => ({
           roleId: staffR.id,
           permissionId: permByCode.get(c)!
         }))
@@ -940,29 +935,81 @@ async function seed() {
       };
     };
 
-    const coffeeRoles = await seedStoreRoles(storeCoffee.id, {
-      name: 'Старший бариста',
-      icon: 'coffee',
-      color: '#d97706',
-      priority: 300,
-      permCodes: ['products.read', 'products.write', 'orders.read', 'orders.edit', 'store.read']
-    });
+    const coffeeRoles = await seedStoreRoles(
+      storeCoffee.id,
+      // Керуючий у кавʼярні має 1 галочку «Адміністратор» (повний доступ крім ownerOnly прав власника)
+      ['store.admin'],
+      {
+        name: 'Старший бариста',
+        icon: 'coffee',
+        color: '#d97706',
+        priority: 300,
+        permCodes: ['products.read', 'products.write', 'orders.read', 'orders.edit']
+      }
+    );
 
-    const techRoles = await seedStoreRoles(storeTech.id, {
-      name: 'Контент-менеджер',
-      icon: 'package',
-      color: '#7c3aed',
-      priority: 250,
-      permCodes: ['products.read', 'products.write', 'products.edit', 'store.read']
-    });
+    const techRoles = await seedStoreRoles(
+      storeTech.id,
+      // Керуючий без store.admin і без архівації персоналу/ролей
+      [
+        'products.read',
+        'products.write',
+        'products.edit',
+        'products.status',
+        'products.archive',
+        'orders.read',
+        'orders.edit',
+        'analytics.read',
+        'analytics.export',
+        'store.read',
+        'store.edit',
+        'staff.read',
+        'staff.write',
+        'staff.edit',
+        'roles.read',
+        'roles.write',
+        'roles.edit'
+      ],
+      {
+        name: 'Контент-менеджер',
+        icon: 'package',
+        color: '#7c3aed',
+        priority: 250,
+        permCodes: ['products.read', 'products.write', 'products.edit', 'products.status']
+      }
+    );
 
-    const bakeryRoles = await seedStoreRoles(storeBakery.id, {
-      name: 'Пекар-технолог',
-      icon: 'flame',
-      color: '#b45309',
-      priority: 250,
-      permCodes: ['products.read', 'products.write', 'products.edit', 'orders.read', 'store.read']
-    });
+    const bakeryRoles = await seedStoreRoles(
+      storeBakery.id,
+      [
+        'products.read',
+        'products.write',
+        'products.edit',
+        'products.status',
+        'products.archive',
+        'orders.read',
+        'orders.edit',
+        'analytics.read',
+        'analytics.export',
+        'store.read',
+        'store.edit',
+        'staff.read',
+        'staff.write',
+        'staff.edit',
+        'staff.archive',
+        'roles.read',
+        'roles.write',
+        'roles.edit',
+        'roles.archive'
+      ],
+      {
+        name: 'Пекар-технолог',
+        icon: 'flame',
+        color: '#b45309',
+        priority: 250,
+        permCodes: ['products.read', 'products.write', 'products.edit', 'orders.read']
+      }
+    );
 
     const insertedMembers = await db
       .insert(schema.storeMembers)
@@ -1059,11 +1106,11 @@ async function seed() {
     const bakeryCourierMember = insertedMembers.find((m) => m.userId === bakeryCourierUser.id)!;
 
     await db.insert(schema.storeMemberPermissions).values([
-      ...['analytics.read', 'analytics.export', 'orders.read', 'store.read'].map((c) => ({
+      ...['analytics.read', 'analytics.export', 'orders.read'].map((c) => ({
         storeMemberId: coffeeAnalystMember.id,
         permissionId: permByCode.get(c)!
       })),
-      ...['orders.read', 'orders.edit', 'store.read'].map((c) => ({
+      ...['orders.read', 'orders.edit'].map((c) => ({
         storeMemberId: bakeryCourierMember.id,
         permissionId: permByCode.get(c)!
       }))
@@ -1539,20 +1586,20 @@ async function seed() {
  👥 ПРАЦІВНИКИ БІЗНЕСІВ (без власних підписок, різні ролі та Custom-доступи):
  ──────────────────────────────────────────────────────────────────────────────────
  [Львівська Кавова Мануфактура]
- • manager.coffee@bizx.ua  | +380672223301 | 💼 Керуючий (priority 500)
+ • manager.coffee@bizx.ua  | +380672223301 | 💼 Керуючий (priority 500, store.admin)
  • barista.coffee@bizx.ua  | +380672223302 | ☕ Старший бариста (priority 300)
- • cashier.coffee@bizx.ua  | +380672223303 | 🛒 Персонал (priority 100)
+ • cashier.coffee@bizx.ua  | +380672223303 | 🛒 Персонал (priority 100, без store.read)
  • analyst.coffee@bizx.ua  | +380672223304 | ⚙️ Custom (аналітика + експорт + замовлення)
 
  [CyberTech Ukraine]
- • manager.tech@bizx.ua    | +380935556601 | 💼 Керуючий (priority 500)
- • content.tech@bizx.ua    | +380935556602 | 📦 Контент-менеджер (priority 250)
- • sales.tech@bizx.ua      | +380935556603 | 🛒 Персонал (priority 100)
+ • manager.tech@bizx.ua    | +380935556601 | 💼 Керуючий (priority 500, без store.admin)
+ • content.tech@bizx.ua    | +380935556602 | 📦 Контент-менеджер (priority 250, товари без archive)
+ • sales.tech@bizx.ua      | +380935556603 | 🛒 Персонал (priority 100, без store.read)
 
  [Хлібна Майстерня]
  • manager.bakery@bizx.ua  | +380668889901 | 💼 Керуючий (priority 500)
- • baker.bakery@bizx.ua    | +380668889902 | 🔥 Пекар-технолог (priority 250)
- • courier.bakery@bizx.ua  | +380668889903 | ⚙️ Custom (замовлення read/edit + магазин)
+ • baker.bakery@bizx.ua    | +380668889902 | 🔥 Пекар-технолог (priority 250, без status/archive)
+ • courier.bakery@bizx.ua  | +380668889903 | ⚙️ Custom (тільки замовлення read/edit)
 
  👤 ЗВИЧАЙНІ КОРИСТУВАЧІ (11 чистих акаунтів БЕЗ підписок, бізнесів і доступів):
  ──────────────────────────────────────────────────────────────────────────────────
