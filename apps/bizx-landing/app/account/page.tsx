@@ -94,6 +94,8 @@ export default function AccountPage() {
   const [isCreatingStore, setIsCreatingStore] = useState(false);
   const [createStoreError, setCreateStoreError] = useState<string | null>(null);
   const [moderationNotice, setModerationNotice] = useState<string | null>(null);
+  const [storeToSuspend, setStoreToSuspend] = useState<Store | null>(null);
+  const [isSuspendingStore, setIsSuspendingStore] = useState(false);
 
   // In-page Auth State for Guests
   const [authLoading, setAuthLoading] = useState(false);
@@ -281,15 +283,30 @@ export default function AccountPage() {
       if (res.success) {
         setModerationNotice(
           nextStatus === 'suspended'
-            ? 'Заклад успішно призупинено'
-            : 'Заклад відправлено на перевірку'
+            ? locale === 'en'
+              ? 'Store suspended. Reactivation will require BizX moderation review.'
+              : 'Заклад успішно призупинено. Повторне ввімкнення можливе лише після перевірки в BizX.'
+            : locale === 'en'
+              ? 'Store submitted for BizX moderation review.'
+              : 'Заклад відправлено на перевірку модераторам BizX.'
         );
         await loadData();
-        setTimeout(() => setModerationNotice(null), 4000);
+        setTimeout(() => setModerationNotice(null), 5000);
       }
     } catch (err: unknown) {
       const errObj = err as { data?: { message?: string }; message?: string };
-      alert(errObj.data?.message || errObj.message || 'Помилка зміни статусу закладу');
+      alert(translateApiError(errObj.data?.message || errObj.message, 'errors.saveFailed'));
+    }
+  };
+
+  const handleConfirmSuspendStore = async () => {
+    if (!storeToSuspend) return;
+    setIsSuspendingStore(true);
+    try {
+      await handleToggleStoreStatus(storeToSuspend.id, storeToSuspend.status);
+      setStoreToSuspend(null);
+    } finally {
+      setIsSuspendingStore(false);
     }
   };
 
@@ -463,29 +480,39 @@ export default function AccountPage() {
                 {menuItems.map((item) => {
                   const Icon = item.icon;
                   const isActive = activeTab === item.id;
+                  const showBusinessAlert =
+                    item.id === 'businesses' &&
+                    Boolean(subDetails?.needsStoreSelection || subDetails?.hasExceededStoreLimit);
                   return (
                     <button
                       key={item.id}
                       onClick={() => setActiveTab(item.id)}
-                      className={`w-full flex items-center gap-3 p-2.5 rounded-lg text-left transition-colors ${
+                      className={`w-full flex items-center justify-between gap-2 p-2.5 rounded-lg text-left transition-colors ${
                         isActive
                           ? 'bg-slate-900 text-white shadow-sm'
                           : 'text-slate-700 hover:bg-slate-100'
                       }`}
                     >
-                      <Icon
-                        className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-slate-400'}`}
-                      />
-                      <div className="min-w-0">
-                        <div className="text-xs font-bold leading-tight">{item.label}</div>
-                        <div
-                          className={`text-[10px] leading-tight truncate ${
-                            isActive ? 'text-slate-300' : 'text-slate-400'
-                          }`}
-                        >
-                          {item.desc}
+                      <div className="flex items-center gap-3 min-w-0">
+                        <Icon
+                          className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-slate-400'}`}
+                        />
+                        <div className="min-w-0">
+                          <div className="text-xs font-bold leading-tight">{item.label}</div>
+                          <div
+                            className={`text-[10px] leading-tight truncate ${
+                              isActive ? 'text-slate-300' : 'text-slate-400'
+                            }`}
+                          >
+                            {item.desc}
+                          </div>
                         </div>
                       </div>
+                      {showBusinessAlert && (
+                        <span className="shrink-0 px-1.5 py-0.5 rounded-full text-[10px] font-black bg-amber-500 text-white">
+                          !
+                        </span>
+                      )}
                     </button>
                   );
                 })}
@@ -701,6 +728,24 @@ export default function AccountPage() {
                     </div>
                   )}
 
+                  {(subDetails?.needsStoreSelection || subDetails?.hasExceededStoreLimit) && (
+                    <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl space-y-1.5 text-xs text-amber-900">
+                      <div className="flex items-center gap-2 font-bold text-amber-950">
+                        <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                        <span>
+                          {locale === 'en'
+                            ? `Action required: select up to ${subDetails.maxAllowedStores} store(s) for your current plan`
+                            : `Потрібна дія: оберіть до ${subDetails.maxAllowedStores} заклад(ів) для вашого поточного тарифу`}
+                        </span>
+                      </div>
+                      <p className="text-[11px] leading-relaxed">
+                        {locale === 'en'
+                          ? 'Your stores were temporarily paused after a plan downgrade. Submit the stores you want to keep active for BizX review, or upgrade your subscription.'
+                          : 'Через пониження тарифу всі заклади було тимчасово призупинено. Оберіть заклади в межах ліміту та відправте їх на перевірку в BizX, або підвищте тариф.'}
+                      </p>
+                    </div>
+                  )}
+
                   {myStores.length === 0 ? (
                     <div className="p-8 text-center border border-dashed border-slate-200 rounded-xl space-y-3">
                       <Building2 className="w-8 h-8 text-slate-400 mx-auto" />
@@ -799,10 +844,10 @@ export default function AccountPage() {
                                 {st.status === 'active' && (
                                   <button
                                     type="button"
-                                    onClick={() => handleToggleStoreStatus(st.id, st.status)}
+                                    onClick={() => setStoreToSuspend(st)}
                                     className="text-[11px] font-bold text-slate-600 hover:text-red-600 transition-colors"
                                   >
-                                    Призупинити
+                                    {t('subscriptions.suspendStore')}
                                   </button>
                                 )}
                                 {st.status === 'suspended' && (
@@ -811,7 +856,7 @@ export default function AccountPage() {
                                     onClick={() => handleToggleStoreStatus(st.id, st.status)}
                                     className="text-[11px] font-bold text-emerald-700 hover:underline transition-colors"
                                   >
-                                    Увімкнути
+                                    {locale === 'en' ? 'Submit for BizX review' : 'На перевірку в BizX'}
                                   </button>
                                 )}
                                 <a
@@ -1368,6 +1413,69 @@ export default function AccountPage() {
                   className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-lg disabled:opacity-50 transition-colors shadow-sm"
                 >
                   {isActivatingSub ? 'Активація...' : 'Підтвердити зміну тарифу'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Confirm Suspend Store */}
+      {storeToSuspend && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
+          <div className="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden">
+            <div className="px-6 py-4 bg-red-50 border-b border-red-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+                <span className="text-xs font-bold text-red-900">
+                  {locale === 'en' ? 'Suspend store?' : 'Призупинити роботу закладу?'}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setStoreToSuspend(null)}
+                className="text-red-400 hover:text-red-700 p-1"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4 text-xs text-slate-700">
+              <p className="leading-relaxed">
+                {locale === 'en' ? (
+                  <>
+                    You are about to pause <strong>{storeToSuspend.name}</strong>. It will be
+                    immediately hidden from customers.
+                  </>
+                ) : (
+                  <>
+                    Ви збираєтесь призупинити роботу закладу <strong>«{storeToSuspend.name}»</strong>.
+                    Він буде миттєво прихований від покупців.
+                  </>
+                )}
+              </p>
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-900 leading-relaxed">
+                <strong>{locale === 'en' ? 'Important:' : 'Важливо:'}</strong>{' '}
+                {locale === 'en'
+                  ? 'You cannot reactivate the store yourself. To turn it back on later, it must be submitted for BizX moderation review.'
+                  : 'Самостійно повернути заклад в активний стан неможливо — для повторного запуску заклад обов’язково проходитиме перевірку модераторами BizX.'}
+              </div>
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setStoreToSuspend(null)}
+                  className="px-3.5 py-2 border border-slate-200 rounded-lg font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  {t('common.cancel')}
+                </button>
+                <button
+                  type="button"
+                  disabled={isSuspendingStore}
+                  onClick={handleConfirmSuspendStore}
+                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold disabled:opacity-50 transition-colors"
+                >
+                  {isSuspendingStore
+                    ? t('common.saving')
+                    : t('subscriptions.suspendStore')}
                 </button>
               </div>
             </div>
