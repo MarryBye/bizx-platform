@@ -3,7 +3,7 @@ import { useAuthStore } from '../store/useAuthStore';
 import { useBusinessStore } from '../store/useBusinessStore';
 import { useTranslation } from '../hooks/useTranslation';
 import { api } from '../lib/api';
-import type { MemberAccessSummary } from '@bizx/common-types';
+import { formatCompactCount, type MemberAccessSummary } from '@bizx/common-types';
 import { Select, LanguageSelector, SidebarAccountMenu } from '@bizx/ui';
 import {
   LayoutDashboard,
@@ -41,6 +41,8 @@ export const DashboardLayout: React.FC = () => {
   const [myAccess, setMyAccess] = useState<MemberAccessSummary | null>(null);
   const [permsLoaded, setPermsLoaded] = useState(false);
   const [ownerHasActiveSub, setOwnerHasActiveSub] = useState<boolean>(true);
+  const [unreadOrdersCount, setUnreadOrdersCount] = useState<number>(0);
+  const [activeDisputesCount, setActiveDisputesCount] = useState<number>(0);
 
   useEffect(() => {
     if (!activeStoreId) {
@@ -83,6 +85,37 @@ export const DashboardLayout: React.FC = () => {
   const isOwnerOrAdmin = Boolean(
     myAccess && (myAccess.isOwner || myPermissions.includes('store.admin'))
   );
+
+  // Адаптивний поллінг непрочитаних повідомлень та спорів для бейджа в лівому меню
+  useEffect(() => {
+    if (!activeStoreId || !permsLoaded || !myPermissions.includes('orders.read')) {
+      setUnreadOrdersCount(0);
+      setActiveDisputesCount(0);
+      return;
+    }
+
+    let cancelled = false;
+    const loadSummary = () => {
+      api.orders
+        .getStoreUnreadSummary(activeStoreId)
+        .then((res) => {
+          if (!cancelled && res.success && res.data) {
+            setUnreadOrdersCount(res.data.totalUnreadMessages);
+            setActiveDisputesCount(res.data.activeDisputesCount);
+          }
+        })
+        .catch(() => {});
+    };
+
+    loadSummary();
+    const timer = window.setInterval(loadSummary, 15000);
+    window.addEventListener('bizx:orders-updated', loadSummary);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+      window.removeEventListener('bizx:orders-updated', loadSummary);
+    };
+  }, [activeStoreId, permsLoaded, myAccess]);
 
   const isStoreInactive = activeStore && activeStore.status !== 'active';
   const isReadOnly = activeStore ? !ownerHasActiveSub : !hasActiveSubscription;
@@ -267,15 +300,35 @@ export const DashboardLayout: React.FC = () => {
                       <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-slate-400'}`} />
                       <span className="truncate">{item.label}</span>
                     </div>
-                    {item.isStub && (
-                      <span
-                        className={`text-[9px] px-1.5 py-0.5 rounded uppercase font-bold shrink-0 ${
-                          isActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-400'
-                        }`}
-                      >
-                        {t('common.soon')}
-                      </span>
-                    )}
+                    <div className="flex items-center gap-1 shrink-0">
+                      {item.id === 'orders' && activeDisputesCount > 0 && (
+                        <span
+                          title={locale === 'en' ? 'Active disputes' : 'Активні спори'}
+                          className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[9px] font-black bg-red-600 text-white"
+                        >
+                          !{formatCompactCount(activeDisputesCount)}
+                        </span>
+                      )}
+                      {item.id === 'orders' && unreadOrdersCount > 0 && (
+                        <span
+                          title={locale === 'en' ? 'Unread messages' : 'Непрочитані повідомлення'}
+                          className={`inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full text-[10px] font-bold ${
+                            isActive ? 'bg-white text-slate-900' : 'bg-blue-600 text-white'
+                          }`}
+                        >
+                          {formatCompactCount(unreadOrdersCount)}
+                        </span>
+                      )}
+                      {item.isStub && (
+                        <span
+                          className={`text-[9px] px-1.5 py-0.5 rounded uppercase font-bold shrink-0 ${
+                            isActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-400'
+                          }`}
+                        >
+                          {t('common.soon')}
+                        </span>
+                      )}
+                    </div>
                   </button>
                 );
               })}
@@ -360,9 +413,15 @@ export const DashboardLayout: React.FC = () => {
                         ? 'This store is inactive because the business subscription has expired or is missing. Editing is locked — you can only view historical data.'
                         : 'Бізнес не працює: термін дії бізнес-підписки закінчився або підписка відсутня. Редагування заблоковано — доступний лише перегляд збережених даних.'
                       : activeStore.status === 'suspended'
-                        ? locale === 'en'
-                          ? 'This store is currently suspended and hidden from shoppers. Submit it for BizX review in your Personal Account to reactivate.'
-                          : 'Заклад призупинено та приховано від покупців. Перейдіть у кабінет BizX, щоб відправити його на перевірку для повторної активації.'
+                        ? activeStore.suspensionReason
+                          ? `${activeStore.suspensionReason}${
+                              activeStore.suspendedUntil
+                                ? ` (${locale === 'en' ? 'Until' : 'До'}: ${new Date(activeStore.suspendedUntil).toLocaleDateString(locale === 'en' ? 'en-US' : 'uk-UA')})`
+                                : ''
+                            }`
+                          : locale === 'en'
+                            ? 'This store is currently suspended and hidden from shoppers. Submit it for BizX review in your Personal Account to reactivate.'
+                            : 'Заклад призупинено та приховано від покупців. Перейдіть у кабінет BizX, щоб відправити його на перевірку для повторної активації.'
                         : activeStore.status === 'pending'
                           ? locale === 'en'
                             ? 'This store is awaiting moderation approval from BizX administrators.'
@@ -417,7 +476,10 @@ export const DashboardLayout: React.FC = () => {
                 />
               )}
               {currentTab === 'orders' && hasPerm('orders.read') && (
-                <OrdersView canEdit={!isReadOnly && hasPerm('orders.edit')} />
+                <OrdersView
+                  canEdit={!isReadOnly && hasPerm('orders.edit')}
+                  canRefund={!isReadOnly && hasPerm('orders.refund')}
+                />
               )}
               {currentTab === 'settings' && hasPerm('store.read') && (
                 <StoreSettingsView

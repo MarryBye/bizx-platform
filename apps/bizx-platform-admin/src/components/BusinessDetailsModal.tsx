@@ -1,12 +1,16 @@
-import React from 'react';
-import type { Store } from '@bizx/common-types';
+import React, { useEffect, useState } from 'react';
+import { platformApi } from '../lib/api';
+import type { Store, StoreStrikeItem } from '@bizx/common-types';
 import {
   X,
   Building2,
   CheckCircle2,
   AlertTriangle,
   Archive,
-  ExternalLink
+  ExternalLink,
+  Star,
+  Zap,
+  RotateCcw
 } from 'lucide-react';
 
 interface BusinessDetailsModalProps {
@@ -17,6 +21,8 @@ interface BusinessDetailsModalProps {
   isUpdating: boolean;
   canModerate?: boolean;
   canArchive?: boolean;
+  canRevokeStrikes?: boolean;
+  onRefresh?: () => Promise<void>;
 }
 
 export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
@@ -26,9 +32,53 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
   onUpdateStatus,
   isUpdating,
   canModerate = false,
-  canArchive = false
+  canArchive = false,
+  canRevokeStrikes = false,
+  onRefresh
 }) => {
+  const [strikes, setStrikes] = useState<StoreStrikeItem[]>([]);
+  const [revokingId, setRevokingId] = useState<string | null>(null);
+  const [revokeReason, setRevokeReason] = useState('');
+  const [isRevoking, setIsRevoking] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen || !business?.id) {
+      setStrikes([]);
+      setRevokingId(null);
+      return;
+    }
+    platformApi.orders
+      .getStoreStrikes(business.id)
+      .then((res) => {
+        if (res.success && res.data) setStrikes(res.data);
+      })
+      .catch(() => setStrikes([]));
+  }, [isOpen, business?.id]);
+
   if (!isOpen || !business) return null;
+
+  const activeStrikesCount = strikes.filter((s) => s.isActive).length;
+
+  const handleRevokeStrike = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!revokingId || revokeReason.trim().length < 3) return;
+    setIsRevoking(true);
+    try {
+      const res = await platformApi.orders.revokeStrike(revokingId, {
+        revokeReason: revokeReason.trim(),
+        liftSuspension: true
+      });
+      if (res.success) {
+        setRevokingId(null);
+        setRevokeReason('');
+        const sRes = await platformApi.orders.getStoreStrikes(business.id);
+        if (sRes.success && sRes.data) setStrikes(sRes.data);
+        await onRefresh?.();
+      }
+    } finally {
+      setIsRevoking(false);
+    }
+  };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -135,13 +185,87 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
 
             <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-xl space-y-1">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                Дата реєстрації
+                Рейтинг та страйки
               </span>
-              <div className="text-xs font-bold text-slate-800">
-                {business.createdAt ? new Date(business.createdAt).toLocaleDateString('uk-UA') : '—'}
+              <div className="flex items-center gap-3 text-xs font-bold text-slate-800">
+                <span className="inline-flex items-center gap-1">
+                  <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-400" />
+                  <span>{(business.ratingAvg ?? 0).toFixed(1)}</span>
+                  <span className="text-slate-400 font-normal">({business.ratingCount ?? 0})</span>
+                </span>
+                <span
+                  className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] border ${
+                    activeStrikesCount >= 2
+                      ? 'bg-rose-100 text-rose-800 border-rose-200'
+                      : 'bg-slate-100 text-slate-600 border-slate-200'
+                  }`}
+                >
+                  <Zap className="w-3 h-3" />
+                  <span>{activeStrikesCount}/3</span>
+                </span>
               </div>
             </div>
           </div>
+
+          {strikes.length > 0 && (
+            <div className="p-3.5 border border-slate-200 rounded-xl bg-white space-y-2">
+              <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                <Zap className="w-3.5 h-3.5 text-amber-500" />
+                <span>Страйки закладу ({activeStrikesCount}/3 активних)</span>
+              </div>
+              <div className="space-y-1.5">
+                {strikes.map((st) => (
+                  <div
+                    key={st.id}
+                    className={`p-2.5 rounded-lg border text-xs flex items-center justify-between gap-2 ${
+                      st.isActive ? 'bg-rose-50/50 border-rose-200' : 'bg-slate-50 border-slate-200 opacity-70'
+                    }`}
+                  >
+                    <div className="min-w-0">
+                      <p className="font-semibold text-slate-800 truncate">{st.reason}</p>
+                      <p className="text-[10px] text-slate-400">
+                        {new Date(st.createdAt).toLocaleDateString('uk-UA')} •{' '}
+                        {st.isActive ? 'Активний' : 'Знято'}
+                      </p>
+                    </div>
+                    {st.isActive && canRevokeStrikes && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRevokingId(st.id);
+                          setRevokeReason('');
+                        }}
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded border border-slate-300 bg-white hover:bg-slate-900 hover:text-white text-[10px] font-bold shrink-0"
+                      >
+                        <RotateCcw className="w-3 h-3" />
+                        <span>Зняти</span>
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {revokingId && (
+                <form onSubmit={handleRevokeStrike} className="pt-2 flex items-center gap-2">
+                  <input
+                    type="text"
+                    required
+                    minLength={3}
+                    value={revokeReason}
+                    onChange={(e) => setRevokeReason(e.target.value)}
+                    placeholder="Причина зняття страйку..."
+                    className="flex-1 px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg"
+                  />
+                  <button
+                    type="submit"
+                    disabled={isRevoking}
+                    className="px-3 py-1.5 bg-slate-900 text-white text-xs font-bold rounded-lg"
+                  >
+                    OK
+                  </button>
+                </form>
+              )}
+            </div>
+          )}
 
           {/* Description if present */}
           {business.description && (

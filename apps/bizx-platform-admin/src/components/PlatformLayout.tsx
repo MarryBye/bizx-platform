@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { platformApi } from '../lib/api';
 import { useTranslation } from '../hooks/useTranslation';
-import type { UserProfile } from '@bizx/common-types';
+import { formatCompactCount, type UserProfile } from '@bizx/common-types';
 import { LanguageSelector, SidebarAccountMenu } from '@bizx/ui';
 import {
   LayoutDashboard,
   BarChart3,
   Building2,
   Users,
+  Scale,
   ShieldCheck,
   KeyRound,
   Menu,
@@ -15,7 +16,14 @@ import {
   ExternalLink
 } from 'lucide-react';
 
-export type PlatformTab = 'metrics' | 'analytics' | 'businesses' | 'users' | 'staff' | 'roles';
+export type PlatformTab =
+  | 'metrics'
+  | 'analytics'
+  | 'businesses'
+  | 'users'
+  | 'disputes'
+  | 'staff'
+  | 'roles';
 
 interface PlatformLayoutProps {
   currentTab: PlatformTab;
@@ -24,6 +32,7 @@ interface PlatformLayoutProps {
   myPermissions?: string[] | null;
   myRoleName?: string | null;
   permsLoaded?: boolean;
+  pendingDisputesCount?: number;
   onLogout: () => void;
   children: React.ReactNode;
 }
@@ -35,6 +44,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({
   myPermissions,
   myRoleName,
   permsLoaded = true,
+  pendingDisputesCount = 0,
   onLogout,
   children
 }) => {
@@ -52,6 +62,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({
     { id: 'analytics' as const, label: t('platform.tabAnalytics'), icon: BarChart3, visible: hasPerm('platform.analytics.read') },
     { id: 'businesses' as const, label: t('platform.tabBusinesses'), icon: Building2, visible: hasPerm('platform.stores.read') },
     { id: 'users' as const, label: t('platform.tabUsers'), icon: Users, visible: hasPerm('platform.users.read') },
+    { id: 'disputes' as const, label: t('platform.tabDisputes'), icon: Scale, visible: hasPerm('platform.disputes.read') },
     { id: 'staff' as const, label: t('platform.tabStaff'), icon: ShieldCheck, visible: hasPerm('platform.staff.read') },
     { id: 'roles' as const, label: t('platform.tabRoles'), icon: KeyRound, visible: hasPerm('platform.roles.read') }
   ].filter((item) => item.visible);
@@ -143,14 +154,25 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({
                       onTabChange(item.id);
                       setIsMobileMenuOpen(false);
                     }}
-                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-bold transition-all text-left ${
+                    className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all text-left ${
                       isActive
                         ? 'bg-slate-900 text-white shadow-sm'
                         : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                     }`}
                   >
-                    <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-slate-400'}`} />
-                    <span className="truncate">{item.label}</span>
+                    <span className="flex items-center gap-3 min-w-0">
+                      <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+                      <span className="truncate">{item.label}</span>
+                    </span>
+                    {item.id === 'disputes' && pendingDisputesCount > 0 && (
+                      <span
+                        className={`inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full text-[10px] font-bold shrink-0 ${
+                          isActive ? 'bg-white text-slate-900' : 'bg-red-600 text-white'
+                        }`}
+                      >
+                        {formatCompactCount(pendingDisputesCount)}
+                      </span>
+                    )}
                   </button>
                 );
               })

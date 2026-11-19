@@ -14,6 +14,7 @@ import { PlatformAnalyticsView } from './views/PlatformAnalyticsView';
 import { PlatformRolesView } from './views/PlatformRolesView';
 import { BusinessesView, type ExtendedBusiness } from './views/BusinessesView';
 import { UsersView } from './views/UsersView';
+import { DisputesView } from './views/DisputesView';
 import { StaffView } from './views/StaffView';
 import { LoginView } from './views/LoginView';
 import { BusinessDetailsModal } from './components/BusinessDetailsModal';
@@ -44,6 +45,7 @@ export const App: React.FC = () => {
 
   // Users State (loaded from real DB /platform/users)
   const [usersList, setUsersList] = useState<PlatformUserRecord[]>([]);
+  const [pendingDisputesCount, setPendingDisputesCount] = useState<number>(0);
 
   const myPermissions = myAccess?.permissions ?? [];
   const hasPerm = (code: string) => Boolean(myAccess && myPermissions.includes(code));
@@ -153,6 +155,7 @@ export const App: React.FC = () => {
     }
     if (myAccess.permissions.includes('platform.stores.read')) allowedTabs.push('businesses');
     if (myAccess.permissions.includes('platform.users.read')) allowedTabs.push('users');
+    if (myAccess.permissions.includes('platform.disputes.read')) allowedTabs.push('disputes');
     if (myAccess.permissions.includes('platform.staff.read')) allowedTabs.push('staff');
     if (myAccess.permissions.includes('platform.roles.read')) allowedTabs.push('roles');
 
@@ -160,6 +163,29 @@ export const App: React.FC = () => {
       setActiveTab(allowedTabs[0]);
     }
   }, [permsLoaded, myAccess, activeTab]);
+
+  // Poll pending escalated disputes count for sidebar badge
+  const refreshDisputesSummary = useCallback(() => {
+    if (!myAccess?.permissions.includes('platform.disputes.read')) {
+      setPendingDisputesCount(0);
+      return;
+    }
+    platformApi.orders
+      .getPlatformDisputesSummary()
+      .then((res) => {
+        if (res.success && res.data) {
+          setPendingDisputesCount(res.data.pendingEscalatedCount);
+        }
+      })
+      .catch(() => {});
+  }, [myAccess]);
+
+  useEffect(() => {
+    refreshDisputesSummary();
+    if (!myAccess?.permissions.includes('platform.disputes.read')) return;
+    const timer = window.setInterval(refreshDisputesSummary, 15000);
+    return () => window.clearInterval(timer);
+  }, [myAccess, refreshDisputesSummary]);
 
   // Check auth on mount
   useEffect(() => {
@@ -327,6 +353,7 @@ export const App: React.FC = () => {
       myPermissions={myPermissions}
       myRoleName={myAccess?.roleName}
       permsLoaded={permsLoaded}
+      pendingDisputesCount={pendingDisputesCount}
       onLogout={handleLogout}
     >
       {actionError && (
@@ -401,6 +428,17 @@ export const App: React.FC = () => {
             />
           )}
 
+          {activeTab === 'disputes' && hasPerm('platform.disputes.read') && (
+            <DisputesView
+              canResolve={hasPerm('platform.disputes.resolve')}
+              canRevokeStrikes={hasPerm('platform.strikes.revoke')}
+              onDisputesChanged={() => {
+                refreshDisputesSummary();
+                void loadPlatformData();
+              }}
+            />
+          )}
+
           {activeTab === 'staff' && hasPerm('platform.staff.read') && (
             <StaffView currentUserId={currentUser.id} />
           )}
@@ -421,6 +459,8 @@ export const App: React.FC = () => {
         isUpdating={isUpdatingBusinessStatus}
         canModerate={hasPerm('platform.stores.moderate')}
         canArchive={hasPerm('platform.stores.archive')}
+        canRevokeStrikes={hasPerm('platform.strikes.revoke')}
+        onRefresh={loadPlatformData}
       />
 
       {/* User Details Modal */}

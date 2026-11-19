@@ -2,15 +2,28 @@ import React, { useState, useEffect } from 'react';
 import { useBusinessStore } from '../store/useBusinessStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { useTranslation } from '../hooks/useTranslation';
+import { api } from '../lib/api';
+import type { DomainVerificationResult } from '@bizx/common-types';
 import { Card, CardHeader, CardTitle, CardContent, Button, Input, Textarea, PhoneInput } from '@bizx/ui';
-import { Upload, Check, AlertCircle, Building, Image as ImageIcon } from 'lucide-react';
+import {
+  Upload,
+  Check,
+  AlertCircle,
+  Building,
+  Image as ImageIcon,
+  Globe,
+  ExternalLink,
+  Copy,
+  RefreshCw,
+  CheckCircle2
+} from 'lucide-react';
 import { StoreMediaImage } from '../components/StoreMediaImage';
 
 export const StoreSettingsView: React.FC<{ isReadOnly?: boolean; canEdit?: boolean }> = ({
   isReadOnly: isReadOnlyProp,
   canEdit: canEditProp
 }) => {
-  const { activeStore, uploadStoreMedia, updateStore, isLoading } = useBusinessStore();
+  const { activeStore, uploadStoreMedia, updateStore, fetchStores, isLoading } = useBusinessStore();
   const { hasActiveSubscription } = useAuthStore();
   const { t, locale } = useTranslation();
   const isReadOnly = isReadOnlyProp !== undefined ? isReadOnlyProp : !hasActiveSubscription;
@@ -21,6 +34,13 @@ export const StoreSettingsView: React.FC<{ isReadOnly?: boolean; canEdit?: boole
   const [address, setAddress] = useState(activeStore?.address || '');
   const [phone, setPhone] = useState(activeStore?.phone || '');
   const [email, setEmail] = useState(activeStore?.email || '');
+
+  // Custom domain state
+  const [customDomain, setCustomDomain] = useState(activeStore?.customDomain || '');
+  const [isSavingDomain, setIsSavingDomain] = useState(false);
+  const [isVerifyingDomain, setIsVerifyingDomain] = useState(false);
+  const [domainResult, setDomainResult] = useState<DomainVerificationResult | null>(null);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [bannerPreview, setBannerPreview] = useState<string | null>(null);
@@ -45,6 +65,8 @@ export const StoreSettingsView: React.FC<{ isReadOnly?: boolean; canEdit?: boole
     setAddress(activeStore?.address || '');
     setPhone(activeStore?.phone || '');
     setEmail(activeStore?.email || '');
+    setCustomDomain(activeStore?.customDomain || '');
+    setDomainResult(null);
   }, [activeStore]);
 
   // Очищення blob URL при розмонтуванні компонента
@@ -146,6 +168,65 @@ export const StoreSettingsView: React.FC<{ isReadOnly?: boolean; canEdit?: boole
     } else {
       setStatusMessage({ text: 'Помилка збереження даних магазину', isError: true });
     }
+  };
+
+  const handleSaveDomain = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeStore || !canEdit) return;
+    setIsSavingDomain(true);
+    setStatusMessage(null);
+    setDomainResult(null);
+    try {
+      const res = await api.stores.updateDomain(activeStore.id, {
+        customDomain: customDomain.trim() ? customDomain.trim().toLowerCase() : null
+      });
+      if (res.success) {
+        await fetchStores();
+        setStatusMessage({
+          text: customDomain.trim()
+            ? locale === 'en'
+              ? 'Custom domain saved. Add the DNS records below and click Verify.'
+              : 'Власний домен збережено. Додайте DNS-записи нижче та натисніть «Перевірити DNS».'
+            : locale === 'en'
+              ? 'Custom domain removed.'
+              : 'Власний домен відв’язано.'
+        });
+      }
+    } catch (err: any) {
+      setStatusMessage({
+        text: err?.data?.message || err?.message || 'Помилка збереження домену',
+        isError: true
+      });
+    } finally {
+      setIsSavingDomain(false);
+    }
+  };
+
+  const handleVerifyDomain = async () => {
+    if (!activeStore || !canEdit) return;
+    setIsVerifyingDomain(true);
+    try {
+      const res = await api.stores.verifyDomain(activeStore.id);
+      if (res.success && res.data) {
+        setDomainResult(res.data);
+        if (res.data.verified) {
+          await fetchStores();
+        }
+      }
+    } catch (err: any) {
+      setStatusMessage({
+        text: err?.data?.message || err?.message || 'Не вдалося перевірити DNS',
+        isError: true
+      });
+    } finally {
+      setIsVerifyingDomain(false);
+    }
+  };
+
+  const copyText = (key: string, val: string) => {
+    navigator.clipboard?.writeText(val).catch(() => {});
+    setCopiedKey(key);
+    setTimeout(() => setCopiedKey(null), 1800);
   };
 
   return (
@@ -330,6 +411,182 @@ export const StoreSettingsView: React.FC<{ isReadOnly?: boolean; canEdit?: boole
               </div>
             )}
           </form>
+        </CardContent>
+      </Card>
+
+      {/* Storefront Web Address & Custom Domain */}
+      <Card className="border-slate-200 shadow-sm">
+        <CardHeader>
+          <CardTitle className="text-base flex items-center justify-between gap-2 flex-wrap">
+            <span className="flex items-center gap-2">
+              <Globe className="w-4 h-4 text-slate-600" />
+              <span>
+                {locale === 'en'
+                  ? 'Web Storefront & Custom Domain'
+                  : 'Веб-вітрина та власний домен'}
+              </span>
+            </span>
+            <a
+              href={`http://localhost:3100/store/${activeStore.slug}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-600 hover:text-blue-800"
+            >
+              <span>{locale === 'en' ? 'Open storefront' : 'Відкрити веб-сайт закладу'}</span>
+              <ExternalLink className="w-3.5 h-3.5" />
+            </a>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+            <div>
+              <span className="text-[10px] font-bold uppercase text-slate-400 block">
+                {locale === 'en' ? 'Default BizX address' : 'Базова адреса на BizX'}
+              </span>
+              <span className="font-mono font-bold text-slate-900">
+                https://{activeStore.slug}.bizx.ua
+              </span>
+            </div>
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 self-start sm:self-center">
+              <CheckCircle2 className="w-3 h-3" />
+              <span>{t('common.active')}</span>
+            </span>
+          </div>
+
+          <form onSubmit={handleSaveDomain} className="space-y-3">
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-slate-700">
+                {locale === 'en'
+                  ? 'Custom domain (purchased at any registrar)'
+                  : 'Власний домен (придбаний у будь-якого реєстратора)'}
+              </label>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <Input
+                  disabled={!canEdit}
+                  value={customDomain}
+                  onChange={(e) => setCustomDomain(e.target.value)}
+                  placeholder="shop.mycoffee.ua"
+                />
+                {canEdit && (
+                  <Button type="submit" disabled={isSavingDomain} className="shrink-0">
+                    {isSavingDomain ? t('common.saving') : t('common.save')}
+                  </Button>
+                )}
+              </div>
+              <p className="text-[11px] text-slate-500">
+                {locale === 'en'
+                  ? 'Enter your domain without https:// (e.g. shop.mycoffee.ua). You will receive DNS records to connect it at your registrar.'
+                  : 'Вкажіть домен без https:// (наприклад, shop.mycoffee.ua). Після збереження з’являться DNS-записи для налаштування у вашого реєстратора.'}
+              </p>
+            </div>
+          </form>
+
+          {activeStore.customDomain && (
+            <div className="p-4 rounded-xl border border-slate-200 bg-white space-y-3">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-xs font-bold text-slate-900">
+                    {activeStore.customDomain}
+                  </span>
+                  {activeStore.customDomainVerified ? (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      <CheckCircle2 className="w-3 h-3" />
+                      {locale === 'en' ? 'Verified' : 'Підтверджено'}
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                      {locale === 'en' ? 'Pending DNS' : 'Очікує налаштування DNS'}
+                    </span>
+                  )}
+                </div>
+
+                {canEdit && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={isVerifyingDomain}
+                    onClick={handleVerifyDomain}
+                    className="inline-flex items-center gap-1.5 text-xs font-bold"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isVerifyingDomain ? 'animate-spin' : ''}`} />
+                    <span>{locale === 'en' ? 'Verify DNS' : 'Перевірити DNS'}</span>
+                  </Button>
+                )}
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-[11px] border border-slate-200 rounded-lg overflow-hidden">
+                  <thead className="bg-slate-50 text-slate-500 font-bold uppercase">
+                    <tr>
+                      <th className="py-2 px-3">Тип</th>
+                      <th className="py-2 px-3">Ім’я / Host</th>
+                      <th className="py-2 px-3">Значення / Target</th>
+                      <th className="py-2 px-3 w-10" />
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 font-mono">
+                    <tr>
+                      <td className="py-2 px-3 font-bold text-slate-900">CNAME</td>
+                      <td className="py-2 px-3 text-slate-700">{activeStore.customDomain}</td>
+                      <td className="py-2 px-3 text-slate-900">shops.bizx.ua</td>
+                      <td className="py-2 px-3">
+                        <button
+                          type="button"
+                          onClick={() => copyText('cname', 'shops.bizx.ua')}
+                          className="text-slate-400 hover:text-slate-900"
+                          title="Copy"
+                        >
+                          {copiedKey === 'cname' ? (
+                            <Check className="w-3.5 h-3.5 text-emerald-600" />
+                          ) : (
+                            <Copy className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+                      </td>
+                    </tr>
+                    {activeStore.domainVerificationToken && (
+                      <tr>
+                        <td className="py-2 px-3 font-bold text-slate-900">TXT</td>
+                        <td className="py-2 px-3 text-slate-700">
+                          _bizx-verify.{activeStore.customDomain}
+                        </td>
+                        <td className="py-2 px-3 text-slate-900 break-all">
+                          {activeStore.domainVerificationToken}
+                        </td>
+                        <td className="py-2 px-3">
+                          <button
+                            type="button"
+                            onClick={() => copyText('txt', activeStore.domainVerificationToken || '')}
+                            className="text-slate-400 hover:text-slate-900"
+                            title="Copy"
+                          >
+                            {copiedKey === 'txt' ? (
+                              <Check className="w-3.5 h-3.5 text-emerald-600" />
+                            ) : (
+                              <Copy className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {domainResult && (
+                <div
+                  className={`p-2.5 rounded-lg text-xs border ${
+                    domainResult.verified
+                      ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                      : 'bg-amber-50 border-amber-200 text-amber-900'
+                  }`}
+                >
+                  {domainResult.message}
+                </div>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

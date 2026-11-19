@@ -1,8 +1,10 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useBusinessStore } from '../store/useBusinessStore';
 import { useTranslation } from '../hooks/useTranslation';
+import { api } from '../lib/api';
+import type { StoreReviewsResponse } from '@bizx/common-types';
 import { Card, CardHeader, CardTitle, CardContent, Badge, Button } from '@bizx/ui';
-import { DollarSign, ShoppingBag, TrendingUp, PackageCheck, Calendar, BarChart3 } from 'lucide-react';
+import { DollarSign, ShoppingBag, TrendingUp, PackageCheck, Calendar, BarChart3, Star } from 'lucide-react';
 
 interface AnalyticsViewProps {
   onOpenDetailed?: () => void;
@@ -11,6 +13,20 @@ interface AnalyticsViewProps {
 export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ onOpenDetailed }) => {
   const { analytics, activeStore, products } = useBusinessStore();
   const { t, locale } = useTranslation();
+  const [reviewsData, setReviewsData] = useState<StoreReviewsResponse | null>(null);
+
+  useEffect(() => {
+    if (!activeStore?.id) {
+      setReviewsData(null);
+      return;
+    }
+    api.stores
+      .getReviews(activeStore.id)
+      .then((res) => {
+        if (res.success && res.data) setReviewsData(res.data);
+      })
+      .catch(() => {});
+  }, [activeStore?.id]);
 
   const formatPrice = (kopecks: number) => {
     return (kopecks / 100).toLocaleString(locale === 'en' ? 'en-US' : 'uk-UA', {
@@ -242,6 +258,66 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ onOpenDetailed }) 
             </div>
           ) : (
             <p className="text-xs text-slate-400 py-4 text-center">{t('admin.noTopProducts')}</p>
+          )}
+        </CardContent>
+      </Card>
+      {/* Store Star Rating & Customer Reviews */}
+      <Card className="border-slate-200 shadow-sm">
+        <CardHeader className="flex flex-row items-center justify-between gap-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Star className="w-4 h-4 text-amber-500 fill-amber-400" />
+            <span>{locale === 'en' ? 'Store Rating & Reviews' : 'Рейтинг закладу та відгуки'}</span>
+          </CardTitle>
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200">
+            <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-400" />
+            <span className="text-xs font-black text-amber-900">
+              {(reviewsData?.ratingAvg ?? activeStore.ratingAvg ?? 0).toFixed(1)}
+            </span>
+            <span className="text-[11px] font-medium text-amber-700">
+              ({reviewsData?.ratingCount ?? activeStore.ratingCount ?? 0})
+            </span>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {reviewsData && reviewsData.reviews.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {reviewsData.reviews.slice(0, 4).map((rev) => (
+                <div
+                  key={rev.id}
+                  className="p-3 rounded-xl border border-slate-100 bg-slate-50/70 space-y-1.5"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-bold text-slate-900 truncate">
+                      {rev.customerName}
+                    </span>
+                    <div className="flex items-center gap-0.5 shrink-0">
+                      {[1, 2, 3, 4, 5].map((starIdx) => (
+                        <Star
+                          key={starIdx}
+                          className={`w-3 h-3 ${
+                            starIdx <= rev.rating
+                              ? 'text-amber-500 fill-amber-400'
+                              : 'text-slate-300'
+                          }`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                  {rev.comment && (
+                    <p className="text-xs text-slate-600 leading-relaxed">{rev.comment}</p>
+                  )}
+                  <p className="text-[10px] text-slate-400">
+                    {new Date(rev.createdAt).toLocaleDateString(locale === 'en' ? 'en-US' : 'uk-UA')}
+                  </p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-slate-400 py-4 text-center">
+              {locale === 'en'
+                ? 'No customer ratings yet. Reviews appear after delivered orders.'
+                : 'Оцінок поки немає. Відгуки з’являються після успішно виконаних замовлень.'}
+            </p>
           )}
         </CardContent>
       </Card>
