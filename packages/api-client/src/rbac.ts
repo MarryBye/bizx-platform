@@ -18,8 +18,10 @@ export interface PlatformUserListItem {
   name: string;
   email: string;
   phone: string | null;
-  role: string;
-  systemRole: string;
+  isPlatformStaff: boolean;
+  platformRoleName: string | null;
+  isBusinessOwner: boolean;
+  storesCount: number;
   status: 'active' | 'suspended' | 'archived';
   subscriptionTier: string;
   subscriptionStatus: string;

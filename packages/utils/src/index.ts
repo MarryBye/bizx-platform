@@ -583,6 +583,85 @@ export const uk = {
     orderNotes: 'Коментар до замовлення',
     totalToPay: 'До сплати',
     phoneSaved: 'Номер телефону збережено'
+  },
+  permissions: {
+    products: {
+      read: 'Перегляд товарів та категорій',
+      write: 'Додавання нових товарів та категорій',
+      edit: 'Редагування та архівація товарів'
+    },
+    orders: {
+      read: 'Перегляд замовлень клієнтів',
+      edit: 'Зміна статусів замовлень та оплати'
+    },
+    analytics: {
+      read: 'Перегляд дашборду та статистики продажів',
+      export: 'Експорт аналітики в Excel / CSV'
+    },
+    store: {
+      read: 'Перегляд даних та налаштувань закладу',
+      edit: 'Редагування даних, логотипу та банера',
+      status: {
+        manage: 'Керування статусом закладу (пауза / модерація)'
+      }
+    },
+    staff: {
+      read: 'Перегляд списку працівників',
+      write: 'Додавання нових працівників',
+      edit: 'Редагування ролей та архівація працівників'
+    },
+    roles: {
+      read: 'Перегляд ролей та їх прав',
+      write: 'Створення нових ролей',
+      edit: 'Редагування, пріоритет та архівація ролей'
+    },
+    platform: {
+      stores: {
+        read: 'Перегляд усіх торгових точок платформи',
+        moderate: 'Модерація та зміна статусів закладів'
+      },
+      categories: {
+        manage: 'Керування категоріями закладів'
+      },
+      users: {
+        read: 'Перегляд реєстру користувачів BizX ID',
+        edit: 'Блокування та керування користувачами'
+      },
+      analytics: {
+        read: 'Перегляд метрик та аналітики платформи',
+        export: 'Експорт платформних звітів у Excel / CSV'
+      },
+      staff: {
+        read: 'Перегляд команди платформи BizX',
+        write: 'Додавання співробітників BizX',
+        edit: 'Редагування ролей та архівація команди BizX'
+      },
+      roles: {
+        read: 'Перегляд ролей платформи',
+        write: 'Створення ролей платформи',
+        edit: 'Редагування, пріоритет та архівація ролей'
+      }
+    }
+  },
+  permissionCategories: {
+    products: 'Товари та каталог',
+    orders: 'Замовлення',
+    analytics: 'Статистика та аналітика',
+    store: 'Налаштування закладу',
+    staff: 'Команда та працівники',
+    roles: 'Ролі та ієрархія',
+    platform_stores: 'Торгові точки платформи',
+    platform_users: 'Користувачі BizX ID',
+    platform_analytics: 'Аналітика платформи',
+    platform_staff: 'Команда BizX',
+    platform_roles: 'Ролі платформи'
+  },
+  permissionActions: {
+    read: 'Читання',
+    write: 'Створення',
+    edit: 'Редагування',
+    manage: 'Керування',
+    export: 'Експорт'
   }
 };
 
@@ -1122,6 +1201,85 @@ export const en: typeof uk = {
     orderNotes: 'Order notes',
     totalToPay: 'Total to pay',
     phoneSaved: 'Phone number saved'
+  },
+  permissions: {
+    products: {
+      read: 'View products & categories',
+      write: 'Create products & categories',
+      edit: 'Edit & archive products'
+    },
+    orders: {
+      read: 'View customer orders',
+      edit: 'Update order & payment statuses'
+    },
+    analytics: {
+      read: 'View dashboard & sales analytics',
+      export: 'Export analytics to Excel / CSV'
+    },
+    store: {
+      read: 'View store settings & details',
+      edit: 'Edit store info, logo & banner',
+      status: {
+        manage: 'Manage store status (pause / submit review)'
+      }
+    },
+    staff: {
+      read: 'View store team members',
+      write: 'Add new team members',
+      edit: 'Edit roles & archive team members'
+    },
+    roles: {
+      read: 'View roles & permissions',
+      write: 'Create new roles',
+      edit: 'Edit, reorder & archive roles'
+    },
+    platform: {
+      stores: {
+        read: 'View all platform stores',
+        moderate: 'Moderate & change store statuses'
+      },
+      categories: {
+        manage: 'Manage store categories'
+      },
+      users: {
+        read: 'View BizX ID users registry',
+        edit: 'Suspend & manage users'
+      },
+      analytics: {
+        read: 'View platform metrics & analytics',
+        export: 'Export platform reports to Excel / CSV'
+      },
+      staff: {
+        read: 'View BizX platform team',
+        write: 'Add BizX platform staff',
+        edit: 'Edit roles & archive BizX staff'
+      },
+      roles: {
+        read: 'View platform roles',
+        write: 'Create platform roles',
+        edit: 'Edit, reorder & archive platform roles'
+      }
+    }
+  },
+  permissionCategories: {
+    products: 'Products & Catalog',
+    orders: 'Orders',
+    analytics: 'Analytics & Reports',
+    store: 'Store Settings',
+    staff: 'Team & Staff',
+    roles: 'Roles & Hierarchy',
+    platform_stores: 'Platform Stores',
+    platform_users: 'BizX ID Users',
+    platform_analytics: 'Platform Analytics',
+    platform_staff: 'BizX Staff',
+    platform_roles: 'Platform Roles'
+  },
+  permissionActions: {
+    read: 'Read',
+    write: 'Create',
+    edit: 'Edit',
+    manage: 'Manage',
+    export: 'Export'
   }
 };
 
