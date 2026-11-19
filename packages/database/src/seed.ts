@@ -5,6 +5,45 @@ import { drizzle } from 'drizzle-orm/postgres-js';
 import * as schema from './schema/index.js';
 import { sql } from 'drizzle-orm';
 
+const OWNER_ROLE_PRIORITY = 10000;
+
+const STORE_PERMISSIONS = [
+  { id: 101, code: 'products.read', scope: 'store', category: 'products', action: 'read', ownerOnly: false, descriptionUk: 'Перегляд товарів та категорій', descriptionEn: 'View products & categories' },
+  { id: 102, code: 'products.write', scope: 'store', category: 'products', action: 'write', ownerOnly: false, descriptionUk: 'Додавання нових товарів та категорій', descriptionEn: 'Create products & categories' },
+  { id: 103, code: 'products.edit', scope: 'store', category: 'products', action: 'edit', ownerOnly: false, descriptionUk: 'Редагування та архівація товарів', descriptionEn: 'Edit & archive products' },
+  { id: 111, code: 'orders.read', scope: 'store', category: 'orders', action: 'read', ownerOnly: false, descriptionUk: 'Перегляд замовлень клієнтів', descriptionEn: 'View customer orders' },
+  { id: 112, code: 'orders.edit', scope: 'store', category: 'orders', action: 'edit', ownerOnly: false, descriptionUk: 'Зміна статусів замовлень та оплати', descriptionEn: 'Update order & payment statuses' },
+  { id: 121, code: 'analytics.read', scope: 'store', category: 'analytics', action: 'read', ownerOnly: false, descriptionUk: 'Перегляд дашборду та статистики продажів', descriptionEn: 'View dashboard & sales analytics' },
+  { id: 122, code: 'analytics.export', scope: 'store', category: 'analytics', action: 'export', ownerOnly: false, descriptionUk: 'Експорт аналітики в Excel / CSV', descriptionEn: 'Export analytics to Excel / CSV' },
+  { id: 131, code: 'store.read', scope: 'store', category: 'store', action: 'read', ownerOnly: false, descriptionUk: 'Перегляд даних та налаштувань закладу', descriptionEn: 'View store settings & details' },
+  { id: 132, code: 'store.edit', scope: 'store', category: 'store', action: 'edit', ownerOnly: false, descriptionUk: 'Редагування даних, логотипу та банера', descriptionEn: 'Edit store info, logo & banner' },
+  { id: 133, code: 'store.status.manage', scope: 'store', category: 'store', action: 'manage', ownerOnly: true, descriptionUk: 'Керування статусом закладу (пауза / модерація)', descriptionEn: 'Manage store status (pause / submit review)' },
+  { id: 141, code: 'staff.read', scope: 'store', category: 'staff', action: 'read', ownerOnly: false, descriptionUk: 'Перегляд списку працівників', descriptionEn: 'View store team members' },
+  { id: 142, code: 'staff.write', scope: 'store', category: 'staff', action: 'write', ownerOnly: false, descriptionUk: 'Додавання нових працівників', descriptionEn: 'Add new team members' },
+  { id: 143, code: 'staff.edit', scope: 'store', category: 'staff', action: 'edit', ownerOnly: false, descriptionUk: 'Редагування ролей та архівація працівників', descriptionEn: 'Edit roles & archive team members' },
+  { id: 151, code: 'roles.read', scope: 'store', category: 'roles', action: 'read', ownerOnly: false, descriptionUk: 'Перегляд ролей та їх прав', descriptionEn: 'View roles & permissions' },
+  { id: 152, code: 'roles.write', scope: 'store', category: 'roles', action: 'write', ownerOnly: false, descriptionUk: 'Створення нових ролей', descriptionEn: 'Create new roles' },
+  { id: 153, code: 'roles.edit', scope: 'store', category: 'roles', action: 'edit', ownerOnly: false, descriptionUk: 'Редагування, пріоритет та архівація ролей', descriptionEn: 'Edit, reorder & archive roles' }
+];
+
+const PLATFORM_PERMISSIONS = [
+  { id: 201, code: 'platform.stores.read', scope: 'platform', category: 'platform_stores', action: 'read', ownerOnly: false, descriptionUk: 'Перегляд усіх торгових точок платформи', descriptionEn: 'View all platform stores' },
+  { id: 202, code: 'platform.stores.moderate', scope: 'platform', category: 'platform_stores', action: 'manage', ownerOnly: false, descriptionUk: 'Модерація та зміна статусів закладів', descriptionEn: 'Moderate & change store statuses' },
+  { id: 203, code: 'platform.categories.manage', scope: 'platform', category: 'platform_stores', action: 'edit', ownerOnly: false, descriptionUk: 'Керування категоріями закладів', descriptionEn: 'Manage store categories' },
+  { id: 211, code: 'platform.users.read', scope: 'platform', category: 'platform_users', action: 'read', ownerOnly: false, descriptionUk: 'Перегляд реєстру користувачів BizX ID', descriptionEn: 'View BizX ID users registry' },
+  { id: 212, code: 'platform.users.edit', scope: 'platform', category: 'platform_users', action: 'edit', ownerOnly: false, descriptionUk: 'Блокування та керування користувачами', descriptionEn: 'Suspend & manage users' },
+  { id: 221, code: 'platform.analytics.read', scope: 'platform', category: 'platform_analytics', action: 'read', ownerOnly: false, descriptionUk: 'Перегляд метрик та аналітики платформи', descriptionEn: 'View platform metrics & analytics' },
+  { id: 222, code: 'platform.analytics.export', scope: 'platform', category: 'platform_analytics', action: 'export', ownerOnly: false, descriptionUk: 'Експорт платформних звітів у Excel / CSV', descriptionEn: 'Export platform reports to Excel / CSV' },
+  { id: 231, code: 'platform.staff.read', scope: 'platform', category: 'platform_staff', action: 'read', ownerOnly: false, descriptionUk: 'Перегляд команди платформи BizX', descriptionEn: 'View BizX platform team' },
+  { id: 232, code: 'platform.staff.write', scope: 'platform', category: 'platform_staff', action: 'write', ownerOnly: false, descriptionUk: 'Додавання співробітників BizX', descriptionEn: 'Add BizX platform staff' },
+  { id: 233, code: 'platform.staff.edit', scope: 'platform', category: 'platform_staff', action: 'edit', ownerOnly: false, descriptionUk: 'Редагування ролей та архівація команди BizX', descriptionEn: 'Edit roles & archive BizX staff' },
+  { id: 241, code: 'platform.roles.read', scope: 'platform', category: 'platform_roles', action: 'read', ownerOnly: false, descriptionUk: 'Перегляд ролей платформи', descriptionEn: 'View platform roles' },
+  { id: 242, code: 'platform.roles.write', scope: 'platform', category: 'platform_roles', action: 'write', ownerOnly: false, descriptionUk: 'Створення ролей платформи', descriptionEn: 'Create platform roles' },
+  { id: 243, code: 'platform.roles.edit', scope: 'platform', category: 'platform_roles', action: 'edit', ownerOnly: false, descriptionUk: 'Редагування, пріоритет та архівація ролей', descriptionEn: 'Edit, reorder & archive platform roles' }
+];
+
+const ALL_PERMISSIONS = [...STORE_PERMISSIONS, ...PLATFORM_PERMISSIONS];
+
 // Завантажуємо змінні оточення
 dotenv.config({ path: path.resolve(process.cwd(), '../../.env') });
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
@@ -84,13 +123,23 @@ async function seed() {
         orders,
         products,
         product_categories,
+        store_member_permissions,
         store_members,
+        platform_member_permissions,
+        platform_members,
+        role_permissions,
+        roles,
+        permissions,
         stores,
         store_categories,
         refresh_tokens,
         users
       CASCADE;
     `);
+
+    // 1b. Довідник прав доступу (RBAC Permissions)
+    console.info('🔐 Наповнення довідника прав доступу (permissions)...');
+    await db.insert(schema.permissions).values(ALL_PERMISSIONS).onConflictDoNothing();
 
     // Завантажуємо медіафайли в R2 якщо клієнт доступний
     console.info('📤 Завантаження стартових медіафайлів у Cloudflare R2...');
@@ -305,18 +354,91 @@ async function seed() {
     const in30Days = new Date(nowSub + 30 * 24 * 60 * 60 * 1000);
     const in365Days = new Date(nowSub + 365 * 24 * 60 * 60 * 1000);
 
-    await db.insert(schema.users).values({
-      email: 'admin@bizx.ua',
-      name: 'Олександр Коваленко',
-      passwordHash: PASSWORD_HASH,
-      role: 'admin',
-      systemRole: 'platform_admin',
-      phone: '+380501234567',
-      preferredLanguage: 'uk',
-      subscriptionTier: 'business_enterprise',
-      subscriptionStatus: 'active',
-      subscriptionExpiresAt: in365Days,
-      avatarUrl: adminAvatarUrl
+    const [adminUser] = await db
+      .insert(schema.users)
+      .values({
+        email: 'admin@bizx.ua',
+        name: 'Олександр Коваленко',
+        passwordHash: PASSWORD_HASH,
+        role: 'admin',
+        systemRole: 'platform_admin',
+        phone: '+380501234567',
+        preferredLanguage: 'uk',
+        subscriptionTier: 'business_enterprise',
+        subscriptionStatus: 'active',
+        subscriptionExpiresAt: in365Days,
+        avatarUrl: adminAvatarUrl
+      })
+      .returning();
+
+    // 2b. Ролі платформи BizX та команда платформи (platform_members)
+    console.info('🛡️ Створення ролей платформи BizX...');
+    const permByCode = new Map(ALL_PERMISSIONS.map((p) => [p.code, p.id]));
+
+    const [platOwnerRole] = await db
+      .insert(schema.roles)
+      .values({
+        scope: 'platform',
+        storeId: null,
+        name: 'Власник платформи',
+        icon: '👑',
+        color: '#0f172a',
+        priority: OWNER_ROLE_PRIORITY,
+        isSystem: true
+      })
+      .returning();
+
+    const [platOpsRole] = await db
+      .insert(schema.roles)
+      .values({
+        scope: 'platform',
+        storeId: null,
+        name: 'Операційний менеджер',
+        icon: '⚡',
+        color: '#2563eb',
+        priority: 500,
+        isSystem: false
+      })
+      .returning();
+
+    const [platSupportRole] = await db
+      .insert(schema.roles)
+      .values({
+        scope: 'platform',
+        storeId: null,
+        name: 'Підтримка та модерація',
+        icon: '🎧',
+        color: '#059669',
+        priority: 100,
+        isSystem: false
+      })
+      .returning();
+
+    await db.insert(schema.rolePermissions).values([
+      ...PLATFORM_PERMISSIONS.map((p) => ({ roleId: platOwnerRole.id, permissionId: p.id })),
+      ...[
+        'platform.stores.read',
+        'platform.stores.moderate',
+        'platform.categories.manage',
+        'platform.users.read',
+        'platform.users.edit',
+        'platform.analytics.read',
+        'platform.analytics.export',
+        'platform.staff.read',
+        'platform.roles.read'
+      ].map((c) => ({ roleId: platOpsRole.id, permissionId: permByCode.get(c)! })),
+      ...['platform.stores.read', 'platform.users.read', 'platform.analytics.read'].map((c) => ({
+        roleId: platSupportRole.id,
+        permissionId: permByCode.get(c)!
+      }))
+    ]);
+
+    await db.insert(schema.platformMembers).values({
+      userId: adminUser.id,
+      roleId: platOwnerRole.id,
+      isCustom: false,
+      isOwner: true,
+      department: 'Керівництво'
     });
 
     const [coffeeOwner] = await db
@@ -496,23 +618,99 @@ async function seed() {
       })
       .returning();
 
-    // 5. Членство у магазинах (Store Members)
-    console.info('👥 Привʼязка власників до магазинів (store_members)...');
+    // 5. Ролі магазинів та членство (RBAC Roles & Store Members)
+    console.info('👥 Створення базових ролей та привʼязка власників до магазинів...');
+    const seedStoreRoles = async (storeId: string) => {
+      const [ownerR] = await db
+        .insert(schema.roles)
+        .values({
+          scope: 'store',
+          storeId,
+          name: 'Власник',
+          icon: '👑',
+          color: '#0f172a',
+          priority: OWNER_ROLE_PRIORITY,
+          isSystem: true
+        })
+        .returning();
+
+      const [managerR] = await db
+        .insert(schema.roles)
+        .values({
+          scope: 'store',
+          storeId,
+          name: 'Керуючий',
+          icon: '💼',
+          color: '#2563eb',
+          priority: 500,
+          isSystem: false
+        })
+        .returning();
+
+      const [staffR] = await db
+        .insert(schema.roles)
+        .values({
+          scope: 'store',
+          storeId,
+          name: 'Персонал',
+          icon: '🛒',
+          color: '#475569',
+          priority: 100,
+          isSystem: false
+        })
+        .returning();
+
+      await db.insert(schema.rolePermissions).values([
+        ...STORE_PERMISSIONS.map((p) => ({ roleId: ownerR.id, permissionId: p.id })),
+        ...[
+          'products.read',
+          'products.write',
+          'products.edit',
+          'orders.read',
+          'orders.edit',
+          'analytics.read',
+          'analytics.export',
+          'store.read',
+          'store.edit',
+          'staff.read',
+          'staff.write',
+          'staff.edit',
+          'roles.read'
+        ].map((c) => ({ roleId: managerR.id, permissionId: permByCode.get(c)! })),
+        ...['products.read', 'orders.read', 'orders.edit', 'store.read'].map((c) => ({
+          roleId: staffR.id,
+          permissionId: permByCode.get(c)!
+        }))
+      ]);
+
+      return { ownerRoleId: ownerR.id };
+    };
+
+    const coffeeRoles = await seedStoreRoles(storeCoffee.id);
+    const techRoles = await seedStoreRoles(storeTech.id);
+    const bakeryRoles = await seedStoreRoles(storeBakery.id);
+
     await db.insert(schema.storeMembers).values([
       {
         storeId: storeCoffee.id,
         userId: coffeeOwner.id,
-        role: 'owner'
+        role: 'owner',
+        roleId: coffeeRoles.ownerRoleId,
+        isCustom: false
       },
       {
         storeId: storeTech.id,
         userId: techOwner.id,
-        role: 'owner'
+        role: 'owner',
+        roleId: techRoles.ownerRoleId,
+        isCustom: false
       },
       {
         storeId: storeBakery.id,
         userId: bakeryOwner.id,
-        role: 'owner'
+        role: 'owner',
+        roleId: bakeryRoles.ownerRoleId,
+        isCustom: false
       }
     ]);
 
