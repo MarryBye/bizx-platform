@@ -10,6 +10,7 @@ import { ProductsModule } from './products/products.module.js';
 import { OrdersModule } from './orders/orders.module.js';
 import { AnalyticsModule } from './analytics/analytics.module.js';
 import { SubscriptionsModule } from './subscriptions/subscriptions.module.js';
+import { InboxModule } from './inbox/inbox.module.js';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 
@@ -35,7 +36,8 @@ import * as path from 'path';
     ProductsModule,
     OrdersModule,
     AnalyticsModule,
-    SubscriptionsModule
+    SubscriptionsModule,
+    InboxModule
   ],
   controllers: [AppController],
   providers: [AppService]

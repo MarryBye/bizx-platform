@@ -2,18 +2,23 @@ import {
   Injectable,
   NotFoundException,
   ConflictException,
-  ForbiddenException
+  ForbiddenException,
+  BadRequestException
 } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 import { randomBytes } from 'node:crypto';
 import * as dns from 'node:dns/promises';
 import { DatabaseService } from '../database/database.service.js';
 import { RbacService } from '../rbac/rbac.service.js';
+import { InboxService } from '../inbox/inbox.service.js';
 import {
   stores,
   storeCategories,
   storeMembers,
   storeReviews,
   storeStrikes,
+  products,
+  productCategories,
   roles,
   users,
   eq,
@@ -22,6 +27,7 @@ import {
   gt,
   ilike,
   desc,
+  asc,
   count,
   isNull,
   inArray,
@@ -37,7 +43,11 @@ import type {
   PaginatedResult,
   StoreReviewsResponse,
   UpdateStoreDomainDto,
-  DomainVerificationResult
+  DomainVerificationResult,
+  RejectStoreDto,
+  PlatformStoresSummary,
+  StorePreviewTokenResponse,
+  StorePreviewResponse
 } from '@bizx/common-types';
 
 export interface StoreListItem {
@@ -80,7 +90,9 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 export class StoresService {
   constructor(
     private readonly databaseService: DatabaseService,
-    private readonly rbacService: RbacService
+    private readonly rbacService: RbacService,
+    private readonly inboxService: InboxService,
+    private readonly jwtService: JwtService
   ) {}
 
   // ==================== КАТЕГОРИИ МАГАЗИНОВ ====================
@@ -362,8 +374,8 @@ export class StoresService {
       .leftJoin(users, eq(stores.ownerId, users.id))
       .where(condition);
 
-    if (!store) {
-      throw new NotFoundException('Магазин не найден');
+    if (!store || store.status !== 'active') {
+      throw new NotFoundException('Магазин не знайдено або ще не опубліковано');
     }
 
     return {
@@ -503,6 +515,11 @@ export class StoresService {
       await this.rbacService.assertStorePermission(storeId, userId, 'store.edit', { write: true });
     }
 
+    // Підтвердження нової заявки (pending -> active) вимагає окремого права platform.stores.approve
+    if (store.status === 'pending' && dto?.status === 'active') {
+      await this.rbacService.assertPlatformPermission(userId, 'platform.stores.approve');
+    }
+
     // Блокування дострокового виходу із суспенду через 3 страйки без права platform.strikes.revoke
     if (dto?.status && ['active', 'pending'].includes(dto.status) && store.status === 'suspended') {
       const now = new Date();
@@ -594,6 +611,19 @@ export class StoresService {
       })
       .where(eq(stores.id, storeId))
       .returning();
+
+    if (!viaPlatform && dto?.status === 'pending' && store.status !== 'pending') {
+      await this.inboxService
+        .sendOfficialBizxMessage({
+          userId: store.ownerId,
+          senderName: 'BizX Модерація',
+          subject: `Заявку «${store.name}» прийнято на перевірку`,
+          body: `Ваш заклад «${store.name}» успішно відправлено на модерацію BizX. Після перевірки сторінки ви отримаєте повідомлення з результатом у цій скриньці.`,
+          relatedStoreId: store.id,
+          canReply: false
+        })
+        .catch(() => {});
+    }
 
     return updated;
   }
@@ -817,6 +847,304 @@ export class StoresService {
         comment: r.comment,
         createdAt: r.createdAt.toISOString()
       }))
+    };
+  }
+
+  // ==================== МОДЕРАЦІЯ ЗАЯВОК ТА ПОПЕРЕДНІЙ ПЕРЕГЛЯД ВІТРИНИ ====================
+
+  async getPlatformStoresSummary(userId: string): Promise<PlatformStoresSummary> {
+    await this.rbacService.assertPlatformPermission(userId, 'platform.stores.read');
+
+    const grouped = await this.databaseService.db
+      .select({ status: stores.status, cnt: count() })
+      .from(stores)
+      .groupBy(stores.status);
+
+    const summary: PlatformStoresSummary = {
+      pendingCount: 0,
+      activeCount: 0,
+      draftCount: 0,
+      suspendedCount: 0,
+      archivedCount: 0,
+      totalCount: 0
+    };
+
+    for (const row of grouped) {
+      const n = Number(row.cnt || 0);
+      summary.totalCount += n;
+      if (row.status === 'pending') summary.pendingCount = n;
+      else if (row.status === 'active') summary.activeCount = n;
+      else if (row.status === 'draft') summary.draftCount = n;
+      else if (row.status === 'suspended') summary.suspendedCount = n;
+      else if (row.status === 'archived') summary.archivedCount = n;
+    }
+
+    return summary;
+  }
+
+  async approveStore(storeId: string, userId: string): Promise<StoreRecord> {
+    await this.rbacService.assertPlatformPermission(userId, 'platform.stores.approve');
+
+    const [store] = await this.databaseService.db
+      .select()
+      .from(stores)
+      .where(eq(stores.id, storeId));
+
+    if (!store) {
+      throw new NotFoundException('Заклад не знайдено');
+    }
+    if (store.status !== 'pending') {
+      throw new BadRequestException('Підтвердити можна лише заклад у статусі очікування перевірки');
+    }
+
+    const [updated] = await this.databaseService.db
+      .update(stores)
+      .set({
+        status: 'active',
+        archivedAt: null,
+        updatedAt: new Date()
+      })
+      .where(eq(stores.id, storeId))
+      .returning();
+
+    await this.inboxService.sendOfficialBizxMessage({
+      userId: store.ownerId,
+      senderName: 'BizX Модерація',
+      subject: `Заклад «${store.name}» схвалено та опубліковано!`,
+      body: `Вітаємо! Ваш заклад «${store.name}» успішно пройшов перевірку модераторами BizX і тепер доступний покупцям у каталозі та за адресою ${store.slug}.bizx.ua.`,
+      relatedStoreId: store.id,
+      canReply: false
+    });
+
+    return updated;
+  }
+
+  async rejectStore(
+    storeId: string,
+    userId: string,
+    dto: RejectStoreDto
+  ): Promise<StoreRecord> {
+    await this.rbacService.assertPlatformPermission(userId, 'platform.stores.approve');
+
+    const [store] = await this.databaseService.db
+      .select()
+      .from(stores)
+      .where(eq(stores.id, storeId));
+
+    if (!store) {
+      throw new NotFoundException('Заклад не знайдено');
+    }
+    if (store.status !== 'pending') {
+      throw new BadRequestException('Відхилити можна лише заклад у статусі очікування перевірки');
+    }
+
+    const reason = dto.reason.trim();
+    const [updated] = await this.databaseService.db
+      .update(stores)
+      .set({
+        status: 'draft',
+        updatedAt: new Date()
+      })
+      .where(eq(stores.id, storeId))
+      .returning();
+
+    await this.inboxService.sendOfficialBizxMessage({
+      userId: store.ownerId,
+      senderName: 'BizX Модерація',
+      subject: `Заявку на публікацію «${store.name}» відхилено`,
+      body: `Модератор BizX повернув заклад «${store.name}» на доопрацювання (статус чернетки).\n\nПричина відхилення:\n${reason}\n\nБудь ласка, внесіть необхідні зміни в панелі бізнесу та надішліть заклад на повторну перевірку.`,
+      relatedStoreId: store.id,
+      canReply: false
+    });
+
+    return updated;
+  }
+
+  private async canUserPreviewStore(storeId: string, userId: string): Promise<boolean> {
+    const platAccess = await this.rbacService.getPlatformMemberAccess(userId);
+    if (
+      platAccess.isMember &&
+      (platAccess.permissions.includes('platform.stores.read') ||
+        platAccess.permissions.includes('platform.stores.approve') ||
+        platAccess.permissions.includes('platform.stores.moderate'))
+    ) {
+      return true;
+    }
+
+    const [membership] = await this.databaseService.db
+      .select({ id: storeMembers.id })
+      .from(storeMembers)
+      .where(
+        and(
+          eq(storeMembers.storeId, storeId),
+          eq(storeMembers.userId, userId),
+          isNull(storeMembers.archivedAt)
+        )
+      );
+
+    return Boolean(membership);
+  }
+
+  async createPreviewToken(
+    storeId: string,
+    userId: string
+  ): Promise<StorePreviewTokenResponse> {
+    const [store] = await this.databaseService.db
+      .select({ id: stores.id })
+      .from(stores)
+      .where(eq(stores.id, storeId));
+
+    if (!store) {
+      throw new NotFoundException('Заклад не знайдено');
+    }
+
+    const allowed = await this.canUserPreviewStore(store.id, userId);
+    if (!allowed) {
+      throw new ForbiddenException('Немає прав на попередній перегляд цього закладу');
+    }
+
+    const previewToken = this.jwtService.sign(
+      { type: 'store_preview', storeId: store.id, sub: userId },
+      { expiresIn: '15m' }
+    );
+
+    return {
+      previewToken,
+      expiresInSeconds: 900
+    };
+  }
+
+  async getStorePreview(
+    idOrSlug: string,
+    options: { previewToken?: string; authHeader?: string }
+  ): Promise<StorePreviewResponse> {
+    const isUuid = UUID_REGEX.test(idOrSlug);
+    const condition = isUuid ? eq(stores.id, idOrSlug) : eq(stores.slug, idOrSlug.toLowerCase());
+
+    const [storeRow] = await this.databaseService.db
+      .select({
+        id: stores.id,
+        ownerId: stores.ownerId,
+        categoryId: stores.categoryId,
+        name: stores.name,
+        slug: stores.slug,
+        description: stores.description,
+        logoUrl: stores.logoUrl,
+        bannerUrl: stores.bannerUrl,
+        address: stores.address,
+        phone: stores.phone,
+        email: stores.email,
+        status: stores.status,
+        customDomain: stores.customDomain,
+        customDomainVerified: stores.customDomainVerified,
+        ratingAvg: stores.ratingAvg,
+        ratingCount: stores.ratingCount,
+        createdAt: stores.createdAt,
+        updatedAt: stores.updatedAt,
+        categoryName: storeCategories.name,
+        ownerName: users.name,
+        ownerEmail: users.email
+      })
+      .from(stores)
+      .leftJoin(storeCategories, eq(stores.categoryId, storeCategories.id))
+      .leftJoin(users, eq(stores.ownerId, users.id))
+      .where(condition);
+
+    if (!storeRow) {
+      throw new NotFoundException('Заклад не знайдено');
+    }
+
+    let authorized = false;
+
+    if (options.previewToken) {
+      try {
+        const decoded = this.jwtService.verify<{
+          type?: string;
+          storeId?: string;
+          sub?: string;
+        }>(options.previewToken);
+        if (decoded?.type === 'store_preview' && decoded?.storeId === storeRow.id) {
+          authorized = true;
+        }
+      } catch {
+        authorized = false;
+      }
+    }
+
+    if (!authorized && options.authHeader && options.authHeader.startsWith('Bearer ')) {
+      try {
+        const bearer = options.authHeader.slice(7).trim();
+        const decoded = this.jwtService.verify<{ sub?: string }>(bearer);
+        if (decoded?.sub) {
+          authorized = await this.canUserPreviewStore(storeRow.id, decoded.sub);
+        }
+      } catch {
+        authorized = false;
+      }
+    }
+
+    if (!authorized) {
+      throw new ForbiddenException(
+        'Попередній перегляд вітрини доступний лише співробітникам модерації BizX або команді закладу'
+      );
+    }
+
+    const [catRows, prodRows] = await Promise.all([
+      this.databaseService.db
+        .select()
+        .from(productCategories)
+        .where(and(eq(productCategories.storeId, storeRow.id), isNull(productCategories.archivedAt)))
+        .orderBy(asc(productCategories.sortOrder), asc(productCategories.name)),
+      this.databaseService.db
+        .select()
+        .from(products)
+        .where(and(eq(products.storeId, storeRow.id), isNull(products.archivedAt)))
+        .orderBy(desc(products.createdAt))
+    ]);
+
+    const hasLogo = Boolean(
+      storeRow.logoUrl && !storeRow.logoUrl.includes('/defaults/')
+    );
+    const hasBanner = Boolean(
+      storeRow.bannerUrl && !storeRow.bannerUrl.includes('/defaults/')
+    );
+    const hasDescription = Boolean(storeRow.description && storeRow.description.trim().length >= 10);
+    const hasContacts = Boolean(
+      (storeRow.phone && storeRow.phone.trim().length >= 5) ||
+        (storeRow.email && storeRow.email.trim().length >= 5)
+    );
+    const hasAddress = Boolean(storeRow.address && storeRow.address.trim().length >= 4);
+    const activeProductsCount = prodRows.filter((p) => p.isActive).length;
+
+    return {
+      store: {
+        ...storeRow,
+        status: storeRow.status as StorePreviewResponse['store']['status'],
+        ratingAvg: Number((Number(storeRow.ratingAvg || 0) / 100).toFixed(2)),
+        createdAt: storeRow.createdAt.toISOString(),
+        updatedAt: storeRow.updatedAt.toISOString()
+      },
+      categories: catRows.map((c) => ({
+        ...c,
+        createdAt: c.createdAt.toISOString(),
+        archivedAt: c.archivedAt ? c.archivedAt.toISOString() : null
+      })),
+      products: prodRows.map((p) => ({
+        ...p,
+        createdAt: p.createdAt.toISOString(),
+        updatedAt: p.updatedAt.toISOString(),
+        archivedAt: p.archivedAt ? p.archivedAt.toISOString() : null
+      })),
+      readiness: {
+        hasLogo,
+        hasBanner,
+        hasDescription,
+        hasContacts,
+        hasAddress,
+        productsCount: prodRows.length,
+        activeProductsCount
+      },
+      isPreviewMode: true
     };
   }
 }
