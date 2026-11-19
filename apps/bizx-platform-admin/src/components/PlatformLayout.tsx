@@ -16,7 +16,10 @@ import {
   X,
   ExternalLink,
   ChevronDown,
-  Store as StoreIcon
+  Store as StoreIcon,
+  MessageSquare,
+  Headphones,
+  Megaphone
 } from 'lucide-react';
 
 export type PlatformTab =
@@ -25,6 +28,8 @@ export type PlatformTab =
   | 'businesses'
   | 'businesses_pending'
   | 'disputes'
+  | 'support'
+  | 'broadcasts'
   | 'users'
   | 'staff'
   | 'roles';
@@ -38,11 +43,13 @@ interface PlatformLayoutProps {
   permsLoaded?: boolean;
   pendingStoresCount?: number;
   pendingDisputesCount?: number;
+  unreadSupportCount?: number;
   onLogout: () => void;
   children: React.ReactNode;
 }
 
 const BUSINESS_CHILD_TABS: PlatformTab[] = ['businesses', 'businesses_pending', 'disputes'];
+const COMM_CHILD_TABS: PlatformTab[] = ['support', 'broadcasts'];
 
 export const PlatformLayout: React.FC<PlatformLayoutProps> = ({
   currentTab,
@@ -53,6 +60,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({
   permsLoaded = true,
   pendingStoresCount = 0,
   pendingDisputesCount = 0,
+  unreadSupportCount = 0,
   onLogout,
   children
 }) => {
@@ -61,10 +69,16 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({
   const [isBusinessesOpen, setIsBusinessesOpen] = useState(
     BUSINESS_CHILD_TABS.includes(currentTab) || pendingStoresCount > 0 || pendingDisputesCount > 0
   );
+  const [isCommOpen, setIsCommOpen] = useState(
+    COMM_CHILD_TABS.includes(currentTab) || unreadSupportCount > 0
+  );
 
   useEffect(() => {
     if (BUSINESS_CHILD_TABS.includes(currentTab)) {
       setIsBusinessesOpen(true);
+    }
+    if (COMM_CHILD_TABS.includes(currentTab)) {
+      setIsCommOpen(true);
     }
   }, [currentTab]);
 
@@ -79,6 +93,11 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({
   const showBusinessesGroup = canReadStores || canReadDisputes;
   const businessAttentionTotal =
     (canReadStores ? pendingStoresCount : 0) + (canReadDisputes ? pendingDisputesCount : 0);
+
+  const canReadSupport = hasPerm('platform.support.read');
+  const canReadBroadcasts = hasPerm('platform.broadcasts.read');
+  const showCommGroup = canReadSupport || canReadBroadcasts;
+  const isCommChildActive = COMM_CHILD_TABS.includes(currentTab);
 
   const isBusinessChildActive = BUSINESS_CHILD_TABS.includes(currentTab);
 
@@ -101,6 +120,10 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({
         return { parent: t('platform.tabBusinesses'), label: t('platform.tabBusinessesPending') };
       case 'disputes':
         return { parent: t('platform.tabBusinesses'), label: t('platform.tabDisputes') };
+      case 'support':
+        return { parent: t('platform.tabCommunications'), label: t('platform.tabSupport') };
+      case 'broadcasts':
+        return { parent: t('platform.tabCommunications'), label: t('platform.tabBroadcasts') };
       case 'users':
         return { label: t('platform.tabUsers') };
       case 'staff':
@@ -336,6 +359,104 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({
                               tone="red"
                               inverted={currentTab === 'disputes'}
                             />
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Expandable Communications Group Dropdown (Support + BizX Broadcasts) */}
+                {showCommGroup && (
+                  <div className="pt-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setIsCommOpen((prev) => !prev)}
+                      className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all text-left ${
+                        isCommChildActive && !isCommOpen
+                          ? 'bg-slate-900 text-white shadow-sm'
+                          : isCommChildActive
+                          ? 'bg-slate-100 text-slate-900'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                      }`}
+                    >
+                      <span className="flex items-center gap-3 min-w-0">
+                        <MessageSquare
+                          className={`w-4 h-4 shrink-0 ${
+                            isCommChildActive && !isCommOpen
+                              ? 'text-white'
+                              : isCommChildActive
+                              ? 'text-slate-900'
+                              : 'text-slate-400'
+                          }`}
+                        />
+                        <span className="truncate">{t('platform.tabCommunications')}</span>
+                      </span>
+
+                      <span className="flex items-center gap-1.5 shrink-0">
+                        {!isCommOpen && canReadSupport && (
+                          <CountBadge count={unreadSupportCount} tone="red" />
+                        )}
+                        <ChevronDown
+                          className={`w-3.5 h-3.5 transition-transform ${
+                            isCommOpen ? 'rotate-180 text-slate-500' : 'text-slate-400'
+                          }`}
+                        />
+                      </span>
+                    </button>
+
+                    {isCommOpen && (
+                      <div className="mt-1 ml-3.5 pl-2.5 border-l border-slate-200 space-y-0.5">
+                        {canReadSupport && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onTabChange('support');
+                              setIsMobileMenuOpen(false);
+                            }}
+                            className={`w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all text-left ${
+                              currentTab === 'support'
+                                ? 'bg-slate-900 text-white shadow-sm'
+                                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                            }`}
+                          >
+                            <span className="flex items-center gap-2 min-w-0">
+                              <Headphones
+                                className={`w-3.5 h-3.5 shrink-0 ${
+                                  currentTab === 'support' ? 'text-blue-300' : 'text-blue-500'
+                                }`}
+                              />
+                              <span className="truncate">{t('platform.tabSupport')}</span>
+                            </span>
+                            <CountBadge
+                              count={unreadSupportCount}
+                              tone="red"
+                              inverted={currentTab === 'support'}
+                            />
+                          </button>
+                        )}
+
+                        {canReadBroadcasts && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onTabChange('broadcasts');
+                              setIsMobileMenuOpen(false);
+                            }}
+                            className={`w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all text-left ${
+                              currentTab === 'broadcasts'
+                                ? 'bg-slate-900 text-white shadow-sm'
+                                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                            }`}
+                          >
+                            <span className="flex items-center gap-2 min-w-0">
+                              <Megaphone
+                                className={`w-3.5 h-3.5 shrink-0 ${
+                                  currentTab === 'broadcasts' ? 'text-white' : 'text-slate-400'
+                                }`}
+                              />
+                              <span className="truncate">{t('platform.tabBroadcasts')}</span>
+                            </span>
                           </button>
                         )}
                       </div>
