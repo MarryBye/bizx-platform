@@ -117,6 +117,7 @@ export const uk = {
     cart: 'Кошик',
     profile: 'Профіль',
     settings: 'Налаштування',
+    accountSettings: 'Налаштування акаунту',
     stores: 'Заклади'
   },
   roles: {
@@ -748,6 +749,7 @@ export const en: typeof uk = {
     cart: 'Cart',
     profile: 'Profile',
     settings: 'Settings',
+    accountSettings: 'Account Settings',
     stores: 'Stores'
   },
   roles: {
