@@ -36,6 +36,13 @@
       "when": 1793869100588,
       "tag": "0004_add_preferred_language",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1795085800000,
+      "tag": "0005_add_unique_phone_index",
+      "breakpoints": true
     }
   ]
 }
