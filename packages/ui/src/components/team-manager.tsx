@@ -328,8 +328,38 @@ export const TeamManager: React.FC<TeamManagerProps> = ({
                         <span className="text-sm font-bold text-slate-900 truncate">
                           {m.userName || m.userEmail}
                         </span>
+                        {/* Role / Custom Badge right next to Full Name */}
+                        <span
+                          className="inline-flex items-center gap-1 h-5 px-2 rounded-md text-[10px] font-bold border leading-none shrink-0"
+                          style={{
+                            backgroundColor: `${roleColor}14`,
+                            borderColor: `${roleColor}35`,
+                            color: roleColor
+                          }}
+                        >
+                          {m.isCustom ? (
+                            <Sliders className="w-3 h-3 shrink-0" />
+                          ) : m.roleIcon ? (
+                            <RoleIcon icon={m.roleIcon} className="w-3 h-3 shrink-0" />
+                          ) : (
+                            <span
+                              className="w-1.5 h-1.5 rounded-full shrink-0"
+                              style={{ backgroundColor: roleColor }}
+                            />
+                          )}
+                          <span>
+                            {m.roleName ||
+                              (m.isCustom
+                                ? locale === 'en'
+                                  ? 'Custom'
+                                  : 'Індивідуальні'
+                                : locale === 'en'
+                                  ? 'Staff'
+                                  : 'Персонал')}
+                          </span>
+                        </span>
                         {m.userId === currentUserId && (
-                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">
+                          <span className="inline-flex items-center h-5 px-1.5 rounded-md text-[10px] font-bold leading-none bg-slate-100 text-slate-600 border border-slate-200 shrink-0">
                             {locale === 'en' ? 'You' : 'Ви'}
                           </span>
                         )}
@@ -344,35 +374,7 @@ export const TeamManager: React.FC<TeamManagerProps> = ({
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0">
-                    {/* Role / Custom Badge */}
-                    <div className="flex flex-col items-end">
-                      <span
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold border"
-                        style={{
-                          backgroundColor: `${roleColor}14`,
-                          borderColor: `${roleColor}35`,
-                          color: roleColor
-                        }}
-                      >
-                        {m.isCustom ? (
-                          <Sliders className="w-3.5 h-3.5 shrink-0" />
-                        ) : m.roleIcon ? (
-                          <RoleIcon icon={m.roleIcon} className="w-3.5 h-3.5 shrink-0" />
-                        ) : (
-                          <span
-                            className="w-2 h-2 rounded-full shrink-0"
-                            style={{ backgroundColor: roleColor }}
-                          />
-                        )}
-                        <span>{m.roleName || (m.isCustom ? 'Custom' : 'Staff')}</span>
-                      </span>
-                      <span className="text-[10px] text-slate-400 mt-0.5">
-                        {m.permissionIds.length}{' '}
-                        {locale === 'en' ? 'permissions' : 'доступів'}
-                      </span>
-                    </div>
-
+                  <div className="flex items-center justify-end gap-1 shrink-0">
                     {/* Pencil & Archive Actions */}
                     <div className="flex items-center gap-1">
                       {editable || archivable ? (
@@ -442,8 +444,8 @@ export const TeamManager: React.FC<TeamManagerProps> = ({
                 <p className="text-[11px] text-slate-500">
                   {editingMember
                     ? locale === 'en'
-                      ? 'Assign a role below your rank or configure custom permissions'
-                      : 'Оберіть роль нижче вашого пріоритету або налаштуйте Custom-доступи'
+                      ? 'Assign a role below your rank or configure individual permissions'
+                      : 'Оберіть роль нижче вашого рівня або налаштуйте індивідуальні доступи'
                     : locale === 'en'
                       ? 'Find a BizX user by email or phone number and assign access'
                       : 'Знайдіть користувача BizX за email або телефоном та призначте доступи'}
@@ -556,13 +558,13 @@ export const TeamManager: React.FC<TeamManagerProps> = ({
                 >
                   {assignableRoles.map((r) => (
                     <option key={r.id} value={r.id}>
-                      {r.name} ({r.permissionIds.length}{' '}
-                      {locale === 'en' ? 'perms' : 'доступів'})
+                      {r.name}
                     </option>
                   ))}
                   <option value={CUSTOM_ROLE_KEY}>
-                    Custom —{' '}
-                    {locale === 'en' ? 'Select individual permissions' : 'Обрати доступи вручну'}
+                    {locale === 'en'
+                      ? 'Custom — Select individual permissions'
+                      : 'Індивідуальні — Обрати доступи вручну'}
                   </option>
                 </select>
               </div>
@@ -573,9 +575,7 @@ export const TeamManager: React.FC<TeamManagerProps> = ({
                   <div className="flex items-center gap-2 text-xs font-bold text-slate-800">
                     <Sliders className="w-3.5 h-3.5 text-purple-600" />
                     <span>
-                      {locale === 'en'
-                        ? `Custom permissions (${customPermIds.length} selected)`
-                        : `Індивідуальні доступи (обрано: ${customPermIds.length})`}
+                      {locale === 'en' ? 'Individual permissions' : 'Індивідуальні доступи'}
                     </span>
                   </div>
                   <PermissionMatrix
@@ -650,7 +650,7 @@ export const TeamManager: React.FC<TeamManagerProps> = ({
                 {locale === 'en' ? (
                   <>
                     Remove <strong>{archivingMember.userName || archivingMember.userEmail}</strong>{' '}
-                    from active team? Their record will be archived (never deleted from DB).
+                    from the active team? Their access will be revoked and history preserved in archive.
                   </>
                 ) : (
                   <>

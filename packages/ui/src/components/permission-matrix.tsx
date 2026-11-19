@@ -11,15 +11,6 @@ export interface PermissionDef {
   ownerOnly: boolean;
 }
 
-const ACTION_COLORS: Record<string, string> = {
-  read: 'bg-slate-100 text-slate-600',
-  write: 'bg-emerald-50 text-emerald-700',
-  edit: 'bg-blue-50 text-blue-700',
-  manage: 'bg-amber-50 text-amber-800',
-  export: 'bg-purple-50 text-purple-700',
-  archive: 'bg-rose-50 text-rose-700'
-};
-
 export interface PermissionMatrixProps {
   catalog: PermissionDef[];
   selectedIds: number[];
@@ -147,10 +138,6 @@ export const PermissionMatrix: React.FC<PermissionMatrixProps> = ({
                 const checked = selectedSet.has(perm.id) || impliedByAdmin;
                 const allowed = canToggle(perm) && !impliedByAdmin;
                 const permLabel = translateOrFallback(`permissions.${perm.code}`, perm.code);
-                const actionLabel = translateOrFallback(
-                  `permissionActions.${perm.action}`,
-                  perm.action
-                );
 
                 return (
                   <button
@@ -174,7 +161,7 @@ export const PermissionMatrix: React.FC<PermissionMatrixProps> = ({
                           : undefined
                     }
                     className={cn(
-                      'w-full flex items-start gap-2.5 p-2 rounded-lg border text-left transition-all',
+                      'w-full flex items-start gap-2.5 px-2.5 py-2 rounded-lg border text-left transition-all',
                       checked
                         ? 'bg-white border-slate-900 shadow-xs'
                         : 'bg-white/70 border-slate-200/80 hover:border-slate-300',
@@ -197,27 +184,21 @@ export const PermissionMatrix: React.FC<PermissionMatrixProps> = ({
                       <span className="block text-xs font-semibold text-slate-800 leading-snug">
                         {permLabel}
                       </span>
-                      <span className="mt-1 flex items-center gap-1.5 flex-wrap">
-                        <span
-                          className={cn(
-                            'inline-block px-1.5 py-0.5 rounded text-[9px] font-bold uppercase',
-                            ACTION_COLORS[perm.action] || 'bg-slate-100 text-slate-600'
+                      {(impliedByAdmin || perm.ownerOnly) && (
+                        <span className="mt-1 flex items-center gap-1.5 flex-wrap">
+                          {impliedByAdmin && (
+                            <span className="inline-flex items-center h-4 px-1.5 rounded text-[9px] font-bold leading-none bg-amber-100 text-amber-900">
+                              {locale === 'en' ? 'Via Admin' : 'Через Адміна'}
+                            </span>
                           )}
-                        >
-                          {actionLabel}
+                          {perm.ownerOnly && (
+                            <span className="inline-flex items-center gap-0.5 h-4 px-1.5 rounded text-[9px] font-bold leading-none bg-amber-100 text-amber-900">
+                              <Lock className="w-2.5 h-2.5" />
+                              {locale === 'en' ? 'Owner only' : 'Тільки власник'}
+                            </span>
+                          )}
                         </span>
-                        {impliedByAdmin && (
-                          <span className="inline-block px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-900">
-                            {locale === 'en' ? 'Via Admin' : 'Через Адміна'}
-                          </span>
-                        )}
-                        {perm.ownerOnly && (
-                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-900">
-                            <Lock className="w-2.5 h-2.5" />
-                            {locale === 'en' ? 'Owner only' : 'Тільки власник'}
-                          </span>
-                        )}
-                      </span>
+                      )}
                     </span>
                   </button>
                 );

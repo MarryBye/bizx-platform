@@ -382,11 +382,6 @@ export const RolesManager: React.FC<RolesManagerProps> = ({
                           {role.membersCount}{' '}
                           {locale === 'en' ? 'members' : 'учасників'}
                         </span>
-                        <span>•</span>
-                        <span>
-                          {role.permissionIds.length}{' '}
-                          {locale === 'en' ? 'permissions' : 'доступів'}
-                        </span>
                       </div>
                     </div>
                   </div>
@@ -581,7 +576,7 @@ export const RolesManager: React.FC<RolesManagerProps> = ({
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-bold text-slate-700">
-                    {locale === 'en' ? 'Role permissions' : 'Доступи ролі'} ({selectedPerms.length})
+                    {locale === 'en' ? 'Role permissions' : 'Доступи ролі'}
                   </label>
                 </div>
                 <PermissionMatrix
