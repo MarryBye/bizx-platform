@@ -102,6 +102,8 @@ export const MobileInboxBadge: React.FC<{ type: InboxBadgeType }> = ({ type }) =
 
 export function getOrderStatusMeta(status: string): { label: string; tone: MobileBadgeTone } {
   switch (status) {
+    case 'paid':
+      return { label: 'Оплачено', tone: 'blue' };
     case 'confirmed':
       return { label: 'Підтверджено', tone: 'blue' };
     case 'processing':

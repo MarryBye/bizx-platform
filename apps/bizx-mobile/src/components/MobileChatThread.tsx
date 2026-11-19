@@ -11,6 +11,7 @@ import {
 import type { OrderMessageAttachmentDto } from '@bizx/common-types';
 import { MaterialIcon } from './MaterialIcon';
 import { SafeImage } from './SafeImage';
+import { resolveMobileMediaUrl } from '../lib/media';
 
 export interface MobileChatMessage {
   id: string;
@@ -118,10 +119,11 @@ export const MobileChatThread: React.FC<MobileChatThreadProps> = ({
                   <View className="mt-2 gap-1.5">
                     {m.attachments.map((att, idx) => {
                       const isImage = att.mimeType.startsWith('image/');
+                      const resolvedUrl = resolveMobileMediaUrl(att.url) || att.url;
                       return isImage ? (
                         <TouchableOpacity
                           key={`${m.id}-att-${idx}`}
-                          onPress={() => Linking.openURL(att.url).catch(() => {})}
+                          onPress={() => Linking.openURL(resolvedUrl).catch(() => {})}
                           className="rounded-lg overflow-hidden border border-slate-200"
                         >
                           <SafeImage
@@ -138,7 +140,7 @@ export const MobileChatThread: React.FC<MobileChatThreadProps> = ({
                       ) : (
                         <TouchableOpacity
                           key={`${m.id}-att-${idx}`}
-                          onPress={() => Linking.openURL(att.url).catch(() => {})}
+                          onPress={() => Linking.openURL(resolvedUrl).catch(() => {})}
                           className={`flex-row items-center gap-1.5 px-2.5 py-1.5 rounded-lg border ${
                             isOwn
                               ? 'bg-slate-800 border-slate-700'

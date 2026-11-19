@@ -76,7 +76,9 @@ export const useMobileStoresStore = create<MobileStoresState>((set) => ({
     set({ isLoading: true });
     try {
       const [productsRes, categoriesRes] = await Promise.all([
-        mobileApi.products.getStoreProducts(store.id, { page: 1, pageSize: 100 }).catch(() => ({ success: false, data: { items: [] } })),
+        mobileApi.products
+          .getStoreProducts(store.id, { page: 1, pageSize: 100, isActive: true })
+          .catch(() => ({ success: false, data: { items: [] } })),
         mobileApi.products.getCategories(store.id).catch(() => ({ success: false, data: [] }))
       ]);
 

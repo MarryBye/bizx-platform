@@ -17,13 +17,8 @@ import { InboxModal } from './InboxModal';
 import { mobileApi } from '../lib/api';
 
 export const ProfileScreen: React.FC = () => {
-  const { user, login, register, updateProfile, logout, isLoading, error } = useMobileAuthStore();
+  const { user, updateProfile, logout } = useMobileAuthStore();
   const { t, locale, mode, setMode } = useMobileTranslation();
-
-  const [isRegisterMode, setIsRegisterMode] = useState(false);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
 
   // Minimal profile edit form state
   const [editName, setEditName] = useState('');
@@ -54,17 +49,6 @@ export const ProfileScreen: React.FC = () => {
       setEditPhone(user.phone || '');
     }
   }, [user]);
-
-  const handleAuthSubmit = async () => {
-    if (!email.trim() || !password.trim()) return;
-
-    if (isRegisterMode) {
-      if (!name.trim()) return;
-      await register({ name, email, password });
-    } else {
-      await login({ email, password });
-    }
-  };
 
   const handleSaveProfile = async () => {
     if (!editName.trim()) return;
@@ -327,113 +311,5 @@ export const ProfileScreen: React.FC = () => {
     );
   }
 
-  // Guest / Auth Form
-  return (
-    <ScrollView className="flex-1 bg-slate-50" contentContainerStyle={{ paddingBottom: 120 }}>
-      {/* Metro Header */}
-      <View className="px-5 pt-4 pb-2">
-        <Text className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-          Вхід для покупців
-        </Text>
-        <Text className="text-2xl font-black text-slate-900 mt-0.5">Особистий кабінет</Text>
-      </View>
-
-      <View className="px-5 mt-3 space-y-4">
-        {/* Auth Card */}
-        <View className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm space-y-4">
-          {/* Tabs */}
-          <View className="flex-row bg-slate-100 p-1 rounded-lg">
-            <TouchableOpacity
-              onPress={() => setIsRegisterMode(false)}
-              className={`flex-1 py-2 rounded-md items-center ${
-                !isRegisterMode ? 'bg-white shadow-sm' : ''
-              }`}
-            >
-              <Text
-                className={`text-xs font-bold ${
-                  !isRegisterMode ? 'text-slate-900' : 'text-slate-500'
-                }`}
-              >
-                Вхід
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => setIsRegisterMode(true)}
-              className={`flex-1 py-2 rounded-md items-center ${
-                isRegisterMode ? 'bg-white shadow-sm' : ''
-              }`}
-            >
-              <Text
-                className={`text-xs font-bold ${
-                  isRegisterMode ? 'text-slate-900' : 'text-slate-500'
-                }`}
-              >
-                Реєстрація
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {error && (
-            <View className="p-3 bg-red-50 rounded-lg border border-red-200">
-              <Text className="text-xs text-red-600 font-medium">{error}</Text>
-            </View>
-          )}
-
-          {isRegisterMode && (
-            <View className="space-y-1">
-              <Text className="text-[11px] font-bold text-slate-700">Ваше ім&apos;я *</Text>
-              <TextInput
-                value={name}
-                onChangeText={setName}
-                placeholder="Іван Петренко"
-                placeholderTextColor="#94a3b8"
-                className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900"
-              />
-            </View>
-          )}
-
-          <View className="space-y-1">
-            <Text className="text-[11px] font-bold text-slate-700">Email *</Text>
-            <TextInput
-              value={email}
-              onChangeText={setEmail}
-              placeholder="user@example.com"
-              placeholderTextColor="#94a3b8"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900"
-            />
-          </View>
-
-          <View className="space-y-1">
-            <Text className="text-[11px] font-bold text-slate-700">Пароль *</Text>
-            <TextInput
-              value={password}
-              onChangeText={setPassword}
-              placeholder="••••••••"
-              placeholderTextColor="#94a3b8"
-              secureTextEntry
-              className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900"
-            />
-          </View>
-
-          <TouchableOpacity
-            onPress={handleAuthSubmit}
-            disabled={isLoading}
-            activeOpacity={0.8}
-            className="w-full bg-slate-900 py-3 rounded-lg items-center shadow-sm flex-row justify-center gap-2 mt-2"
-          >
-            {isLoading ? (
-              <ActivityIndicator size="small" color="#ffffff" />
-            ) : (
-              <Text className="text-white text-xs font-bold">
-                {isRegisterMode ? 'Зареєструватися' : 'Увійти в кабінет'}
-              </Text>
-            )}
-          </TouchableOpacity>
-        </View>
-      </View>
-    </ScrollView>
-  );
+  return null;
 };
