@@ -38,8 +38,7 @@ export const AuthScreen: React.FC = () => {
         name: name.trim(),
         email: email.trim(),
         phone: phone.trim() || undefined,
-        password,
-        role: 'client'
+        password
       });
     } else if (loginMethod === 'phone') {
       if (!phone.trim() || !password.trim()) {

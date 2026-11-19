@@ -40,7 +40,7 @@ export const ProfileScreen: React.FC = () => {
 
     if (isRegisterMode) {
       if (!name.trim()) return;
-      await register({ name, email, password, role: 'client' });
+      await register({ name, email, password });
     } else {
       await login({ email, password });
     }
