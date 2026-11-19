@@ -10,13 +10,18 @@ import {
   Platform
 } from 'react-native';
 import { MaterialIcon } from '../components/MaterialIcon';
+import { MobilePhoneInput } from '../components/MobilePhoneInput';
 import { useMobileAuthStore } from '../store/useMobileAuthStore';
+import { useMobileTranslation } from '../hooks/useMobileTranslation';
 
 export const AuthScreen: React.FC = () => {
   const { login, register, isLoading, error } = useMobileAuthStore();
+  const { t, locale } = useMobileTranslation();
   const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [loginMethod, setLoginMethod] = useState<'email' | 'phone'>('email');
 
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [localError, setLocalError] = useState<string | null>(null);
@@ -24,23 +29,32 @@ export const AuthScreen: React.FC = () => {
   const handleSubmit = async () => {
     setLocalError(null);
 
-    if (!email.trim() || !password.trim()) {
-      setLocalError('Будь ласка, заповніть email та пароль');
-      return;
-    }
-
     if (mode === 'register') {
-      if (!name.trim()) {
-        setLocalError("Будь ласка, введіть ваше повне ім'я");
+      if (!name.trim() || !email.trim() || !password.trim()) {
+        setLocalError(t('errors.invalidCredentials'));
         return;
       }
       await register({
         name: name.trim(),
         email: email.trim(),
+        phone: phone.trim() || undefined,
         password,
         role: 'client'
       });
+    } else if (loginMethod === 'phone') {
+      if (!phone.trim() || !password.trim()) {
+        setLocalError(t('errors.invalidPhone'));
+        return;
+      }
+      await login({
+        phone: phone.trim(),
+        password
+      });
     } else {
+      if (!email.trim() || !password.trim()) {
+        setLocalError(t('errors.invalidCredentials'));
+        return;
+      }
       await login({
         email: email.trim(),
         password
@@ -65,7 +79,6 @@ export const AuthScreen: React.FC = () => {
         keyboardShouldPersistTaps="handled"
       >
         <View className="w-full max-w-sm mx-auto">
-          {/* Main Card */}
           <View className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
             {/* Header Accent Bar */}
             <View className="px-6 py-4 bg-slate-50 border-b border-slate-100 flex-row items-center justify-between">
@@ -76,7 +89,7 @@ export const AuthScreen: React.FC = () => {
                   </Text>
                 </View>
                 <Text className="text-xs font-bold text-slate-600">
-                  Мобільний клієнт
+                  {locale === 'en' ? 'Mobile App' : 'Мобільний клієнт'}
                 </Text>
               </View>
               <MaterialIcon name="shield" size={16} color="#64748b" />
@@ -101,7 +114,7 @@ export const AuthScreen: React.FC = () => {
                     mode === 'login' ? 'text-slate-900' : 'text-slate-500'
                   }`}
                 >
-                  Вхід
+                  {t('common.login')}
                 </Text>
               </TouchableOpacity>
 
@@ -122,25 +135,59 @@ export const AuthScreen: React.FC = () => {
                     mode === 'register' ? 'text-slate-900' : 'text-slate-500'
                   }`}
                 >
-                  Реєстрація
+                  {t('common.register')}
                 </Text>
               </TouchableOpacity>
             </View>
 
             {/* Form Body */}
             <View className="p-6">
-              <View className="mb-5">
+              <View className="mb-4">
                 <Text className="text-xl font-black text-slate-900 tracking-tight">
-                  {mode === 'login' ? 'Вхід у додаток' : 'Створення акаунту'}
-                </Text>
-                <Text className="text-xs text-slate-500 mt-1 leading-relaxed">
-                  {mode === 'login'
-                    ? 'Введіть email та пароль вашого акаунту BizX'
-                    : 'Зареєструйте новий клієнтський акаунт для замовлень'}
+                  {mode === 'login' ? t('auth.signInTitle') : t('auth.signUpTitle')}
                 </Text>
               </View>
 
-              {/* Error Banner */}
+              {/* Email / Phone Login Switcher */}
+              {mode === 'login' && (
+                <View className="flex-row bg-slate-100 p-1 rounded-xl mb-4">
+                  <TouchableOpacity
+                    onPress={() => {
+                      setLoginMethod('email');
+                      setLocalError(null);
+                    }}
+                    className={`flex-1 py-2 rounded-lg items-center ${
+                      loginMethod === 'email' ? 'bg-white shadow-xs' : ''
+                    }`}
+                  >
+                    <Text
+                      className={`text-xs font-bold ${
+                        loginMethod === 'email' ? 'text-slate-900' : 'text-slate-500'
+                      }`}
+                    >
+                      {t('auth.loginByEmail')}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setLoginMethod('phone');
+                      setLocalError(null);
+                    }}
+                    className={`flex-1 py-2 rounded-lg items-center ${
+                      loginMethod === 'phone' ? 'bg-white shadow-xs' : ''
+                    }`}
+                  >
+                    <Text
+                      className={`text-xs font-bold ${
+                        loginMethod === 'phone' ? 'text-slate-900' : 'text-slate-500'
+                      }`}
+                    >
+                      {t('auth.loginByPhone')}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
               {displayError && (
                 <View className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl flex-row items-start gap-2">
                   <MaterialIcon
@@ -155,23 +202,18 @@ export const AuthScreen: React.FC = () => {
                 </View>
               )}
 
-              {/* Form Fields */}
               <View className="space-y-3.5">
                 {mode === 'register' && (
                   <View>
                     <Text className="text-xs font-bold text-slate-700 mb-1">
-                      Повне ім&apos;я
+                      {t('auth.fullName')}
                     </Text>
                     <View className="flex-row items-center border border-slate-300 rounded-xl px-3 py-2 bg-white">
-                      <MaterialIcon
-                        name="person-outline"
-                        size={18}
-                        color="#94a3b8"
-                      />
+                      <MaterialIcon name="person-outline" size={18} color="#94a3b8" />
                       <TextInput
                         value={name}
                         onChangeText={setName}
-                        placeholder="Тарас Шевченко"
+                        placeholder={locale === 'en' ? 'John Doe' : 'Тарас Шевченко'}
                         placeholderTextColor="#94a3b8"
                         autoCapitalize="words"
                         className="flex-1 ml-2 text-xs text-slate-900 font-medium"
@@ -180,27 +222,39 @@ export const AuthScreen: React.FC = () => {
                   </View>
                 )}
 
-                <View>
-                  <Text className="text-xs font-bold text-slate-700 mb-1">
-                    Електронна пошта
-                  </Text>
-                  <View className="flex-row items-center border border-slate-300 rounded-xl px-3 py-2 bg-white">
-                    <MaterialIcon name="mail-outline" size={18} color="#94a3b8" />
-                    <TextInput
-                      value={email}
-                      onChangeText={setEmail}
-                      placeholder="name@example.com"
-                      placeholderTextColor="#94a3b8"
-                      keyboardType="email-address"
-                      autoCapitalize="none"
-                      className="flex-1 ml-2 text-xs text-slate-900 font-medium"
-                    />
+                {(mode === 'register' || loginMethod === 'email') && (
+                  <View>
+                    <Text className="text-xs font-bold text-slate-700 mb-1">
+                      {t('auth.email')}
+                    </Text>
+                    <View className="flex-row items-center border border-slate-300 rounded-xl px-3 py-2 bg-white">
+                      <MaterialIcon name="mail-outline" size={18} color="#94a3b8" />
+                      <TextInput
+                        value={email}
+                        onChangeText={setEmail}
+                        placeholder="name@example.com"
+                        placeholderTextColor="#94a3b8"
+                        keyboardType="email-address"
+                        autoCapitalize="none"
+                        className="flex-1 ml-2 text-xs text-slate-900 font-medium"
+                      />
+                    </View>
                   </View>
-                </View>
+                )}
+
+                {(mode === 'register' || loginMethod === 'phone') && (
+                  <View>
+                    <Text className="text-xs font-bold text-slate-700 mb-1">
+                      {t('auth.phone')}
+                      {mode === 'register' ? ` (${t('common.optional')})` : ''}
+                    </Text>
+                    <MobilePhoneInput value={phone} onChange={setPhone} locale={locale} />
+                  </View>
+                )}
 
                 <View>
                   <Text className="text-xs font-bold text-slate-700 mb-1">
-                    Пароль доступу
+                    {t('auth.password')}
                   </Text>
                   <View className="flex-row items-center border border-slate-300 rounded-xl px-3 py-2 bg-white">
                     <MaterialIcon name="lock-outline" size={18} color="#94a3b8" />
@@ -216,7 +270,6 @@ export const AuthScreen: React.FC = () => {
                   </View>
                 </View>
 
-                {/* Submit Button */}
                 <TouchableOpacity
                   onPress={handleSubmit}
                   disabled={isLoading}
@@ -228,23 +281,12 @@ export const AuthScreen: React.FC = () => {
                   ) : (
                     <>
                       <Text className="text-xs font-bold text-white">
-                        {mode === 'login' ? 'Увійти в акаунт' : 'Зареєструватися'}
+                        {mode === 'login' ? t('auth.signIn') : t('auth.signUp')}
                       </Text>
-                      <MaterialIcon
-                        name="arrow-forward"
-                        size={16}
-                        color="#ffffff"
-                      />
+                      <MaterialIcon name="arrow-forward" size={16} color="#ffffff" />
                     </>
                   )}
                 </TouchableOpacity>
-              </View>
-
-              {/* Notice */}
-              <View className="mt-5 pt-4 border-t border-slate-100 items-center">
-                <Text className="text-[11px] text-slate-400 text-center">
-                  Єдиний обліковий запис BizX ID для веб-сайту та мобільного додатку
-                </Text>
               </View>
             </View>
           </View>

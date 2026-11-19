@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { mobileApi, setMobileToken } from '../lib/api';
+import { i18n, translateApiError } from '@bizx/utils';
 import type { UserProfile, LoginDto, RegisterDto } from '@bizx/common-types';
 
 interface MobileAuthState {
@@ -9,7 +10,7 @@ interface MobileAuthState {
   error: string | null;
   login: (dto: LoginDto) => Promise<boolean>;
   register: (dto: RegisterDto) => Promise<boolean>;
-  updateProfile: (dto: { name?: string; phone?: string }) => Promise<boolean>;
+  updateProfile: (dto: { name?: string; phone?: string | null; preferredLanguage?: 'uk' | 'en' }) => Promise<boolean>;
   logout: () => Promise<void>;
   init: () => Promise<void>;
 }
@@ -42,10 +43,10 @@ export const useMobileAuthStore = create<MobileAuthState>((set) => ({
         set({ user: res.data.user, isLoading: false, isInitialized: true });
         return true;
       }
-      set({ error: 'Помилка входу', isLoading: false });
+      set({ error: i18n.t('errors.invalidCredentials'), isLoading: false });
       return false;
     } catch (err: any) {
-      const message = err.data?.message || err.message || 'Невірний логін або пароль';
+      const message = translateApiError(err.data?.message || err.message, 'auth.loginError');
       set({ error: message, isLoading: false });
       return false;
     }
@@ -63,16 +64,16 @@ export const useMobileAuthStore = create<MobileAuthState>((set) => ({
         set({ user: res.data.user, isLoading: false, isInitialized: true });
         return true;
       }
-      set({ error: 'Помилка реєстрації', isLoading: false });
+      set({ error: i18n.t('auth.registerError'), isLoading: false });
       return false;
     } catch (err: any) {
-      const message = err.data?.message || err.message || 'Помилка реєстрації';
+      const message = translateApiError(err.data?.message || err.message, 'auth.registerError');
       set({ error: message, isLoading: false });
       return false;
     }
   },
 
-  updateProfile: async (dto: { name?: string; phone?: string }) => {
+  updateProfile: async (dto) => {
     set({ isLoading: true, error: null });
     try {
       const res = await mobileApi.auth.updateProfile(dto);
@@ -80,10 +81,10 @@ export const useMobileAuthStore = create<MobileAuthState>((set) => ({
         set({ user: res.data, isLoading: false });
         return true;
       }
-      set({ error: 'Не вдалося оновити профіль', isLoading: false });
+      set({ error: i18n.t('errors.saveFailed'), isLoading: false });
       return false;
     } catch (err: any) {
-      const message = err.data?.message || err.message || 'Помилка оновлення профілю';
+      const message = translateApiError(err.data?.message || err.message, 'errors.saveFailed');
       set({ error: message, isLoading: false });
       return false;
     }

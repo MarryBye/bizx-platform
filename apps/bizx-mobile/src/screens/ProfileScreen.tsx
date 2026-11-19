@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { MaterialIcon } from '../components/MaterialIcon';
 import { SafeImage } from '../components/SafeImage';
+import { MobilePhoneInput } from '../components/MobilePhoneInput';
 import { useMobileAuthStore } from '../store/useMobileAuthStore';
 import { useMobileTranslation } from '../hooks/useMobileTranslation';
 
@@ -70,9 +71,9 @@ export const ProfileScreen: React.FC = () => {
         {/* Metro Header */}
         <View className="px-5 pt-4 pb-2">
           <Text className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-            Особистий кабінет BizX
+            {t('account.title')}
           </Text>
-          <Text className="text-2xl font-black text-slate-900 mt-0.5">Мій профіль</Text>
+          <Text className="text-2xl font-black text-slate-900 mt-0.5">{t('mobile.tabProfile')}</Text>
         </View>
 
         {/* User Badge Tile */}
@@ -108,18 +109,18 @@ export const ProfileScreen: React.FC = () => {
           <View className="bg-white rounded-xl p-4 border border-slate-200 shadow-sm space-y-3.5">
             <View className="border-b border-slate-100 pb-2 flex-row items-center justify-between">
               <Text className="text-xs font-bold text-slate-900 uppercase tracking-wider">
-                Налаштування даних
+                {t('account.personalInfo')}
               </Text>
               {saveSuccess && (
                 <View className="flex-row items-center gap-1">
                   <MaterialIcon name="check-circle" size={14} color="#059669" />
-                  <Text className="text-[11px] font-bold text-emerald-600">Збережено</Text>
+                  <Text className="text-[11px] font-bold text-emerald-600">{t('common.success')}</Text>
                 </View>
               )}
             </View>
 
             <View className="space-y-1">
-              <Text className="text-[11px] font-bold text-slate-600">Ім&apos;я користувача</Text>
+              <Text className="text-[11px] font-bold text-slate-600">{t('auth.fullName')}</Text>
               <TextInput
                 value={editName}
                 onChangeText={setEditName}
@@ -130,15 +131,8 @@ export const ProfileScreen: React.FC = () => {
             </View>
 
             <View className="space-y-1">
-              <Text className="text-[11px] font-bold text-slate-600">Контактний телефон</Text>
-              <TextInput
-                value={editPhone}
-                onChangeText={setEditPhone}
-                placeholder="+380..."
-                placeholderTextColor="#94a3b8"
-                keyboardType="phone-pad"
-                className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 font-medium"
-              />
+              <Text className="text-[11px] font-bold text-slate-600">{t('auth.phone')}</Text>
+              <MobilePhoneInput value={editPhone} onChange={setEditPhone} locale={locale} />
             </View>
 
             <TouchableOpacity
@@ -152,7 +146,7 @@ export const ProfileScreen: React.FC = () => {
               ) : (
                 <>
                   <MaterialIcon name="save" size={14} color="#ffffff" />
-                  <Text className="text-white text-xs font-bold">Зберегти зміни</Text>
+                  <Text className="text-white text-xs font-bold">{t('account.saveChanges')}</Text>
                 </>
               )}
             </TouchableOpacity>
