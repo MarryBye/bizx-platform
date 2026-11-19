@@ -46,7 +46,10 @@ export const userSubscriptionDetailsSchema = z.object({
   daysLeft: z.number().int(),
   maxAllowedStores: z.number().int(),
   activeStoresCount: z.number().int(),
+  suspendedStoresCount: z.number().int().optional().default(0),
+  totalStoresCount: z.number().int().optional().default(0),
   hasExceededStoreLimit: z.boolean(),
+  needsStoreSelection: z.boolean().optional().default(false),
   canAccessBusinessAdmin: z.boolean()
 });
 export type UserSubscriptionDetails = z.infer<typeof userSubscriptionDetailsSchema>;
