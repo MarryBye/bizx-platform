@@ -1,7 +1,6 @@
 import * as React from 'react';
 import { cn } from '../lib/utils';
-import KeyboardArrowDownOutlinedIcon from '@mui/icons-material/KeyboardArrowDownOutlined';
-import CheckOutlinedIcon from '@mui/icons-material/CheckOutlined';
+import { ChevronDown, Check } from 'lucide-react';
 
 export interface SelectOption {
   value: string;
@@ -94,7 +93,7 @@ export function Select({
             {selectedOption ? selectedOption.label : placeholder}
           </span>
         </div>
-        <KeyboardArrowDownOutlinedIcon
+        <ChevronDown
           className={cn(
             'w-4 h-4 text-slate-400 shrink-0 transition-transform duration-150',
             isOpen && 'rotate-180 text-slate-700'
@@ -136,9 +135,7 @@ export function Select({
                     )}
                     <span className="truncate">{opt.label}</span>
                   </div>
-                  {isSelected && (
-                    <CheckOutlinedIcon className="w-3.5 h-3.5 text-white shrink-0" />
-                  )}
+                  {isSelected && <Check className="w-3.5 h-3.5 text-white shrink-0" />}
                 </button>
               );
             })
