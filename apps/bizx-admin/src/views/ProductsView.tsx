@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useBusinessStore } from '../store/useBusinessStore';
+import { useAuthStore } from '../store/useAuthStore';
 import { useTranslation } from '../hooks/useTranslation';
 import { Button, Input, Textarea, Card, CardContent, Badge, Modal, ProductPlaceholder, Select } from '@bizx/ui';
 import { Plus, Search, Archive, Image as ImageIcon, Upload, AlertCircle, Pencil } from 'lucide-react';
@@ -9,7 +10,9 @@ import type { Product } from '@bizx/common-types';
 export const ProductsView: React.FC = () => {
   const { products, categories, activeStore, createProduct, updateProduct, deleteProduct, isLoading } =
     useBusinessStore();
+  const { hasActiveSubscription } = useAuthStore();
   const { t, locale } = useTranslation();
+  const isReadOnly = !hasActiveSubscription;
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -158,7 +161,11 @@ export const ProductsView: React.FC = () => {
           </p>
         </div>
 
-        <Button onClick={openCreateModal} className="flex items-center gap-1.5 shrink-0">
+        <Button
+          onClick={openCreateModal}
+          disabled={isReadOnly}
+          className="flex items-center gap-1.5 shrink-0 disabled:opacity-50"
+        >
           <Plus className="w-4 h-4" /> {t('products.addProduct')}
         </Button>
       </div>

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useBusinessStore } from '../store/useBusinessStore';
+import { useAuthStore } from '../store/useAuthStore';
 import { useTranslation } from '../hooks/useTranslation';
 import { Card, CardHeader, CardTitle, CardContent, Button, Input, Textarea, PhoneInput } from '@bizx/ui';
 import { Upload, Check, AlertCircle, Building, Image as ImageIcon } from 'lucide-react';
@@ -7,7 +8,9 @@ import { StoreMediaImage } from '../components/StoreMediaImage';
 
 export const StoreSettingsView: React.FC = () => {
   const { activeStore, uploadStoreMedia, updateStore, isLoading } = useBusinessStore();
+  const { hasActiveSubscription } = useAuthStore();
   const { t, locale } = useTranslation();
+  const isReadOnly = !hasActiveSubscription;
 
   const [name, setName] = useState(activeStore?.name || '');
   const [description, setDescription] = useState(activeStore?.description || '');
@@ -290,8 +293,8 @@ export const StoreSettingsView: React.FC = () => {
             </div>
 
             <div className="flex justify-end pt-2">
-              <Button type="submit" disabled={isLoading}>
-                {isLoading ? 'Збереження...' : 'Зберегти зміни'}
+              <Button type="submit" disabled={isLoading || isReadOnly}>
+                {isLoading ? t('common.saving') : t('account.saveChanges')}
               </Button>
             </div>
           </form>

@@ -21,8 +21,9 @@ import type { StoreMember, StoreMemberRole } from '@bizx/common-types';
 
 export const StaffView: React.FC = () => {
   const { activeStoreId, stores } = useBusinessStore();
-  const { user: currentUser } = useAuthStore();
+  const { user: currentUser, hasActiveSubscription } = useAuthStore();
   const { t } = useTranslation();
+  const isReadOnly = !hasActiveSubscription;
   const [members, setMembers] = useState<StoreMember[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -160,12 +161,13 @@ export const StaffView: React.FC = () => {
         </div>
 
         <Button
+          disabled={isReadOnly}
           onClick={() => {
             setInviteError(null);
             setInviteSuccess(null);
             setIsInviteOpen(true);
           }}
-          className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white text-xs px-4 py-2.5 rounded-lg shadow-sm font-semibold"
+          className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white text-xs px-4 py-2.5 rounded-lg shadow-sm font-semibold disabled:opacity-50"
         >
           <UserPlus className="w-4 h-4" /> {t('staff.addMember')}
         </Button>
