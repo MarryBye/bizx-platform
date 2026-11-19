@@ -71,6 +71,7 @@ const STORE_PERMISSIONS = [
   { id: 105, code: 'products.archive', scope: 'store', category: 'products', action: 'archive', ownerOnly: false },
   { id: 111, code: 'orders.read', scope: 'store', category: 'orders', action: 'read', ownerOnly: false },
   { id: 112, code: 'orders.edit', scope: 'store', category: 'orders', action: 'edit', ownerOnly: false },
+  { id: 113, code: 'orders.refund', scope: 'store', category: 'orders', action: 'manage', ownerOnly: false },
   { id: 121, code: 'analytics.read', scope: 'store', category: 'analytics', action: 'read', ownerOnly: false },
   { id: 122, code: 'analytics.export', scope: 'store', category: 'analytics', action: 'export', ownerOnly: false },
   { id: 131, code: 'store.read', scope: 'store', category: 'store', action: 'read', ownerOnly: false },
@@ -104,7 +105,10 @@ const PLATFORM_PERMISSIONS = [
   { id: 241, code: 'platform.roles.read', scope: 'platform', category: 'platform_roles', action: 'read', ownerOnly: false },
   { id: 242, code: 'platform.roles.write', scope: 'platform', category: 'platform_roles', action: 'write', ownerOnly: false },
   { id: 243, code: 'platform.roles.edit', scope: 'platform', category: 'platform_roles', action: 'edit', ownerOnly: false },
-  { id: 244, code: 'platform.roles.archive', scope: 'platform', category: 'platform_roles', action: 'archive', ownerOnly: false }
+  { id: 244, code: 'platform.roles.archive', scope: 'platform', category: 'platform_roles', action: 'archive', ownerOnly: false },
+  { id: 251, code: 'platform.disputes.read', scope: 'platform', category: 'platform_disputes', action: 'read', ownerOnly: false },
+  { id: 252, code: 'platform.disputes.resolve', scope: 'platform', category: 'platform_disputes', action: 'manage', ownerOnly: false },
+  { id: 253, code: 'platform.strikes.revoke', scope: 'platform', category: 'platform_disputes', action: 'manage', ownerOnly: false }
 ];
 
 const ALL_PERMISSIONS = [...STORE_PERMISSIONS, ...PLATFORM_PERMISSIONS];
@@ -193,6 +197,10 @@ async function seed() {
     console.info('🧹 Очищення існуючих тестових даних...');
     await db.execute(sql`
       TRUNCATE TABLE 
+        store_reviews,
+        store_strikes,
+        order_disputes,
+        order_messages,
         order_items,
         orders,
         products,
@@ -433,9 +441,16 @@ async function seed() {
         'platform.staff.edit',
         'platform.roles.read',
         'platform.roles.write',
-        'platform.roles.edit'
+        'platform.roles.edit',
+        'platform.disputes.read',
+        'platform.disputes.resolve'
       ].map((c) => ({ roleId: platOpsRole.id, permissionId: permByCode.get(c)! })),
-      ...['platform.stores.read', 'platform.users.read', 'platform.analytics.read'].map((c) => ({
+      ...[
+        'platform.stores.read',
+        'platform.users.read',
+        'platform.analytics.read',
+        'platform.disputes.read'
+      ].map((c) => ({
         roleId: platSupportRole.id,
         permissionId: permByCode.get(c)!
       }))
@@ -959,6 +974,7 @@ async function seed() {
         'products.archive',
         'orders.read',
         'orders.edit',
+        'orders.refund',
         'analytics.read',
         'analytics.export',
         'store.read',
@@ -989,6 +1005,7 @@ async function seed() {
         'products.archive',
         'orders.read',
         'orders.edit',
+        'orders.refund',
         'analytics.read',
         'analytics.export',
         'store.read',
@@ -1546,6 +1563,7 @@ async function seed() {
             contactName: customer.name,
             paymentStatus,
             paymentMethod: pick(paymentMethods),
+            payoutStatus: status === 'delivered' ? 'released' : status === 'cancelled' ? 'refunded' : 'held',
             notes: pick(orderNotes),
             createdAt,
             updatedAt: createdAt
@@ -1560,6 +1578,214 @@ async function seed() {
         );
         totalOrderItemsCount += itemsDraft.length;
       }
+    }
+
+    // 9b. Оновлюємо баланс виплат, чати, спори, страйки та зіркові відгуки для демонстрації
+    console.info('💬 Створення чатів, спорів, страйків та оцінок закладів...');
+    const allSeededOrders = await db
+      .select()
+      .from(schema.orders)
+      .orderBy(sql`${schema.orders.createdAt} DESC`);
+
+    const coffeeOrdersSeed = allSeededOrders.filter((o) => o.storeId === storeCoffee.id);
+    const techOrdersSeed = allSeededOrders.filter((o) => o.storeId === storeTech.id);
+    const bakeryOrdersSeed = allSeededOrders.filter((o) => o.storeId === storeBakery.id);
+
+    // Активний спір у Кав'ярні + непрочитані повідомлення від клієнта
+    const coffeeDisputeOrder = coffeeOrdersSeed.find((o) => o.status !== 'cancelled') || coffeeOrdersSeed[0];
+    if (coffeeDisputeOrder) {
+      await db
+        .update(schema.orders)
+        .set({ status: 'shipped', paymentStatus: 'paid', payoutStatus: 'held' })
+        .where(sql`${schema.orders.id} = ${coffeeDisputeOrder.id}`);
+
+      await db.insert(schema.orderDisputes).values({
+        orderId: coffeeDisputeOrder.id,
+        storeId: storeCoffee.id,
+        customerId: coffeeDisputeOrder.customerId,
+        category: 'damaged',
+        description: 'Упаковка кави прийшла надірваною, частина зерен просипалась у коробку.',
+        status: 'open_store'
+      });
+
+      const t1 = new Date(Date.now() - 45 * 60 * 1000);
+      const t2 = new Date(Date.now() - 30 * 60 * 1000);
+      const t3 = new Date(Date.now() - 10 * 60 * 1000);
+      await db.insert(schema.orderMessages).values([
+        {
+          orderId: coffeeDisputeOrder.id,
+          senderId: coffeeDisputeOrder.customerId,
+          senderType: 'customer',
+          body: 'Вітаю! Отримав посилку, але пачка кави пошкоджена — просипалась у коробці.',
+          attachments: [],
+          readByCustomerAt: t1,
+          readByStoreAt: t2,
+          createdAt: t1
+        },
+        {
+          orderId: coffeeDisputeOrder.id,
+          senderId: coffeeManagerUser.id,
+          senderType: 'store',
+          body: 'Доброго дня! Дуже шкода, що так сталось. Можемо надіслати заміну або зробити швидке повернення.',
+          attachments: [],
+          readByCustomerAt: t3,
+          readByStoreAt: t2,
+          createdAt: t2
+        },
+        {
+          orderId: coffeeDisputeOrder.id,
+          senderId: coffeeDisputeOrder.customerId,
+          senderType: 'customer',
+          body: 'Підійде повернення коштів або нова пачка, підкажіть будь ласка як швидше?',
+          attachments: [],
+          readByCustomerAt: t3,
+          readByStoreAt: null,
+          createdAt: t3
+        }
+      ]);
+    }
+
+    // Ще одне замовлення в Кав'ярні з непрочитаним питанням (без спору)
+    const coffeeChatOrder = coffeeOrdersSeed.find((o) => o.id !== coffeeDisputeOrder?.id);
+    if (coffeeChatOrder) {
+      const tNow = new Date(Date.now() - 15 * 60 * 1000);
+      await db.insert(schema.orderMessages).values({
+        orderId: coffeeChatOrder.id,
+        senderId: coffeeChatOrder.customerId,
+        senderType: 'customer',
+        body: 'Підкажіть, будь ласка, чи можна зробити помел під джезву?',
+        attachments: [],
+        readByCustomerAt: tNow,
+        readByStoreAt: null,
+        createdAt: tNow
+      });
+    }
+
+    // Ескальована скарга в BizX Core для CyberTech Ukraine + 2 активні страйки (3-й викличе авто-паузу!)
+    const techDisputeOrder = techOrdersSeed.find((o) => o.status !== 'cancelled') || techOrdersSeed[0];
+    if (techDisputeOrder) {
+      await db
+        .update(schema.orders)
+        .set({ status: 'shipped', paymentStatus: 'paid', payoutStatus: 'held' })
+        .where(sql`${schema.orders.id} = ${techDisputeOrder.id}`);
+
+      const escTime = new Date(Date.now() - 2 * 60 * 60 * 1000);
+      await db.insert(schema.orderDisputes).values({
+        orderId: techDisputeOrder.id,
+        storeId: storeTech.id,
+        customerId: techDisputeOrder.customerId,
+        category: 'wrong_item',
+        description: 'Замовляв механічну клавіатуру, а прислали звичайний USB-хаб. Магазин не відповідає 2 дні.',
+        status: 'escalated_platform',
+        escalatedAt: escTime,
+        escalationReason: 'Продавець ігнорує чат та відмовляється повертати кошти.'
+      });
+
+      const m1 = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const m2 = new Date(Date.now() - 18 * 60 * 60 * 1000);
+      await db.insert(schema.orderMessages).values([
+        {
+          orderId: techDisputeOrder.id,
+          senderId: techDisputeOrder.customerId,
+          senderType: 'customer',
+          body: 'Вітаю! Прийшов зовсім інший товар у посилці. Прошу оформити повернення!',
+          attachments: [],
+          readByCustomerAt: m1,
+          readByStoreAt: m2,
+          createdAt: m1
+        },
+        {
+          orderId: techDisputeOrder.id,
+          senderId: techDisputeOrder.customerId,
+          senderType: 'customer',
+          body: 'Минула доба, відповіді немає — передаю скаргу до арбітражу BizX.',
+          attachments: [],
+          readByCustomerAt: escTime,
+          readByStoreAt: null,
+          createdAt: escTime
+        }
+      ]);
+
+      // 2 активні попередні страйки на CyberTech Ukraine (для демонстрації порогу 3/3 у BizX Control)
+      const expires90d = new Date(Date.now() + 80 * 24 * 60 * 60 * 1000);
+      await db.insert(schema.storeStrikes).values([
+        {
+          storeId: storeTech.id,
+          issuedByUserId: platOpsUser.id,
+          reason: 'Повторне порушення строків відправки оплачених замовлень.',
+          expiresAt: expires90d,
+          createdAt: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000)
+        },
+        {
+          storeId: storeTech.id,
+          issuedByUserId: platOpsUser.id,
+          reason: 'Відправлення товару з пошкодженою заводською пломбою та відмова від обміну.',
+          expiresAt: expires90d,
+          createdAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+        }
+      ]);
+    }
+
+    // Непрочитане повідомлення у Пекарні
+    const bakeryChatOrder = bakeryOrdersSeed[0];
+    if (bakeryChatOrder) {
+      const tb = new Date(Date.now() - 25 * 60 * 1000);
+      await db.insert(schema.orderMessages).values({
+        orderId: bakeryChatOrder.id,
+        senderId: bakeryChatOrder.customerId,
+        senderType: 'customer',
+        body: 'Добрий день! Чи буде свіжий круасан о 10:00 на самовивіз?',
+        attachments: [],
+        readByCustomerAt: tb,
+        readByStoreAt: null,
+        createdAt: tb
+      });
+    }
+
+    // Зіркові оцінки для доставлених замовлень + оновлення ratingAvg / ratingCount / payoutBalance
+    const reviewComments = [
+      'Чудова якість та швидка доставка! Замовлятиму ще.',
+      'Все свіже, акуратно запаковано, приємний сервіс.',
+      'Швидко відповіли в чаті та врахували всі побажання.',
+      'Добре, але доставка затрималась на 20 хвилин.',
+      'Найкращий сервіс у місті, рекомендую!',
+      'Товар повністю відповідає опису, дякую!'
+    ];
+
+    const reviewRatings = [5, 5, 5, 4, 5, 4, 5];
+    for (const [storeObj, list] of [
+      [storeCoffee, coffeeOrdersSeed],
+      [storeTech, techOrdersSeed],
+      [storeBakery, bakeryOrdersSeed]
+    ] as const) {
+      const delivered = list.filter((o) => o.status === 'delivered');
+      const toRate = delivered.slice(0, 6);
+      let sumRating = 0;
+      for (let i = 0; i < toRate.length; i++) {
+        const ord = toRate[i];
+        const rating = storeObj.id === storeTech.id ? (i % 2 === 0 ? 4 : 5) : reviewRatings[i % reviewRatings.length];
+        sumRating += rating;
+        await db.insert(schema.storeReviews).values({
+          storeId: storeObj.id,
+          orderId: ord.id,
+          customerId: ord.customerId,
+          rating,
+          comment: reviewComments[(i + storeObj.name.length) % reviewComments.length],
+          createdAt: ord.createdAt
+        });
+      }
+
+      const releasedBalance = delivered.reduce((acc, o) => acc + o.totalAmount, 0);
+      const ratingAvgScaled = toRate.length > 0 ? Math.round((sumRating / toRate.length) * 100) : 0;
+
+      await db
+        .update(schema.stores)
+        .set({
+          ratingAvg: ratingAvgScaled,
+          ratingCount: toRate.length,
+          payoutBalance: releasedBalance
+        })
+        .where(sql`${schema.stores.id} = ${storeObj.id}`);
     }
 
     const totalOrdersCount = orderSeq - 1;

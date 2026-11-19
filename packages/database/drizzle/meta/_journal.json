@@ -57,6 +57,13 @@
       "when": 1795094000000,
       "tag": "0007_normalize_rbac_and_icons",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1795100000000,
+      "tag": "0008_orders_chat_disputes_reviews_domains",
+      "breakpoints": true
     }
   ]
 }
