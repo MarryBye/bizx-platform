@@ -118,7 +118,11 @@ export const DashboardLayout: React.FC = () => {
   }, [activeStoreId, permsLoaded, myAccess]);
 
   const isStoreInactive = activeStore && activeStore.status !== 'active';
+  const isStoreWriteLocked = Boolean(
+    activeStore && (activeStore.status === 'suspended' || activeStore.status === 'archived')
+  );
   const isReadOnly = activeStore ? !ownerHasActiveSub : !hasActiveSubscription;
+  const isCatalogLocked = isReadOnly || isStoreWriteLocked;
 
   const merchantNavItems = [
     { id: 'overview' as const, label: t('admin.overview'), icon: LayoutDashboard, visible: hasPerm('analytics.read') },
@@ -466,11 +470,11 @@ export const DashboardLayout: React.FC = () => {
               )}
               {currentTab === 'products' && hasPerm('products.read') && (
                 <ProductsView
-                  isReadOnly={isReadOnly}
-                  canCreate={!isReadOnly && hasPerm('products.write')}
-                  canEdit={!isReadOnly && hasPerm('products.edit')}
-                  canChangeStatus={!isReadOnly && hasPerm('products.status')}
-                  canArchive={!isReadOnly && hasPerm('products.archive')}
+                  isReadOnly={isCatalogLocked}
+                  canCreate={!isCatalogLocked && hasPerm('products.write')}
+                  canEdit={!isCatalogLocked && hasPerm('products.edit')}
+                  canChangeStatus={!isCatalogLocked && hasPerm('products.status')}
+                  canArchive={!isCatalogLocked && hasPerm('products.archive')}
                 />
               )}
               {currentTab === 'orders' && hasPerm('orders.read') && (
@@ -481,8 +485,8 @@ export const DashboardLayout: React.FC = () => {
               )}
               {currentTab === 'settings' && hasPerm('store.read') && (
                 <StoreSettingsView
-                  isReadOnly={isReadOnly}
-                  canEdit={!isReadOnly && hasPerm('store.edit')}
+                  isReadOnly={isCatalogLocked}
+                  canEdit={!isCatalogLocked && hasPerm('store.edit')}
                 />
               )}
               {currentTab === 'staff' && hasPerm('staff.read') && <StaffView />}

@@ -99,13 +99,16 @@ export const DisputesView: React.FC<DisputesViewProps> = ({
   }, []);
 
   useEffect(() => {
+    setConfirmDecision(null);
+    setShowThirdStrikeModal(false);
+    setRevokingStrikeId(null);
+    setRevokeReason('');
     if (!selectedId) {
       setDetail(null);
       setResolutionNote('');
       setStrikeReason('');
       setIssueStrike(true);
       setNotice(null);
-      setShowThirdStrikeModal(false);
       return;
     }
 
@@ -447,7 +450,7 @@ export const DisputesView: React.FC<DisputesViewProps> = ({
                     <p className="font-bold text-slate-900">{detail.dispute.storeName}</p>
                     <p className="text-[11px] text-slate-600">
                       {t('common.status')}:{' '}
-                      <strong className="uppercase">{detail.dispute.storeStatus}</strong>
+                      <strong>{t(`statuses.store.${detail.dispute.storeStatus}`)}</strong>
                     </p>
                     <p
                       className={`text-[11px] font-bold ${
