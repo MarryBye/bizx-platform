@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { cn } from '../lib/utils';
 import { PermissionMatrix, type PermissionDef } from './permission-matrix';
 import { RoleIcon, ROLE_ICON_OPTIONS } from './role-icon';
+import { Modal } from './modal';
+import { Button } from './button';
 import {
   Shield,
   Plus,
@@ -11,7 +13,6 @@ import {
   Pencil,
   Lock,
   Archive,
-  X,
   AlertCircle,
   Users,
   Check,
@@ -431,55 +432,34 @@ export const RolesManager: React.FC<RolesManagerProps> = ({
         )}
       </div>
 
-      {/* Create / Edit Role Modal */}
-      {isModalOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm"
-          onClick={() => setIsModalOpen(false)}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-4xl max-h-[90vh] bg-white border border-slate-200 rounded-2xl shadow-2xl flex flex-col overflow-hidden"
-          >
-            <div className="px-6 py-4 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <span
-                  className="w-8 h-8 rounded-lg flex items-center justify-center border border-black/10"
-                  style={{ backgroundColor: `${color}18`, color }}
-                >
-                  {icon ? (
-                    <RoleIcon icon={icon} className="w-4 h-4" />
-                  ) : (
-                    <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
-                  )}
-                </span>
-                <div>
-                  <h2 className="text-sm font-black text-slate-900">
-                    {editingRole
-                      ? locale === 'en'
-                        ? `Edit role: ${editingRole.name}`
-                        : `Редагування ролі: ${editingRole.name}`
-                      : locale === 'en'
-                        ? 'Create new role'
-                        : 'Створення нової ролі'}
-                  </h2>
-                  <p className="text-[11px] text-slate-500">
-                    {locale === 'en'
-                      ? 'Configure role appearance and granular permissions'
-                      : 'Налаштуйте назву, значок, колір та доступи цієї ролі'}
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsModalOpen(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200/60"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSave} className="flex-1 overflow-y-auto p-6 space-y-5">
+      {/* Create / Edit Role Modal — Unified Light Modal */}
+      <Modal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        size="4xl"
+        icon={
+          icon ? (
+            <RoleIcon icon={icon} className="w-4 h-4" />
+          ) : (
+            <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
+          )
+        }
+        title={
+          editingRole
+            ? locale === 'en'
+              ? `Edit role: ${editingRole.name}`
+              : `Редагування ролі: ${editingRole.name}`
+            : locale === 'en'
+              ? 'Create new role'
+              : 'Створення нової ролі'
+        }
+        subtitle={
+          locale === 'en'
+            ? 'Configure role appearance and granular permissions'
+            : 'Налаштуйте назву, значок, колір та доступи цієї ролі'
+        }
+      >
+        <form onSubmit={handleSave} className="space-y-5">
               {modalError && (
                 <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 flex items-center gap-2">
                   <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
@@ -630,18 +610,10 @@ export const RolesManager: React.FC<RolesManagerProps> = ({
                 </div>
 
                 <div className="flex items-center justify-end gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setIsModalOpen(false)}
-                    className="px-4 py-2 border border-slate-200 text-xs font-bold text-slate-700 rounded-lg hover:bg-slate-50"
-                  >
+                  <Button variant="outline" onClick={() => setIsModalOpen(false)}>
                     {locale === 'en' ? 'Cancel' : 'Скасувати'}
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isSaving}
-                    className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-lg shadow-sm disabled:opacity-50"
-                  >
+                  </Button>
+                  <Button type="submit" variant="primary" disabled={isSaving}>
                     {isSaving
                       ? locale === 'en'
                         ? 'Saving...'
@@ -649,13 +621,11 @@ export const RolesManager: React.FC<RolesManagerProps> = ({
                       : locale === 'en'
                         ? 'Save role'
                         : 'Зберегти роль'}
-                  </button>
+                  </Button>
                 </div>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+      </Modal>
     </div>
   );
 };
