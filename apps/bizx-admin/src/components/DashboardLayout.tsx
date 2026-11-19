@@ -4,7 +4,7 @@ import { useBusinessStore } from '../store/useBusinessStore';
 import { useTranslation } from '../hooks/useTranslation';
 import { api } from '../lib/api';
 import type { MemberAccessSummary } from '@bizx/common-types';
-import { Button, Select, LanguageSelector } from '@bizx/ui';
+import { Select, LanguageSelector, SidebarAccountMenu } from '@bizx/ui';
 import {
   LayoutDashboard,
   BarChart3,
@@ -14,7 +14,6 @@ import {
   Users,
   ShieldCheck,
   CreditCard,
-  LogOut,
   Menu,
   X,
   ExternalLink,
@@ -39,7 +38,6 @@ export const DashboardLayout: React.FC = () => {
   const { stores, activeStore, activeStoreId, setActiveStore } = useBusinessStore();
   const [currentTab, setCurrentTab] = useState<TabType>('overview');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [avatarError, setAvatarError] = useState(false);
   const [myAccess, setMyAccess] = useState<MemberAccessSummary | null>(null);
   const [permsLoaded, setPermsLoaded] = useState(false);
   const [ownerHasActiveSub, setOwnerHasActiveSub] = useState<boolean>(true);
@@ -116,16 +114,8 @@ export const DashboardLayout: React.FC = () => {
     }
   };
 
-  const getInitials = (userName: string) => {
-    return userName
-      .split(' ')
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((w) => w[0].toUpperCase())
-      .join('');
-  };
-
   const avatarUrl = resolveMediaUrl(user?.avatarUrl);
+  const currentTabLabel = merchantNavItems.find((item) => item.id === currentTab)?.label;
 
   const formatTierShort = (tier?: string | null) => {
     if (tier === 'business_starter') return 'Starter';
@@ -144,17 +134,25 @@ export const DashboardLayout: React.FC = () => {
           </div>
           <span className="font-extrabold text-base tracking-tight text-slate-900">BizX</span>
         </div>
-        <button
-          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          className="p-2 rounded-lg border border-slate-200 text-slate-600"
-        >
-          {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-        </button>
+        <div className="flex items-center gap-2">
+          <LanguageSelector
+            value={locale}
+            onChange={handleLanguageChange}
+            variant="minimal"
+            align="right"
+          />
+          <button
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            className="p-2 rounded-lg border border-slate-200 text-slate-600"
+          >
+            {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          </button>
+        </div>
       </div>
 
       {/* Sticky Full-Viewport Sidebar */}
       <aside
-        className={`w-full md:w-64 bg-white border-r border-slate-200 flex-col shrink-0 md:sticky md:top-0 md:h-screen md:max-h-screen md:overflow-hidden ${
+        className={`w-full md:w-64 bg-white border-r border-slate-200 flex-col shrink-0 md:sticky md:top-0 md:h-screen md:max-h-screen z-30 ${
           isMobileMenuOpen ? 'flex' : 'hidden md:flex'
         }`}
       >
@@ -285,64 +283,49 @@ export const DashboardLayout: React.FC = () => {
           )}
         </div>
 
-        {/* Pinned Bottom User Profile, Language & Logout */}
-        <div className="p-3.5 border-t border-slate-100 bg-slate-50/70 space-y-2 shrink-0">
-          <a
-            href="http://localhost:3100/account"
-            target="_blank"
-            rel="noopener noreferrer"
-            title={t('admin.manageAccountTitle')}
-            className="w-full flex items-center justify-between p-1.5 rounded-lg hover:bg-white border border-transparent hover:border-slate-200 text-left transition-colors group cursor-pointer"
-          >
-            <div className="flex items-center gap-2.5 min-w-0">
-              {avatarUrl && !avatarError ? (
-                <img
-                  src={avatarUrl}
-                  alt={user?.name || ''}
-                  className="w-8 h-8 rounded-full object-cover border border-slate-200 shrink-0"
-                  onError={() => setAvatarError(true)}
-                />
-              ) : (
-                <div className="w-8 h-8 rounded-full bg-slate-900 text-white text-xs font-bold flex items-center justify-center shrink-0">
-                  {getInitials(user?.name || 'U')}
-                </div>
-              )}
-              <div className="min-w-0">
-                <p className="text-xs font-bold text-slate-900 truncate group-hover:text-blue-600 transition-colors">
-                  {user?.name || t('common.user')}
-                </p>
-                <p className="text-[10px] text-slate-400 truncate">{t('admin.profileInBizx')}</p>
-              </div>
-            </div>
-            <ExternalLink className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-700 shrink-0 ml-1" />
-          </a>
-
-          <div className="flex items-center gap-2">
-            <div className="flex-1 min-w-0">
-              <LanguageSelector
-                value={locale}
-                onChange={handleLanguageChange}
-                variant="sidebar"
-                dropUp={true}
-                align="left"
-                label={t('account.language')}
-              />
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={logout}
-              title={t('common.logout')}
-              className="px-2.5 text-xs text-red-600 hover:bg-red-50 hover:border-red-200 shrink-0"
-            >
-              <LogOut className="w-3.5 h-3.5 shrink-0" />
-            </Button>
-          </div>
+        {/* Pinned Bottom User Account Dropdown */}
+        <div className="p-3 border-t border-slate-100 bg-slate-50/70 shrink-0">
+          <SidebarAccountMenu
+            name={user?.name || t('common.user')}
+            subtitle={user?.email || user?.phone || null}
+            roleBadge={myAccess?.roleName || null}
+            avatarUrl={avatarUrl}
+            accountHref="http://localhost:3100/account"
+            accountSettingsLabel={t('nav.accountSettings')}
+            logoutLabel={t('common.logout')}
+            onLogout={logout}
+          />
         </div>
       </aside>
 
-      {/* Main Content Area */}
-      <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8">
+      {/* Right Content Column */}
+      <div className="flex-1 min-w-0 flex flex-col">
+        {/* Desktop Top Utility Bar (Breadcrumb + Landing-style Language Dropdown) */}
+        <header className="hidden md:flex sticky top-0 z-20 h-14 px-6 lg:px-8 bg-white/85 backdrop-blur-sm border-b border-slate-200/80 items-center justify-between gap-4 shrink-0">
+          <div className="flex items-center gap-2 min-w-0 text-xs">
+            {activeStore && (
+              <>
+                <span className="font-semibold text-slate-500 truncate max-w-[240px]">
+                  {activeStore.name}
+                </span>
+                <span className="text-slate-300">/</span>
+              </>
+            )}
+            <span className="font-bold text-slate-900 truncate">
+              {currentTabLabel || t('admin.storePanel')}
+            </span>
+          </div>
+
+          <LanguageSelector
+            value={locale}
+            onChange={handleLanguageChange}
+            variant="minimal"
+            align="right"
+          />
+        </header>
+
+        {/* Main Content Area */}
+        <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8">
         <div className="max-w-6xl mx-auto space-y-5">
           {/* Inactive / Read-Only Banner */}
           {(isReadOnly || isStoreInactive) && activeStore && (
@@ -454,7 +437,8 @@ export const DashboardLayout: React.FC = () => {
             </>
           )}
         </div>
-      </main>
+        </main>
+      </div>
     </div>
   );
 };
