@@ -17,7 +17,7 @@ export const stores = pgTable('stores', {
   address: varchar('address', { length: 500 }),
   phone: varchar('phone', { length: 50 }),
   email: varchar('email', { length: 255 }),
-  status: varchar('status', { length: 50 }).default('active').notNull(),
+  status: varchar('status', { length: 50 }).default('draft').notNull(),
   archivedAt: timestamp('archived_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull()

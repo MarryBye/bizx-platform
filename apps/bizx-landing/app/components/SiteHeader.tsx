@@ -3,16 +3,22 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { api } from '../lib/api';
+import { useTranslation } from '../hooks/useTranslation';
 import type { UserProfile, Store } from '@bizx/common-types';
+import { LanguageSelector } from '@bizx/ui';
 import { AuthModal } from './AuthModal';
-import KeyboardArrowDownOutlinedIcon from '@mui/icons-material/KeyboardArrowDownOutlined';
-import StorefrontOutlinedIcon from '@mui/icons-material/StorefrontOutlined';
-import ShieldOutlinedIcon from '@mui/icons-material/ShieldOutlined';
-import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
-import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
-import LoginOutlinedIcon from '@mui/icons-material/LoginOutlined';
+import {
+  ChevronDown,
+  Store as StoreIcon,
+  Shield,
+  CreditCard,
+  Settings,
+  LogOut,
+  LogIn
+} from 'lucide-react';
 
 export const SiteHeader: React.FC = () => {
+  const { t, locale, setLocale } = useTranslation();
   const [user, setUser] = useState<UserProfile | null>(null);
   const [stores, setStores] = useState<Store[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -28,7 +34,12 @@ export const SiteHeader: React.FC = () => {
       const res = await api.auth.me();
       if (res.success && res.data) {
         setUser(res.data);
-        // Load user stores to verify if user has businesses
+        if (
+          res.data.preferredLanguage &&
+          (res.data.preferredLanguage === 'uk' || res.data.preferredLanguage === 'en')
+        ) {
+          setLocale(res.data.preferredLanguage);
+        }
         try {
           const storesRes = await api.stores.getMyStores();
           if (storesRes.success && storesRes.data) {
@@ -52,7 +63,6 @@ export const SiteHeader: React.FC = () => {
   useEffect(() => {
     loadUserData();
 
-    // Listen to unauthorized event
     const handleUnauthorized = () => {
       setUser(null);
       setStores([]);
@@ -64,7 +74,6 @@ export const SiteHeader: React.FC = () => {
     };
   }, []);
 
-  // Close dropdown on click outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
@@ -86,16 +95,23 @@ export const SiteHeader: React.FC = () => {
     };
   }, []);
 
+  const handleLanguageChange = (nextLocale: 'uk' | 'en') => {
+    setLocale(nextLocale);
+    if (user) {
+      api.auth.updateProfile({ preferredLanguage: nextLocale }).catch(() => {});
+    }
+  };
+
   const handleLogout = async () => {
     try {
       await api.auth.logout();
     } catch {
       // Ignore
     }
-    // Clean all tokens from localStorage across all portals
     if (typeof window !== 'undefined') {
       localStorage.removeItem('bizx_access_token');
       localStorage.removeItem('bizx_admin_access_token');
+      localStorage.removeItem('bizx_platform_admin_token');
     }
     setUser(null);
     setStores([]);
@@ -103,13 +119,9 @@ export const SiteHeader: React.FC = () => {
     window.location.reload();
   };
 
-  // Determine user permissions
   const isBusinessUser = user?.role === 'business_owner' || stores.length > 0;
-
-  // Platform admin is strictly staff members with systemRole === 'platform_admin'
   const isPlatformStaff = user?.systemRole === 'platform_admin';
 
-  // Compute initials
   const getInitials = (name?: string) => {
     if (!name) return 'U';
     const parts = name.trim().split(/\s+/);
@@ -134,25 +146,27 @@ export const SiteHeader: React.FC = () => {
           {/* Business-oriented Navigation */}
           <nav className="hidden md:flex items-center gap-7 text-xs font-semibold text-slate-600">
             <Link href="/#features" className="hover:text-slate-900 transition-colors">
-              Можливості
+              {t('nav.features')}
             </Link>
             <Link href="/#benefits" className="hover:text-slate-900 transition-colors">
-              Для бізнесу
+              {t('nav.forBusiness')}
+            </Link>
+            <Link href="/pricing" className="hover:text-slate-900 transition-colors">
+              {t('nav.pricing')}
             </Link>
             <Link href="/#process" className="hover:text-slate-900 transition-colors">
-              Як це працює
+              {t('nav.howItWorks')}
             </Link>
             <Link href="/#contacts" className="hover:text-slate-900 transition-colors">
-              Контакти
+              {t('nav.contacts')}
             </Link>
           </nav>
 
-          {/* Header Actions / User Menu */}
-          <div className="flex items-center gap-3">
+          {/* Header Actions / User Menu + Subtle Language Dropdown in Top-Right */}
+          <div className="flex items-center gap-2">
             {isLoading ? (
               <div className="w-28 h-8 bg-slate-100 animate-pulse rounded-md" />
             ) : user ? (
-              /* User is Logged In: Dropdown Menu */
               <div className="relative" ref={dropdownRef}>
                 <button
                   type="button"
@@ -175,14 +189,13 @@ export const SiteHeader: React.FC = () => {
                   <span className="text-xs font-bold text-slate-900 max-w-[140px] truncate">
                     {user.name || user.email}
                   </span>
-                  <KeyboardArrowDownOutlinedIcon
-                    className={`w-4 h-4 text-slate-400 transition-transform ${
+                  <ChevronDown
+                    className={`w-4 h-4 text-slate-400 shrink-0 transition-transform ${
                       isDropdownOpen ? 'rotate-180 text-slate-900' : ''
                     }`}
                   />
                 </button>
 
-                {/* Dropdown Content */}
                 {isDropdownOpen && (
                   <div className="absolute right-0 mt-2 w-64 bg-white border border-slate-200 rounded-xl shadow-xl py-2 z-50 animate-fade-in text-xs">
                     {/* User Profile Summary */}
@@ -202,59 +215,75 @@ export const SiteHeader: React.FC = () => {
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="font-bold text-slate-900 truncate">
-                          {user.name || 'Користувач'}
+                          {user.name || t('common.user')}
                         </div>
                         <div className="text-[11px] text-slate-500 truncate">{user.email}</div>
                       </div>
                     </div>
-                    <div className="px-4 py-1.5">
+
+                    <div className="px-4 py-1.5 flex items-center gap-1.5 flex-wrap">
                       {isPlatformStaff ? (
                         <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800">
-                          BizX Staff
+                          {t('roles.platformAdmin')}
                         </span>
                       ) : isBusinessUser ? (
                         <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                          Бізнес-партнер
+                          {t('roles.businessPartner')}
                         </span>
                       ) : (
                         <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700">
-                          Клієнт
+                          {t('auth.clientRole')}
+                        </span>
+                      )}
+
+                      {user.subscriptionTier && user.subscriptionTier !== 'free' && (
+                        <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-200 uppercase">
+                          {user.subscriptionTier === 'client_premium' && 'Premium'}
+                          {user.subscriptionTier === 'business_starter' && 'Starter'}
+                          {user.subscriptionTier === 'business_pro' && 'Pro'}
+                          {user.subscriptionTier === 'business_enterprise' && 'Enterprise'}
                         </span>
                       )}
                     </div>
 
-                    {/* Links */}
+                    {/* Uniform Lucide Icons Links */}
                     <div className="py-1">
-                      {/* Business Panel Link (if business owner or has stores) */}
                       {isBusinessUser && (
                         <a
                           href="http://localhost:3102"
                           className="flex items-center gap-2.5 px-4 py-2 text-slate-700 hover:bg-slate-100 hover:text-slate-900 transition-colors font-medium"
                         >
-                          <StorefrontOutlinedIcon className="w-4 h-4 text-slate-500" />
-                          <span>Перейти в панель бізнесу</span>
+                          <StoreIcon className="w-4 h-4 shrink-0 text-slate-500" />
+                          <span>{t('nav.businessAdmin')}</span>
                         </a>
                       )}
 
-                      {/* BizX Platform Admin Link (if BizX employee / platform admin) */}
                       {isPlatformStaff && (
                         <a
                           href="http://localhost:3103"
                           className="flex items-center gap-2.5 px-4 py-2 text-slate-700 hover:bg-slate-100 hover:text-slate-900 transition-colors font-medium"
                         >
-                          <ShieldOutlinedIcon className="w-4 h-4 text-blue-600" />
-                          <span>BizX Panel</span>
+                          <Shield className="w-4 h-4 shrink-0 text-slate-500" />
+                          <span>{t('nav.platformAdmin')}</span>
                         </a>
                       )}
 
-                      {/* Account Settings */}
+                      <Link
+                        href="/pricing"
+                        onClick={() => setIsDropdownOpen(false)}
+                        className="flex items-center gap-2.5 px-4 py-2 text-slate-700 hover:bg-slate-100 hover:text-slate-900 transition-colors font-medium"
+                      >
+                        <CreditCard className="w-4 h-4 shrink-0 text-slate-500" />
+                        <span>{t('account.subscriptionsTab')}</span>
+                      </Link>
+
                       <Link
                         href="/account"
                         onClick={() => setIsDropdownOpen(false)}
                         className="flex items-center gap-2.5 px-4 py-2 text-slate-700 hover:bg-slate-100 hover:text-slate-900 transition-colors font-medium"
                       >
-                        <SettingsOutlinedIcon className="w-4 h-4 text-slate-500" />
-                        <span>Налаштування акаунта</span>
+                        <Settings className="w-4 h-4 shrink-0 text-slate-500" />
+                        <span>{t('nav.settings')}</span>
                       </Link>
                     </div>
 
@@ -265,46 +294,55 @@ export const SiteHeader: React.FC = () => {
                         onClick={handleLogout}
                         className="w-full flex items-center gap-2.5 px-4 py-2 text-red-600 hover:bg-red-50 transition-colors font-semibold text-left"
                       >
-                        <LogoutOutlinedIcon className="w-4 h-4 text-red-500" />
-                        <span>Вийти</span>
+                        <LogOut className="w-4 h-4 shrink-0 text-red-500" />
+                        <span>{t('common.logout')}</span>
                       </button>
                     </div>
                   </div>
                 )}
               </div>
             ) : (
-              /* User is NOT Logged In: "Увійти в акаунт" */
-              <div className="flex items-center gap-2.5">
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => setIsAuthModalOpen(true)}
                   className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-lg border border-slate-300 bg-white text-slate-800 hover:bg-slate-50 hover:border-slate-400 transition-colors shadow-sm"
                 >
-                  <LoginOutlinedIcon className="w-4 h-4 text-slate-600" />
-                  <span>Увійти в акаунт</span>
+                  <LogIn className="w-4 h-4 shrink-0 text-slate-600" />
+                  <span>{t('common.login')}</span>
                 </button>
 
                 <a
                   href="http://localhost:3102"
                   className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-lg bg-slate-900 text-white hover:bg-slate-800 transition-colors shadow-sm"
                 >
-                  <span>Для партнерів</span>
+                  <span>{t('nav.forPartners')}</span>
                 </a>
               </div>
             )}
+
+            {/* Subtle Language Dropdown tucked neatly in the top-right corner */}
+            <LanguageSelector
+              value={locale}
+              onChange={handleLanguageChange}
+              variant="minimal"
+              align="right"
+            />
           </div>
         </div>
       </header>
 
-      {/* Login / Registration Modal */}
       <AuthModal
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
         onSuccess={(loggedUser) => {
           setUser(loggedUser);
-          api.stores.getMyStores().then((sRes) => {
-            if (sRes.success && sRes.data) setStores(sRes.data);
-          }).catch(() => {});
+          api.stores
+            .getMyStores()
+            .then((sRes) => {
+              if (sRes.success && sRes.data) setStores(sRes.data);
+            })
+            .catch(() => {});
         }}
       />
     </>

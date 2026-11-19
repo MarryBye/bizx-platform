@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import type { PlatformUserRecord } from '../components/UserDetailsModal';
+import { useTranslation } from '../hooks/useTranslation';
 import {
   Users,
   Search,
@@ -15,6 +16,7 @@ interface UsersViewProps {
 }
 
 export const UsersView: React.FC<UsersViewProps> = ({ users, onSelectUser, isLoading: _isLoading }) => {
+  const { t } = useTranslation();
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -45,51 +47,52 @@ export const UsersView: React.FC<UsersViewProps> = ({ users, onSelectUser, isLoa
       case 'business_owner':
         return (
           <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-            Власник бізнесу
+            {t('auth.businessRole')}
           </span>
         );
       case 'admin':
         return (
           <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-200">
-            Адміністратор
+            {t('roles.platformAdmin')}
           </span>
         );
       default:
         return (
           <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
-            Клієнт
+            {t('auth.clientRole')}
           </span>
         );
     }
   };
 
   const getStatusBadge = (status: string) => {
+    const label = t(`statuses.user.${status}`);
     switch (status) {
       case 'active':
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-            <span>Активний</span>
+            <span>{label}</span>
           </span>
         );
       case 'suspended':
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
             <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-            <span>Заблокований</span>
+            <span>{label}</span>
           </span>
         );
       case 'archived':
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-500 border border-slate-200">
             <Archive className="w-3 h-3" />
-            <span>В архіві</span>
+            <span>{label}</span>
           </span>
         );
       default:
         return (
           <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-700">
-            {status}
+            {label}
           </span>
         );
     }

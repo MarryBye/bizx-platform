@@ -1,21 +1,22 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useAuthStore } from '../store/useAuthStore';
-import { Button, Input, Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@bizx/ui';
-import { Store } from 'lucide-react';
+import { useTranslation } from '../hooks/useTranslation';
+import { AuthScreen, LanguageSelector } from '@bizx/ui';
 
 export const LoginView: React.FC = () => {
-  const { login, register, isLoading, error } = useAuthStore();
-  const [isRegisterMode, setIsRegisterMode] = useState(false);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
+  const { login, isLoading, error } = useAuthStore();
+  const { t, locale, setLocale } = useTranslation();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (isRegisterMode) {
-      await register({ name, email, password, role: 'business_owner' });
+  const handleLogin = async (data: {
+    loginMethod?: 'email' | 'phone';
+    email: string;
+    phone?: string;
+    password: string;
+  }) => {
+    if (data.loginMethod === 'phone') {
+      await login({ phone: data.phone, password: data.password });
     } else {
-      await login({ email, password });
+      await login({ email: data.email, password: data.password });
     }
   };
 

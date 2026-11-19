@@ -1,20 +1,13 @@
 import React, { useState } from 'react';
 import { useBusinessStore } from '../store/useBusinessStore';
+import { useTranslation } from '../hooks/useTranslation';
 import { Card, CardContent, Badge, Select, Button, Modal } from '@bizx/ui';
 import { ShoppingBag, Phone, MapPin, Pencil, Check, X } from 'lucide-react';
 import type { OrderStatus } from '@bizx/common-types';
 
-const STATUS_LABELS: Record<OrderStatus, string> = {
-  pending: 'Очікує',
-  paid: 'Оплачено',
-  confirmed: 'Підтверджено',
-  shipped: 'Відправлено',
-  delivered: 'Доставлено',
-  cancelled: 'Скасовано'
-};
-
 export const OrdersView: React.FC = () => {
   const { orders, activeStore, updateOrderStatus, isLoading } = useBusinessStore();
+  const { t, locale } = useTranslation();
 
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<OrderStatus>('pending');
@@ -26,27 +19,27 @@ export const OrdersView: React.FC = () => {
   } | null>(null);
 
   const formatPrice = (kopecks: number) => {
-    return (kopecks / 100).toLocaleString('uk-UA', {
+    return (kopecks / 100).toLocaleString(locale === 'en' ? 'en-US' : 'uk-UA', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2
     });
   };
 
   const getStatusBadge = (status: string) => {
+    const label = t(`statuses.order.${status}`);
     switch (status) {
       case 'delivered':
-        return <Badge variant="success">Доставлено</Badge>;
+        return <Badge variant="success">{label}</Badge>;
       case 'confirmed':
-        return <Badge variant="default">Підтверджено</Badge>;
       case 'processing':
-        return <Badge variant="default">Комплектується</Badge>;
       case 'shipped':
-        return <Badge variant="default">Відправлено</Badge>;
+      case 'paid':
+        return <Badge variant="default">{label}</Badge>;
       case 'cancelled':
-        return <Badge variant="destructive">Скасовано</Badge>;
+        return <Badge variant="destructive">{label}</Badge>;
       case 'pending':
       default:
-        return <Badge variant="warning">Очікує</Badge>;
+        return <Badge variant="warning">{label}</Badge>;
     }
   };
 
@@ -60,7 +53,7 @@ export const OrdersView: React.FC = () => {
   if (!activeStore) {
     return (
       <div className="p-8 text-center text-slate-500">
-        Оберіть магазин для перегляду замовлень
+        {t('admin.selectStore')}
       </div>
     );
   }
@@ -69,9 +62,9 @@ export const OrdersView: React.FC = () => {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900">Замовлення магазину</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900">{t('orders.title')}</h1>
         <p className="text-sm text-slate-500 mt-1">
-          Всі замовлення клієнтів для магазину «{activeStore.name}»
+          {t('orders.subtitle')} — «{activeStore.name}»
         </p>
       </div>
 
@@ -223,10 +216,7 @@ export const OrdersView: React.FC = () => {
       ) : (
         <Card className="border-dashed border-slate-300 p-12 text-center">
           <ShoppingBag className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-          <p className="font-medium text-slate-700">Замовлень поки немає</p>
-          <p className="text-xs text-slate-400 mt-1">
-            Нові замовлення покупців автоматично з&apos;являться у цьому списку
-          </p>
+          <p className="font-medium text-slate-700">{t('orders.empty')}</p>
         </Card>
       )}
 
@@ -235,15 +225,15 @@ export const OrdersView: React.FC = () => {
         <Modal
           isOpen={confirmModal.isOpen}
           onClose={() => setConfirmModal(null)}
-          title="Підтвердження зміни статусу"
+          title={t('orders.changeStatus')}
         >
           <div className="space-y-4">
             <p className="text-xs text-slate-600 leading-relaxed">
-              Ви дійсно бажаєте змінити статус замовлення <strong className="text-slate-900">#{confirmModal.orderNumber}</strong> на:
+              {t('orders.orderNumber')} <strong className="text-slate-900">#{confirmModal.orderNumber}</strong>
             </p>
             <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-center">
               <span className="text-sm font-bold text-slate-900">
-                {STATUS_LABELS[confirmModal.newStatus]}
+                {t(`statuses.order.${confirmModal.newStatus}`)}
               </span>
             </div>
             <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
@@ -253,7 +243,7 @@ export const OrdersView: React.FC = () => {
                 onClick={() => setConfirmModal(null)}
                 disabled={isLoading}
               >
-                Скасувати
+                {t('common.cancel')}
               </Button>
               <Button
                 size="sm"
@@ -261,7 +251,7 @@ export const OrdersView: React.FC = () => {
                 onClick={handleConfirmStatusChange}
                 disabled={isLoading}
               >
-                {isLoading ? 'Збереження...' : 'Підтвердити зміну'}
+                {isLoading ? t('common.saving') : t('common.confirm')}
               </Button>
             </div>
           </div>

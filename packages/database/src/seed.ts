@@ -301,6 +301,10 @@ async function seed() {
 
     // 2. Користувачі (Users)
     console.info('👤 Створення користувачів...');
+    const nowSub = Date.now();
+    const in30Days = new Date(nowSub + 30 * 24 * 60 * 60 * 1000);
+    const in365Days = new Date(nowSub + 365 * 24 * 60 * 60 * 1000);
+
     await db.insert(schema.users).values({
       email: 'admin@bizx.ua',
       name: 'Олександр Коваленко',
@@ -308,6 +312,10 @@ async function seed() {
       role: 'admin',
       systemRole: 'platform_admin',
       phone: '+380501234567',
+      preferredLanguage: 'uk',
+      subscriptionTier: 'business_enterprise',
+      subscriptionStatus: 'active',
+      subscriptionExpiresAt: in365Days,
       avatarUrl: adminAvatarUrl
     });
 
@@ -319,6 +327,10 @@ async function seed() {
         passwordHash: PASSWORD_HASH,
         role: 'business_owner',
         phone: '+380671112233',
+        preferredLanguage: 'uk',
+        subscriptionTier: 'business_pro',
+        subscriptionStatus: 'active',
+        subscriptionExpiresAt: in30Days,
         avatarUrl: coffeeOwnerAvatarUrl
       })
       .returning();
@@ -331,6 +343,10 @@ async function seed() {
         passwordHash: PASSWORD_HASH,
         role: 'business_owner',
         phone: '+380934445566',
+        preferredLanguage: 'uk',
+        subscriptionTier: 'business_starter',
+        subscriptionStatus: 'active',
+        subscriptionExpiresAt: in30Days,
         avatarUrl: techOwnerAvatarUrl
       })
       .returning();
@@ -343,6 +359,10 @@ async function seed() {
         passwordHash: PASSWORD_HASH,
         role: 'business_owner',
         phone: '+380667778899',
+        preferredLanguage: 'uk',
+        subscriptionTier: 'business_starter',
+        subscriptionStatus: 'active',
+        subscriptionExpiresAt: in30Days,
         avatarUrl: bakeryOwnerAvatarUrl
       })
       .returning();
@@ -356,6 +376,9 @@ async function seed() {
         passwordHash: PASSWORD_HASH,
         role: 'client',
         phone: '+380991239876',
+        preferredLanguage: 'uk',
+        subscriptionTier: 'free',
+        subscriptionStatus: 'none',
         avatarUrl: '/storage/defaults/avatar.svg' // Статична заглушка
       })
       .returning();

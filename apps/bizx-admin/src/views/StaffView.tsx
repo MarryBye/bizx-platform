@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useBusinessStore } from '../store/useBusinessStore';
 import { useAuthStore } from '../store/useAuthStore';
+import { useTranslation } from '../hooks/useTranslation';
+import { translateApiError } from '@bizx/utils';
 import { api } from '../lib/api';
 import { resolveMediaUrl } from '../lib/media';
 import { Button, Input, Modal, Select } from '@bizx/ui';
@@ -19,7 +21,9 @@ import type { StoreMember, StoreMemberRole } from '@bizx/common-types';
 
 export const StaffView: React.FC = () => {
   const { activeStoreId, stores } = useBusinessStore();
-  const { user: currentUser } = useAuthStore();
+  const { user: currentUser, hasActiveSubscription } = useAuthStore();
+  const { t } = useTranslation();
+  const isReadOnly = !hasActiveSubscription;
   const [members, setMembers] = useState<StoreMember[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -48,7 +52,7 @@ export const StaffView: React.FC = () => {
         setMembers(res.data);
       }
     } catch (err: any) {
-      setError(err?.data?.message || err?.message || 'Не вдалося завантажити список персоналу');
+      setError(translateApiError(err?.data?.message || err?.message, 'errors.loadFailed'));
     } finally {
       setIsLoading(false);
     }
@@ -110,20 +114,20 @@ export const StaffView: React.FC = () => {
       case 'owner':
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[11px] font-bold bg-slate-900 text-white uppercase tracking-wider">
-            <ShieldCheck className="w-3 h-3" /> Власник
+            <ShieldCheck className="w-3 h-3" /> {t('roles.owner')}
           </span>
         );
       case 'manager':
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[11px] font-bold bg-slate-200 text-slate-800 uppercase tracking-wider">
-            <Briefcase className="w-3 h-3 text-slate-600" /> Керуючий
+            <Briefcase className="w-3 h-3 text-slate-600" /> {t('roles.manager')}
           </span>
         );
       case 'staff':
       default:
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-600 uppercase tracking-wider border border-slate-200">
-            <User className="w-3 h-3 text-slate-400" /> Персонал
+            <User className="w-3 h-3 text-slate-400" /> {t('roles.staff')}
           </span>
         );
     }
@@ -133,10 +137,7 @@ export const StaffView: React.FC = () => {
     return (
       <div className="bg-white border border-slate-200 rounded-xl p-8 text-center">
         <Users className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-        <h3 className="font-bold text-slate-800 text-base">Оберіть магазин</h3>
-        <p className="text-xs text-slate-500 mt-1">
-          Для керування співробітниками оберіть активний заклад у бічній панелі
-        </p>
+        <h3 className="font-bold text-slate-800 text-base">{t('admin.selectStore')}</h3>
       </div>
     );
   }
@@ -148,26 +149,27 @@ export const StaffView: React.FC = () => {
         <div>
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-              {activeStore?.name || 'Магазин'}
+              {activeStore?.name || t('admin.storeLabel')}
             </span>
             <span className="text-slate-300">•</span>
-            <span className="text-xs font-medium text-slate-500">Команда та ролі</span>
+            <span className="text-xs font-medium text-slate-500">{t('admin.staff')}</span>
           </div>
-          <h1 className="text-xl font-black text-slate-900 mt-1">Персонал магазину</h1>
+          <h1 className="text-xl font-black text-slate-900 mt-1">{t('staff.title')}</h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Керуйте доступами керуючих, касирів та операторів вашого закладу
+            {t('staff.subtitle')}
           </p>
         </div>
 
         <Button
+          disabled={isReadOnly}
           onClick={() => {
             setInviteError(null);
             setInviteSuccess(null);
             setIsInviteOpen(true);
           }}
-          className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white text-xs px-4 py-2.5 rounded-lg shadow-sm font-semibold"
+          className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white text-xs px-4 py-2.5 rounded-lg shadow-sm font-semibold disabled:opacity-50"
         >
-          <UserPlus className="w-4 h-4" /> Запросити співробітника
+          <UserPlus className="w-4 h-4" /> {t('staff.addMember')}
         </Button>
       </div>
 
