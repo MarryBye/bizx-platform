@@ -164,7 +164,8 @@ export class AuthService {
     const payload = {
       sub: user.id,
       email: user.email,
-      name: user.name
+      name: user.name,
+      tokenType: 'access' as const
     };
 
     const accessToken = await this.jwtService.signAsync(payload, {
@@ -341,22 +342,34 @@ export class AuthService {
   }
 
   async logout(rawRefreshToken?: string, userId?: string, bearerToken?: string): Promise<void> {
-    if (rawRefreshToken) {
+    if (rawRefreshToken && typeof rawRefreshToken === 'string') {
       const tokenHash = this.hashToken(rawRefreshToken);
       await this.databaseService.db
         .delete(refreshTokens)
         .where(eq(refreshTokens.tokenHash, tokenHash));
     }
 
-    let resolvedUserId = userId;
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    let resolvedUserId = userId && uuidRegex.test(userId) ? userId : undefined;
+
     if (!resolvedUserId && bearerToken) {
       try {
-        const decoded = this.jwtService.decode(bearerToken) as { sub?: string } | null;
-        if (decoded?.sub) {
-          resolvedUserId = decoded.sub;
+        // Verify cryptographic signature (allowing expired access token during logout), never trust unverified decode()
+        const verified = await this.jwtService.verifyAsync<{
+          sub?: string;
+          tokenType?: string;
+          type?: string;
+        }>(bearerToken, { ignoreExpiration: true });
+        if (
+          verified?.tokenType === 'access' &&
+          verified?.type !== 'store_preview' &&
+          typeof verified?.sub === 'string' &&
+          uuidRegex.test(verified.sub)
+        ) {
+          resolvedUserId = verified.sub;
         }
       } catch {
-        // ignore
+        // Invalid/forged bearer token: silently ignore instead of wiping any user's sessions
       }
     }
 

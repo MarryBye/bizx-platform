@@ -13,11 +13,35 @@ export const ALLOWED_IMAGE_MIMES = [
   'image/jpeg',
   'image/png',
   'image/webp',
-  'image/svg+xml',
   'image/gif'
 ] as const;
 
 export const MAX_IMAGE_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+
+function hasValidMagicBytes(buf: Buffer, mime: string): boolean {
+  if (buf.length < 4) return false;
+  if (mime === 'image/jpeg') {
+    return buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff;
+  }
+  if (mime === 'image/png') {
+    return buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47;
+  }
+  if (mime === 'image/gif') {
+    const header = buf.subarray(0, 6).toString('ascii');
+    return header === 'GIF87a' || header === 'GIF89a';
+  }
+  if (mime === 'image/webp') {
+    return (
+      buf.length >= 12 &&
+      buf.subarray(0, 4).toString('ascii') === 'RIFF' &&
+      buf.subarray(8, 12).toString('ascii') === 'WEBP'
+    );
+  }
+  if (mime === 'application/pdf') {
+    return buf.subarray(0, 5).toString('ascii') === '%PDF-';
+  }
+  return false;
+}
 
 export function validateImageFile(file?: UploadedFileDto): UploadedFileDto {
   if (!file || !file.buffer || file.size === 0) {
@@ -26,7 +50,7 @@ export function validateImageFile(file?: UploadedFileDto): UploadedFileDto {
 
   if (!ALLOWED_IMAGE_MIMES.includes(file.mimetype as (typeof ALLOWED_IMAGE_MIMES)[number])) {
     throw new BadRequestException(
-      `Непідтримуваний формат файлу "${file.mimetype}". Дозволені формати: JPEG, PNG, WebP, SVG, GIF`
+      `Непідтримуваний формат файлу "${file.mimetype}". Дозволені формати: JPEG, PNG, WebP, GIF`
     );
   }
 
@@ -34,6 +58,10 @@ export function validateImageFile(file?: UploadedFileDto): UploadedFileDto {
     throw new BadRequestException(
       `Розмір файлу (${Math.round(file.size / 1024 / 1024)} МБ) перевищує ліміт у 10 МБ`
     );
+  }
+
+  if (!hasValidMagicBytes(file.buffer, file.mimetype)) {
+    throw new BadRequestException('Вміст файлу не відповідає заявленому формату зображення');
   }
 
   return file;
@@ -62,6 +90,10 @@ export function validateChatAttachmentFile(file?: UploadedFileDto): UploadedFile
     throw new BadRequestException(
       `Розмір файлу (${Math.round(file.size / 1024 / 1024)} МБ) перевищує ліміт у 10 МБ`
     );
+  }
+
+  if (!hasValidMagicBytes(file.buffer, file.mimetype)) {
+    throw new BadRequestException('Вміст файлу не відповідає заявленому формату');
   }
 
   return file;

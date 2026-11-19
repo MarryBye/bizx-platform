@@ -22,6 +22,7 @@ import {
   eq,
   and,
   ne,
+  gte,
   isNull,
   inArray,
   desc,
@@ -89,7 +90,7 @@ export class OrdersService {
 
   private generateOrderNumber(): string {
     const datePart = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    const randomPart = Math.floor(1000 + Math.random() * 9000);
+    const randomPart = Math.floor(100000 + Math.random() * 900000);
     return `BX-${datePart}-${randomPart}`;
   }
 
@@ -139,7 +140,7 @@ export class OrdersService {
               .where(
                 and(
                   inArray(orderMessages.orderId, orderIds),
-                  eq(orderMessages.senderType, 'customer'),
+                  inArray(orderMessages.senderType, ['customer', 'platform']),
                   isNull(orderMessages.readByStoreAt)
                 )
               )
@@ -226,11 +227,25 @@ export class OrdersService {
       throw new BadRequestException('Замовлення в цьому закладі наразі недоступні');
     }
 
-    const productIds = dto.items.map((item) => item.productId);
+    // Aggregate duplicate productId entries to prevent negative inventory bypass
+    const aggregatedQuantities = new Map<string, number>();
+    for (const item of dto.items) {
+      aggregatedQuantities.set(
+        item.productId,
+        (aggregatedQuantities.get(item.productId) || 0) + item.quantity
+      );
+    }
+    const uniqueProductIds = Array.from(aggregatedQuantities.keys());
     const dbProducts = await this.databaseService.db
       .select()
       .from(products)
-      .where(and(eq(products.storeId, dto.storeId), inArray(products.id, productIds)));
+      .where(
+        and(
+          eq(products.storeId, dto.storeId),
+          inArray(products.id, uniqueProductIds),
+          isNull(products.archivedAt)
+        )
+      );
 
     const productMap = new Map(dbProducts.map((p) => [p.id, p]));
 
@@ -243,28 +258,32 @@ export class OrdersService {
       totalPrice: number;
     }[] = [];
 
-    for (const item of dto.items) {
-      const prod = productMap.get(item.productId);
+    for (const [productId, quantity] of aggregatedQuantities.entries()) {
+      const prod = productMap.get(productId);
       if (!prod) {
-        throw new NotFoundException(`Товар ID "${item.productId}" не знайдено в цьому закладі`);
+        throw new NotFoundException(`Товар ID "${productId}" не знайдено в цьому закладі`);
       }
       if (!prod.isActive) {
         throw new BadRequestException(`Товар "${prod.name}" наразі недоступний`);
       }
-      if (prod.inventoryCount < item.quantity) {
+      if (prod.inventoryCount < quantity) {
         throw new BadRequestException(
           `Недостатньо товару "${prod.name}" на складі (в наявності: ${prod.inventoryCount})`
         );
       }
 
-      const itemTotalPrice = prod.price * item.quantity;
+      const itemTotalPrice = prod.price * quantity;
       totalAmount += itemTotalPrice;
+
+      if (totalAmount > 2_147_483_647) {
+        throw new BadRequestException('Загальна сума замовлення перевищує допустимий ліміт');
+      }
 
       orderItemsToInsert.push({
         productId: prod.id,
         productName: prod.name,
         unitPrice: prod.price,
-        quantity: item.quantity,
+        quantity,
         totalPrice: itemTotalPrice
       });
     }
@@ -292,6 +311,27 @@ export class OrdersService {
 
       const createdItems: OrderItemRecord[] = [];
       for (const item of orderItemsToInsert) {
+        const [decremented] = await tx
+          .update(products)
+          .set({
+            inventoryCount: sql`${products.inventoryCount} - ${item.quantity}`,
+            updatedAt: new Date()
+          })
+          .where(
+            and(
+              eq(products.id, item.productId),
+              gte(products.inventoryCount, item.quantity),
+              isNull(products.archivedAt)
+            )
+          )
+          .returning({ id: products.id });
+
+        if (!decremented) {
+          throw new ConflictException(
+            `Недостатньо товару "${item.productName}" на складі (одночасне замовлення)`
+          );
+        }
+
         const [insertedItem] = await tx
           .insert(orderItems)
           .values({
@@ -305,14 +345,6 @@ export class OrdersService {
           .returning();
 
         createdItems.push(insertedItem);
-
-        await tx
-          .update(products)
-          .set({
-            inventoryCount: sql`${products.inventoryCount} - ${item.quantity}`,
-            updatedAt: new Date()
-          })
-          .where(eq(products.id, item.productId));
       }
 
       return {
@@ -446,7 +478,7 @@ export class OrdersService {
         .where(
           and(
             eq(orders.storeId, storeId),
-            eq(orderMessages.senderType, 'customer'),
+            inArray(orderMessages.senderType, ['customer', 'platform']),
             isNull(orderMessages.readByStoreAt)
           )
         ),
@@ -536,6 +568,39 @@ export class OrdersService {
     const nextStatus = dto?.status ?? order.status;
     const nextPaymentStatus = dto?.paymentStatus ?? order.paymentStatus;
 
+    // 1. Забороняємо зміну статусу завершених або скасованих замовлень (термінальні стани)
+    if (dto?.status && dto.status !== order.status) {
+      const allowedTransitions: Record<string, string[]> = {
+        pending: ['paid', 'confirmed', 'shipped', 'delivered', 'cancelled'],
+        paid: ['confirmed', 'shipped', 'delivered', 'cancelled'],
+        confirmed: ['paid', 'shipped', 'delivered', 'cancelled'],
+        shipped: ['delivered', 'cancelled'],
+        delivered: [],
+        cancelled: []
+      };
+      if (!(allowedTransitions[order.status] || []).includes(nextStatus)) {
+        throw new BadRequestException(
+          `Неможливо змінити статус замовлення з «${order.status}» на «${nextStatus}»`
+        );
+      }
+    }
+
+    // 2. Повернення коштів ('refunded') можливе лише через процедуру швидкого повернення (orders.refund) або арбітраж
+    if (dto?.paymentStatus === 'refunded' && order.paymentStatus !== 'refunded') {
+      throw new ForbiddenException(
+        'Оформлення повернення коштів можливе лише через швидке повернення (orders.refund) або арбітраж BizX'
+      );
+    }
+
+    // 3. Не можна відкатити вже оплачений статус назад у pending/failed
+    if (
+      order.paymentStatus === 'paid' &&
+      dto?.paymentStatus &&
+      dto.paymentStatus !== 'paid'
+    ) {
+      throw new BadRequestException('Неможливо скасувати статус оплати для вже оплаченого замовлення');
+    }
+
     // Перевіряємо чи немає відкритого спору перед розмороженням Escrow
     const [activeDispute] = await this.databaseService.db
       .select({ id: orderDisputes.id })
@@ -547,8 +612,14 @@ export class OrdersService {
         )
       );
 
+    // Escrow розморожується ТІЛЬКИ якщо замовлення доставлено, реально оплачено (або готівка) і немає спору
+    const isActuallyPaid =
+      nextPaymentStatus === 'paid' || order.paymentMethod === 'cash';
     const shouldReleaseEscrow =
-      nextStatus === 'delivered' && order.payoutStatus === 'held' && !activeDispute;
+      nextStatus === 'delivered' &&
+      order.payoutStatus === 'held' &&
+      isActuallyPaid &&
+      !activeDispute;
 
     return await this.databaseService.db.transaction(async (tx) => {
       const [updated] = await tx
@@ -559,8 +630,16 @@ export class OrdersService {
           ...(shouldReleaseEscrow ? { payoutStatus: 'released' } : {}),
           updatedAt: new Date()
         })
-        .where(eq(orders.id, orderId))
+        .where(
+          shouldReleaseEscrow
+            ? and(eq(orders.id, orderId), eq(orders.payoutStatus, 'held'))
+            : eq(orders.id, orderId)
+        )
         .returning();
+
+      if (!updated) {
+        throw new ConflictException('Статус виплати замовлення вже було змінено');
+      }
 
       if (shouldReleaseEscrow) {
         await tx
@@ -596,13 +675,13 @@ export class OrdersService {
       return { order, actorType: 'customer' };
     }
 
-    // Check store membership first
+    // Check store membership first (allow order chat even while store is suspended so disputes/orders resolve!)
     try {
       const check = await this.rbacService.assertStorePermission(
         order.storeId,
         userId,
         mode === 'write' ? 'orders.edit' : 'orders.read',
-        { write: mode === 'write' }
+        { write: mode === 'write', allowWhenSuspended: true }
       );
       if (!check.viaPlatform) {
         return { order, actorType: 'store' };
@@ -613,10 +692,7 @@ export class OrdersService {
 
     if (mode === 'read') {
       const plat = await this.rbacService.getPlatformMemberAccess(userId);
-      if (
-        plat.permissions.includes('platform.disputes.read') ||
-        plat.permissions.includes('platform.stores.read')
-      ) {
+      if (plat.permissions.includes('platform.disputes.read')) {
         return { order, actorType: 'platform' };
       }
     } else {
@@ -729,7 +805,7 @@ export class OrdersService {
       .where(
         and(
           eq(orderMessages.orderId, orderId),
-          eq(orderMessages.senderType, 'customer'),
+          inArray(orderMessages.senderType, ['customer', 'platform']),
           isNull(orderMessages.readByStoreAt)
         )
       )
@@ -771,9 +847,10 @@ export class OrdersService {
       throw new NotFoundException('Замовлення не знайдено');
     }
 
-    // Окреме гранулярне право на швидкі повернення: orders.refund
+    // Окреме гранулярне право на швидкі повернення: orders.refund (дозволено навіть при suspended закладі для врегулювання)
     await this.rbacService.assertStorePermission(order.storeId, userId, 'orders.refund', {
-      write: true
+      write: true,
+      allowWhenSuspended: true
     });
 
     if (order.status === 'cancelled' || order.paymentStatus === 'refunded') {

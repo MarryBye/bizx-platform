@@ -53,9 +53,48 @@ export class ProductsService {
     private readonly rbacService: RbacService
   ) {}
 
+  private async canInspectUnpublishedStore(storeId: string, callerUserId?: string): Promise<boolean> {
+    if (!callerUserId) return false;
+    try {
+      const plat = await this.rbacService.getPlatformMemberAccess(callerUserId);
+      if (plat.isMember && plat.permissions.includes('platform.stores.read')) {
+        return true;
+      }
+      const storeAccess = await this.rbacService.getStoreMemberAccess(storeId, callerUserId);
+      if (storeAccess.isMember && storeAccess.permissions.includes('products.read')) {
+        return true;
+      }
+    } catch {
+      return false;
+    }
+    return false;
+  }
+
+  private async assertStoreVisibleForCatalog(storeId: string, callerUserId?: string): Promise<boolean> {
+    const [store] = await this.databaseService.db
+      .select({ id: stores.id, status: stores.status, archivedAt: stores.archivedAt })
+      .from(stores)
+      .where(eq(stores.id, storeId));
+
+    if (!store) {
+      throw new NotFoundException('Магазин не знайдено');
+    }
+
+    const canInspect = await this.canInspectUnpublishedStore(storeId, callerUserId);
+    if (!canInspect && (store.status !== 'active' || store.archivedAt !== null)) {
+      throw new NotFoundException('Магазин не знайдено або ще не опубліковано');
+    }
+
+    return canInspect;
+  }
+
   // ==================== КАТЕГОРИИ ТОВАРОВ ====================
 
-  async getProductCategories(storeId: string): Promise<ProductCategoryRecord[]> {
+  async getProductCategories(
+    storeId: string,
+    callerUserId?: string
+  ): Promise<ProductCategoryRecord[]> {
+    await this.assertStoreVisibleForCatalog(storeId, callerUserId);
     return await this.databaseService.db
       .select()
       .from(productCategories)
@@ -121,7 +160,11 @@ export class ProductsService {
         .select({ id: productCategories.id })
         .from(productCategories)
         .where(
-          and(eq(productCategories.id, dto.categoryId), eq(productCategories.storeId, storeId))
+          and(
+            eq(productCategories.id, dto.categoryId),
+            eq(productCategories.storeId, storeId),
+            isNull(productCategories.archivedAt)
+          )
         );
 
       if (!category) {
@@ -150,8 +193,11 @@ export class ProductsService {
 
   async getStoreProducts(
     storeId: string,
-    query: ProductFilterQuery
+    query: ProductFilterQuery,
+    callerUserId?: string
   ): Promise<PaginatedResult<ProductListItem>> {
+    const canInspect = await this.assertStoreVisibleForCatalog(storeId, callerUserId);
+
     const page = query.page || 1;
     const pageSize = query.pageSize || 20;
     const offset = (page - 1) * pageSize;
@@ -165,7 +211,10 @@ export class ProductsService {
       conditions.push(eq(products.categoryId, query.categoryId));
     }
 
-    if (query.isActive !== undefined) {
+    // Публічні відвідувачі бачать ВИКЛЮЧНО активні товари (чернетки не витікають у вітрину/мобілку)
+    if (!canInspect) {
+      conditions.push(eq(products.isActive, true));
+    } else if (query.isActive !== undefined) {
       conditions.push(eq(products.isActive, query.isActive));
     }
 
@@ -212,8 +261,8 @@ export class ProductsService {
     };
   }
 
-  async getProductById(id: string): Promise<ProductDetailItem> {
-    const [product] = await this.databaseService.db
+  async getProductById(id: string, callerUserId?: string): Promise<ProductDetailItem> {
+    const [row] = await this.databaseService.db
       .select({
         id: products.id,
         storeId: products.storeId,
@@ -226,21 +275,35 @@ export class ProductsService {
         imageUrl: products.imageUrl,
         inventoryCount: products.inventoryCount,
         isActive: products.isActive,
+        archivedAt: products.archivedAt,
         createdAt: products.createdAt,
         updatedAt: products.updatedAt,
         categoryName: productCategories.name,
         storeName: stores.name,
-        storeSlug: stores.slug
+        storeSlug: stores.slug,
+        storeStatus: stores.status,
+        storeArchivedAt: stores.archivedAt
       })
       .from(products)
       .leftJoin(productCategories, eq(products.categoryId, productCategories.id))
       .leftJoin(stores, eq(products.storeId, stores.id))
-      .where(eq(products.id, id));
+      .where(and(eq(products.id, id), isNull(products.archivedAt)));
 
-    if (!product) {
+    if (!row) {
       throw new NotFoundException('Товар не найден');
     }
 
+    const isPubliclyVisible =
+      row.isActive && row.storeStatus === 'active' && row.storeArchivedAt === null;
+
+    if (!isPubliclyVisible) {
+      const canInspect = await this.canInspectUnpublishedStore(row.storeId, callerUserId);
+      if (!canInspect) {
+        throw new NotFoundException('Товар не найден');
+      }
+    }
+
+    const { archivedAt: _a, storeStatus: _s, storeArchivedAt: _sa, ...product } = row;
     return product;
   }
 
@@ -252,7 +315,7 @@ export class ProductsService {
     const [product] = await this.databaseService.db
       .select()
       .from(products)
-      .where(eq(products.id, id));
+      .where(and(eq(products.id, id), isNull(products.archivedAt)));
 
     if (!product) {
       throw new NotFoundException('Товар не найден');
@@ -270,7 +333,7 @@ export class ProductsService {
     const [existing] = await this.databaseService.db
       .select()
       .from(products)
-      .where(eq(products.id, id));
+      .where(and(eq(products.id, id), isNull(products.archivedAt)));
 
     if (!existing) {
       throw new NotFoundException('Товар не найден');
@@ -308,7 +371,8 @@ export class ProductsService {
         .where(
           and(
             eq(productCategories.id, dto.categoryId),
-            eq(productCategories.storeId, product.storeId)
+            eq(productCategories.storeId, product.storeId),
+            isNull(productCategories.archivedAt)
           )
         );
 

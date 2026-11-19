@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service.js';
 import { users, stores, storeMembers, platformMembers, eq, and, isNull, inArray } from '@bizx/database';
 import type {
@@ -259,6 +259,10 @@ export class SubscriptionsService {
 
     if (!user) {
       throw new NotFoundException('Користувач не знайдений');
+    }
+
+    if (user.subscriptionTier === 'free' || user.subscriptionStatus === 'none' || user.subscriptionStatus === 'cancelled') {
+      throw new BadRequestException('У вас немає активної платної підписки для скасування');
     }
 
     await this.databaseService.db.transaction(async (tx) => {

@@ -17,7 +17,7 @@ import { DisputesService } from './disputes.service.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import { CurrentUser } from '../auth/decorators/auth.decorators.js';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
-import type { UploadedFileDto } from '../common/file-upload.utils.js';
+import { MAX_IMAGE_FILE_SIZE, type UploadedFileDto } from '../common/file-upload.utils.js';
 import type { OrderRecord } from '@bizx/database';
 import {
   createOrderDtoSchema,
@@ -149,7 +149,7 @@ export class OrdersController {
   }
 
   @Post(':id/messages/upload')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_IMAGE_FILE_SIZE } }))
   async uploadChatAttachment(
     @Param('id') id: string,
     @CurrentUser('sub') userId: string,
