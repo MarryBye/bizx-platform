@@ -6,9 +6,10 @@ import { ShieldAlert } from 'lucide-react';
 import { PlatformLayout, type PlatformTab } from './components/PlatformLayout';
 import { MetricsView } from './views/MetricsView';
 import { PlatformAnalyticsView } from './views/PlatformAnalyticsView';
+import { PlatformRolesView } from './views/PlatformRolesView';
 import { BusinessesView, type ExtendedBusiness } from './views/BusinessesView';
 import { UsersView } from './views/UsersView';
-import { StaffView, type PlatformStaffMember } from './views/StaffView';
+import { StaffView } from './views/StaffView';
 import { LoginView } from './views/LoginView';
 import { BusinessDetailsModal } from './components/BusinessDetailsModal';
 import { UserDetailsModal, type PlatformUserRecord } from './components/UserDetailsModal';
@@ -23,6 +24,7 @@ export const App: React.FC = () => {
   const [analytics, setAnalytics] = useState<PlatformAnalytics | null>(null);
   const [businesses, setBusinesses] = useState<ExtendedBusiness[]>([]);
   const [categories, setCategories] = useState<Array<{ id: string; name: string }>>([]);
+  const [myPermissions, setMyPermissions] = useState<string[] | null>(null);
   const [isDataLoading, setIsDataLoading] = useState(false);
 
   // Modals & Active Selections
@@ -33,109 +35,8 @@ export const App: React.FC = () => {
   const [selectedUser, setSelectedUser] = useState<PlatformUserRecord | null>(null);
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
 
-  // Users State
-  const [usersList, setUsersList] = useState<PlatformUserRecord[]>([
-    {
-      id: 'u-1',
-      name: 'Олександр Коваленко',
-      email: 'admin@bizx.ua',
-      phone: '+380 50 123 45 67',
-      role: 'admin',
-      systemRole: 'platform_admin',
-      status: 'active',
-      createdAt: '12.01.2026'
-    },
-    {
-      id: 'u-2',
-      name: 'Тарас Шевчук',
-      email: 'owner.coffee@bizx.ua',
-      phone: '+380 67 111 22 33',
-      role: 'business_owner',
-      systemRole: 'user',
-      status: 'active',
-      createdAt: '15.01.2026'
-    },
-    {
-      id: 'u-3',
-      name: 'Ірина Мельник',
-      email: 'owner.tech@bizx.ua',
-      phone: '+380 93 444 55 66',
-      role: 'business_owner',
-      systemRole: 'user',
-      status: 'active',
-      createdAt: '22.01.2026'
-    },
-    {
-      id: 'u-4',
-      name: 'Богдан Кравченко',
-      email: 'owner.bakery@bizx.ua',
-      phone: '+380 66 777 88 99',
-      role: 'business_owner',
-      systemRole: 'user',
-      status: 'active',
-      createdAt: '01.02.2026'
-    },
-    {
-      id: 'u-5',
-      name: 'Марія Бондаренко',
-      email: 'client@bizx.ua',
-      phone: '+380 99 123 98 76',
-      role: 'client',
-      systemRole: 'user',
-      status: 'active',
-      createdAt: '10.02.2026'
-    },
-    {
-      id: 'u-6',
-      name: 'Дмитро Кравчук',
-      email: 'suspicious.actor@spam.ua',
-      phone: '+380 50 999 88 77',
-      role: 'client',
-      systemRole: 'user',
-      status: 'suspended',
-      createdAt: '18.02.2026'
-    }
-  ]);
-
-  // Staff State
-  const [staffList, setStaffList] = useState<PlatformStaffMember[]>([
-    {
-      id: 'st-1',
-      name: 'Олександр Коваленко',
-      email: 'admin@bizx.ua',
-      department: 'Керівництво',
-      role: 'Head of Platform',
-      accessLevel: 'full_admin',
-      status: 'active'
-    },
-    {
-      id: 'st-2',
-      name: 'Юлія Шевченко',
-      email: 'yulia.shevchenko@bizx.ua',
-      department: 'Операційний відділ',
-      role: 'Lead Ops Manager',
-      accessLevel: 'ops_manager',
-      status: 'active'
-    },
-    {
-      id: 'st-3',
-      name: 'Сергій Бондар',
-      email: 'sergiy.bondar@bizx.ua',
-      department: 'Відділ комплаєнсу',
-      role: 'Compliance Officer',
-      accessLevel: 'compliance',
-      status: 'active'
-    },
-    {
-      id: 'st-4',
-      name: 'Анна Ткаченко',
-      email: 'anna.tkachenko@bizx.ua',
-      department: 'Служба підтримки',
-      role: 'Support Lead',
-      accessLevel: 'support_lead',
-      status: 'active'
-    }
-  ]);
+  // Users State (loaded from real DB /platform/users)
+  const [usersList, setUsersList] = useState<PlatformUserRecord[]>([]);
 
   // Load Real Data from Backend API
   const loadPlatformData = async () => {
@@ -292,6 +193,35 @@ export const App: React.FC = () => {
           ]
         });
       }
+      // 4. Fetch Real Platform Permissions & Users from DB
+      try {
+        const permRes = await platformApi.rbac.getPlatformPermissions();
+        if (permRes.success && permRes.data?.myAccess) {
+          setMyPermissions(permRes.data.myAccess.permissions);
+        }
+      } catch {
+        // ignore
+      }
+
+      try {
+        const uRes = await platformApi.rbac.getPlatformUsers();
+        if (uRes.success && uRes.data) {
+          setUsersList(
+            uRes.data.map((u) => ({
+              id: u.id,
+              name: u.name,
+              email: u.email,
+              phone: u.phone || undefined,
+              role: (u.role as PlatformUserRecord['role']) || 'client',
+              systemRole: (u.systemRole as PlatformUserRecord['systemRole']) || 'user',
+              status: u.status,
+              createdAt: new Date(u.createdAt).toLocaleDateString('uk-UA')
+            }))
+          );
+        }
+      } catch {
+        // ignore
+      }
     } finally {
       setIsDataLoading(false);
     }
@@ -354,11 +284,16 @@ export const App: React.FC = () => {
     }
   };
 
-  // Handler: Update User Status
-  const handleUpdateUserStatus = (
+  // Handler: Update User Status (persisted in DB)
+  const handleUpdateUserStatus = async (
     userId: string,
     newStatus: 'active' | 'suspended' | 'archived'
   ) => {
+    try {
+      await platformApi.rbac.updatePlatformUserStatus(userId, newStatus);
+    } catch {
+      // ignore
+    }
     setUsersList((prev) =>
       prev.map((u) => (u.id === userId ? { ...u, status: newStatus } : u))
     );
@@ -378,15 +313,6 @@ export const App: React.FC = () => {
     if (selectedUser && selectedUser.id === userId) {
       setSelectedUser((prev) => (prev ? { ...prev, systemRole: newSystemRole } : null));
     }
-  };
-
-  // Handler: Add Staff
-  const handleAddStaff = (newStaff: Omit<PlatformStaffMember, 'id'>) => {
-    const created: PlatformStaffMember = {
-      ...newStaff,
-      id: `st-${Date.now()}`
-    };
-    setStaffList((prev) => [...prev, created]);
   };
 
   // Handler: Logout
@@ -413,7 +339,14 @@ export const App: React.FC = () => {
   }
 
   if (!currentUser) {
-    return <LoginView onSuccess={(user) => setCurrentUser(user)} />;
+    return (
+      <LoginView
+        onSuccess={(user) => {
+          setCurrentUser(user);
+          loadPlatformData();
+        }}
+      />
+    );
   }
 
   const isStaff = currentUser.systemRole === 'platform_admin' || currentUser.role === 'admin';
@@ -464,6 +397,7 @@ export const App: React.FC = () => {
       currentTab={activeTab}
       onTabChange={setActiveTab}
       currentUser={currentUser}
+      myPermissions={myPermissions}
       onLogout={handleLogout}
     >
       {/* View: Metrics */}
@@ -511,10 +445,11 @@ export const App: React.FC = () => {
         />
       )}
 
-      {/* View: Staff */}
-      {activeTab === 'staff' && (
-        <StaffView staffList={staffList} onAddStaff={handleAddStaff} />
-      )}
+      {/* View: Staff (Real DB RBAC) */}
+      {activeTab === 'staff' && <StaffView currentUserId={currentUser.id} />}
+
+      {/* View: Platform Roles & Permissions (Discord-style hierarchy) */}
+      {activeTab === 'roles' && <PlatformRolesView />}
 
       {/* Business Details Slide-over / Modal */}
       <BusinessDetailsModal

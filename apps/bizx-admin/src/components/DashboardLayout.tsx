@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuthStore } from '../store/useAuthStore';
 import { useBusinessStore } from '../store/useBusinessStore';
 import { useTranslation } from '../hooks/useTranslation';
@@ -11,6 +11,7 @@ import {
   ShoppingBag,
   Settings,
   Users,
+  ShieldCheck,
   CreditCard,
   LogOut,
   Menu,
@@ -25,10 +26,11 @@ import { ProductsView } from '../views/ProductsView';
 import { OrdersView } from '../views/OrdersView';
 import { StoreSettingsView } from '../views/StoreSettingsView';
 import { StaffView } from '../views/StaffView';
+import { RolesView } from '../views/RolesView';
 import { PlaceholderView } from '../views/PlaceholderView';
 import { resolveMediaUrl } from '../lib/media';
 
-type TabType = 'overview' | 'analytics' | 'products' | 'orders' | 'settings' | 'staff' | 'payouts';
+type TabType = 'overview' | 'analytics' | 'products' | 'orders' | 'settings' | 'staff' | 'roles' | 'payouts';
 
 export const DashboardLayout: React.FC = () => {
   const { t, locale, setLocale } = useTranslation();
@@ -37,19 +39,40 @@ export const DashboardLayout: React.FC = () => {
   const [currentTab, setCurrentTab] = useState<TabType>('overview');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
+  const [myPermissions, setMyPermissions] = useState<string[] | null>(null);
+
+  useEffect(() => {
+    if (!activeStoreId) {
+      setMyPermissions(null);
+      return;
+    }
+    api.rbac
+      .getStorePermissions(activeStoreId)
+      .then((res) => {
+        if (res.success && res.data?.myAccess) {
+          setMyPermissions(res.data.myAccess.permissions);
+        }
+      })
+      .catch(() => {
+        setMyPermissions(null);
+      });
+  }, [activeStoreId]);
+
+  const hasPerm = (code: string) => !myPermissions || myPermissions.includes(code);
 
   const isStoreInactive = activeStore && activeStore.status !== 'active';
   const isReadOnly = !hasActiveSubscription;
 
   const merchantNavItems = [
-    { id: 'overview' as const, label: t('admin.overview'), icon: LayoutDashboard },
-    { id: 'analytics' as const, label: t('admin.detailedAnalytics'), icon: BarChart3 },
-    { id: 'products' as const, label: t('admin.products'), icon: Package },
-    { id: 'orders' as const, label: t('admin.orders'), icon: ShoppingBag },
-    { id: 'settings' as const, label: t('admin.settings'), icon: Settings },
-    { id: 'staff' as const, label: t('admin.staff'), icon: Users },
-    { id: 'payouts' as const, label: t('admin.payouts'), icon: CreditCard, isStub: true }
-  ];
+    { id: 'overview' as const, label: t('admin.overview'), icon: LayoutDashboard, visible: hasPerm('analytics.read') },
+    { id: 'analytics' as const, label: t('admin.detailedAnalytics'), icon: BarChart3, visible: hasPerm('analytics.read') },
+    { id: 'products' as const, label: t('admin.products'), icon: Package, visible: hasPerm('products.read') },
+    { id: 'orders' as const, label: t('admin.orders'), icon: ShoppingBag, visible: hasPerm('orders.read') },
+    { id: 'settings' as const, label: t('admin.settings'), icon: Settings, visible: hasPerm('store.read') },
+    { id: 'staff' as const, label: t('admin.staff'), icon: Users, visible: hasPerm('staff.read') },
+    { id: 'roles' as const, label: t('admin.roles'), icon: ShieldCheck, visible: hasPerm('roles.read') },
+    { id: 'payouts' as const, label: t('admin.payouts'), icon: CreditCard, isStub: true, visible: true }
+  ].filter((item) => item.visible);
 
   const handleLanguageChange = (next: 'uk' | 'en') => {
     setLocale(next);
@@ -330,6 +353,7 @@ export const DashboardLayout: React.FC = () => {
           {currentTab === 'orders' && <OrdersView />}
           {currentTab === 'settings' && <StoreSettingsView />}
           {currentTab === 'staff' && <StaffView />}
+          {currentTab === 'roles' && <RolesView />}
           {currentTab === 'payouts' && (
             <PlaceholderView
               title={t('admin.payoutsTitle')}

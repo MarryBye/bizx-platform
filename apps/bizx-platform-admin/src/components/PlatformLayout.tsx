@@ -9,18 +9,20 @@ import {
   Building2,
   Users,
   ShieldCheck,
+  KeyRound,
   LogOut,
   Menu,
   X,
   ExternalLink
 } from 'lucide-react';
 
-export type PlatformTab = 'metrics' | 'analytics' | 'businesses' | 'users' | 'staff';
+export type PlatformTab = 'metrics' | 'analytics' | 'businesses' | 'users' | 'staff' | 'roles';
 
 interface PlatformLayoutProps {
   currentTab: PlatformTab;
   onTabChange: (tab: PlatformTab) => void;
   currentUser: UserProfile | null;
+  myPermissions?: string[] | null;
   onLogout: () => void;
   children: React.ReactNode;
 }
@@ -29,6 +31,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({
   currentTab,
   onTabChange,
   currentUser,
+  myPermissions,
   onLogout,
   children
 }) => {
@@ -40,13 +43,16 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({
     ? platformApi.storage.resolveMediaUrl(currentUser.avatarUrl)
     : null;
 
+  const hasPerm = (code: string) => !myPermissions || myPermissions.includes(code);
+
   const navItems = [
-    { id: 'metrics' as const, label: t('platform.tabMetrics'), icon: LayoutDashboard },
-    { id: 'analytics' as const, label: t('platform.tabAnalytics'), icon: BarChart3 },
-    { id: 'businesses' as const, label: t('platform.tabBusinesses'), icon: Building2 },
-    { id: 'users' as const, label: t('platform.tabUsers'), icon: Users },
-    { id: 'staff' as const, label: t('platform.tabStaff'), icon: ShieldCheck }
-  ];
+    { id: 'metrics' as const, label: t('platform.tabMetrics'), icon: LayoutDashboard, visible: hasPerm('platform.analytics.read') },
+    { id: 'analytics' as const, label: t('platform.tabAnalytics'), icon: BarChart3, visible: hasPerm('platform.analytics.read') },
+    { id: 'businesses' as const, label: t('platform.tabBusinesses'), icon: Building2, visible: hasPerm('platform.stores.read') },
+    { id: 'users' as const, label: t('platform.tabUsers'), icon: Users, visible: hasPerm('platform.users.read') },
+    { id: 'staff' as const, label: t('platform.tabStaff'), icon: ShieldCheck, visible: hasPerm('platform.staff.read') },
+    { id: 'roles' as const, label: t('platform.tabRoles'), icon: KeyRound, visible: hasPerm('platform.roles.read') }
+  ].filter((item) => item.visible);
 
   const handleLanguageChange = (next: 'uk' | 'en') => {
     setLocale(next);
