@@ -17,6 +17,7 @@ import {
   desc,
   count,
   isNull,
+  inArray,
   type StoreRecord,
   type StoreCategoryRecord
 } from '@bizx/database';
@@ -161,6 +162,62 @@ export class StoresService {
     return { message: 'Категорію успішно архівовано' };
   }
 
+  // ==================== СИНХРОНІЗАЦІЯ ПІДПИСКИ ТА ЗАКЛАДІВ ====================
+
+  async reconcileOwnerStores(ownerId: string): Promise<{
+    hasActiveBizSub: boolean;
+    maxAllowedStores: number;
+    isStaff: boolean;
+  }> {
+    const [owner] = await this.databaseService.db
+      .select()
+      .from(users)
+      .where(eq(users.id, ownerId));
+
+    if (!owner) {
+      return { hasActiveBizSub: false, maxAllowedStores: 0, isStaff: false };
+    }
+
+    const isStaff = owner.systemRole === 'platform_admin' || owner.role === 'admin';
+    let currentStatus = owner.subscriptionStatus;
+
+    if (
+      owner.subscriptionExpiresAt &&
+      new Date(owner.subscriptionExpiresAt).getTime() <= Date.now() &&
+      currentStatus === 'active'
+    ) {
+      currentStatus = 'expired';
+      await this.databaseService.db
+        .update(users)
+        .set({ subscriptionStatus: 'expired', updatedAt: new Date() })
+        .where(eq(users.id, ownerId));
+    }
+
+    const hasActiveBizSub =
+      isSubscriptionActive({
+        subscriptionTier: owner.subscriptionTier,
+        subscriptionExpiresAt: owner.subscriptionExpiresAt,
+        subscriptionStatus: currentStatus
+      }) && isBusinessSubscriptionTier(owner.subscriptionTier);
+
+    const maxAllowedStores = hasActiveBizSub ? getMaxAllowedStores(owner.subscriptionTier) : 0;
+
+    if (!isStaff && !hasActiveBizSub) {
+      await this.databaseService.db
+        .update(stores)
+        .set({ status: 'suspended', updatedAt: new Date() })
+        .where(
+          and(
+            eq(stores.ownerId, ownerId),
+            inArray(stores.status, ['active', 'pending']),
+            isNull(stores.archivedAt)
+          )
+        );
+    }
+
+    return { hasActiveBizSub, maxAllowedStores, isStaff };
+  }
+
   // ==================== МАГАЗИНЫ ====================
 
   async createStore(ownerId: string, dto: CreateStoreDto): Promise<StoreRecord> {
@@ -173,32 +230,22 @@ export class StoresService {
       throw new ConflictException('Магазин с таким slug уже существует');
     }
 
-    const [owner] = await this.databaseService.db
-      .select()
-      .from(users)
-      .where(eq(users.id, ownerId));
+    const { hasActiveBizSub, maxAllowedStores, isStaff } = await this.reconcileOwnerStores(ownerId);
 
-    if (!owner) {
-      throw new NotFoundException('Власника не знайдено');
-    }
-
-    const isStaff = owner.systemRole === 'platform_admin' || owner.role === 'admin';
-    const activeSub = isSubscriptionActive(owner);
-    const isBizTier = isBusinessSubscriptionTier(owner.subscriptionTier);
-
-    if (!isStaff && (!activeSub || !isBizTier)) {
+    if (!isStaff && !hasActiveBizSub) {
       throw new ForbiddenException(
         'Для створення закладу необхідна активна бізнес-підписка. Будь ласка, оформіть підписку в особистому кабінеті.'
       );
     }
 
-    const maxStores = getMaxAllowedStores(owner.subscriptionTier);
-    const userStores = await this.getMyStores(ownerId);
-    const activeStoresCount = userStores.filter((s) => s.status !== 'archived').length;
+    const ownedStores = await this.databaseService.db
+      .select({ id: stores.id, status: stores.status })
+      .from(stores)
+      .where(and(eq(stores.ownerId, ownerId), isNull(stores.archivedAt)));
 
-    if (!isStaff && activeStoresCount >= maxStores) {
+    if (!isStaff && ownedStores.length >= maxAllowedStores) {
       throw new ForbiddenException(
-        `Ви досягли максимального ліміту закладів для вашого тарифу (${maxStores}). Оновіть тарифний план для відкриття нових бізнесів.`
+        `Ви досягли максимального ліміту закладів для вашого тарифу (${maxAllowedStores}). Оновіть тарифний план для відкриття нових бізнесів.`
       );
     }
 
@@ -342,6 +389,9 @@ export class StoresService {
   }
 
   async getMyStores(userId: string): Promise<StoreListItem[]> {
+    // Автоматично синхронізуємо підписку власника перед поверненням списку магазинів
+    await this.reconcileOwnerStores(userId);
+
     const rows = await this.databaseService.db
       .select({
         id: stores.id,
@@ -379,73 +429,72 @@ export class StoresService {
     storeId: string,
     userId: string,
     allowedRoles?: StoreMemberRole[],
-    systemRole?: SystemRole
+    systemRole?: SystemRole,
+    options?: { write?: boolean }
   ): Promise<{ store: StoreRecord; memberRole?: StoreMemberRole }> {
-    const [store] = await this.databaseService.db
+    const [initialStore] = await this.databaseService.db
       .select()
       .from(stores)
       .where(eq(stores.id, storeId));
 
-    if (!store) {
+    if (!initialStore) {
       throw new NotFoundException('Магазин не знайдено');
     }
 
     if (systemRole === 'platform_admin') {
-      return { store, memberRole: 'owner' };
+      return { store: initialStore, memberRole: 'owner' };
     }
 
     const [member] = await this.databaseService.db
       .select()
       .from(storeMembers)
-      .where(and(eq(storeMembers.storeId, storeId), eq(storeMembers.userId, userId)));
+      .where(
+        and(
+          eq(storeMembers.storeId, storeId),
+          eq(storeMembers.userId, userId),
+          isNull(storeMembers.archivedAt)
+        )
+      );
 
-    if (!member) {
-      // Сумісність для головного власника
-      if (store.ownerId === userId) {
-        return { store, memberRole: 'owner' };
-      }
+    let resolvedRole: StoreMemberRole | undefined;
+    if (member) {
+      resolvedRole = member.role as StoreMemberRole;
+    } else if (initialStore.ownerId === userId) {
+      resolvedRole = 'owner';
+    } else {
       throw new ForbiddenException('У вас немає доступу до керування цим магазином');
     }
 
-    {
-      const [storeOwner] = await this.databaseService.db
-        .select()
-        .from(users)
-        .where(eq(users.id, store.ownerId));
-
-      if (storeOwner) {
-        const isOwnerStaff = storeOwner.systemRole === 'platform_admin' || storeOwner.role === 'admin';
-        if (!isOwnerStaff) {
-          const isSubActive = isSubscriptionActive(storeOwner);
-          if (!isSubActive) {
-            if (store.status === 'active') {
-              await this.databaseService.db
-                .update(stores)
-                .set({ status: 'suspended', updatedAt: new Date() })
-                .where(eq(stores.id, store.id));
-            }
-            throw new ForbiddenException(
-              'Термін дії бізнес-підписки власника закладу завершився. Заклад призупинено, доступ до керування заблоковано.'
-            );
-          }
-        }
-      }
-    }
-
-    if (allowedRoles && allowedRoles.length > 0 && !allowedRoles.includes(member.role as StoreMemberRole)) {
+    if (allowedRoles && allowedRoles.length > 0 && !allowedRoles.includes(resolvedRole)) {
       throw new ForbiddenException('Недостатньо прав для виконання цієї операції в магазині');
     }
 
-    return { store, memberRole: member.role as StoreMemberRole };
+    // Завжди синхронізуємо підписку власника (прострочена підписка одразу переведе магазин у 'suspended')
+    const { hasActiveBizSub, isStaff } = await this.reconcileOwnerStores(initialStore.ownerId);
+
+    const [store] = await this.databaseService.db
+      .select()
+      .from(stores)
+      .where(eq(stores.id, storeId));
+
+    // Для операцій редагування (write: true) вимагаємо активну бізнес-підписку власника
+    if (options?.write && !isStaff && !hasActiveBizSub) {
+      throw new ForbiddenException(
+        'Термін дії бізнес-підписки власника закладу завершився або підписка відсутня. Редагування заблоковано (доступний лише перегляд).'
+      );
+    }
+
+    return { store: store || initialStore, memberRole: resolvedRole };
   }
 
   async assertStoreOwnership(
     storeId: string,
     userId: string,
     userRole?: UserRole,
-    systemRole?: SystemRole
+    systemRole?: SystemRole,
+    options?: { write?: boolean }
   ): Promise<StoreRecord> {
-    const { store } = await this.assertStoreAccess(storeId, userId, ['owner'], systemRole);
+    const { store } = await this.assertStoreAccess(storeId, userId, ['owner'], systemRole, options);
     return store;
   }
 
@@ -492,7 +541,7 @@ export class StoresService {
     dto: AddStoreMemberDto,
     systemRole?: SystemRole
   ): Promise<StoreMember> {
-    await this.assertStoreAccess(storeId, callerUserId, ['owner'], systemRole);
+    await this.assertStoreAccess(storeId, callerUserId, ['owner'], systemRole, { write: true });
 
     const [targetUser] = await this.databaseService.db
       .select()
@@ -545,7 +594,7 @@ export class StoresService {
     memberId: string,
     systemRole?: SystemRole
   ): Promise<{ message: string }> {
-    await this.assertStoreAccess(storeId, callerUserId, ['owner'], systemRole);
+    await this.assertStoreAccess(storeId, callerUserId, ['owner'], systemRole, { write: true });
 
     const [member] = await this.databaseService.db
       .select()
@@ -583,10 +632,38 @@ export class StoresService {
     dto?: UpdateStoreDto,
     systemRole?: SystemRole
   ): Promise<StoreRecord> {
-    const store = await this.assertStoreOwnership(storeId, userId, userRole, systemRole);
+    const store = await this.assertStoreOwnership(storeId, userId, userRole, systemRole, {
+      write: true
+    });
 
-    if (dto?.status && systemRole !== 'platform_admin' && dto.status === 'active') {
-      throw new ForbiddenException('Активація магазину можлива лише після схвалення адміністраторами платформи BizX');
+    if (dto?.status && systemRole !== 'platform_admin') {
+      if (dto.status === 'active') {
+        throw new ForbiddenException(
+          'Активація магазину можлива лише після схвалення адміністраторами платформи BizX'
+        );
+      }
+
+      if (dto.status === 'pending' && store.status !== 'pending') {
+        const { maxAllowedStores, isStaff } = await this.reconcileOwnerStores(store.ownerId);
+        if (!isStaff) {
+          const activeOrPending = await this.databaseService.db
+            .select({ id: stores.id })
+            .from(stores)
+            .where(
+              and(
+                eq(stores.ownerId, store.ownerId),
+                inArray(stores.status, ['active', 'pending']),
+                isNull(stores.archivedAt)
+              )
+            );
+          const otherCount = activeOrPending.filter((s) => s.id !== storeId).length;
+          if (otherCount >= maxAllowedStores) {
+            throw new ForbiddenException(
+              `Досягнуто ліміту активних закладів для вашого тарифу (${maxAllowedStores}). Призупиніть інший заклад або підвищте тарифний план.`
+            );
+          }
+        }
+      }
     }
 
     if (dto?.slug && dto.slug.toLowerCase() !== store.slug) {
@@ -630,7 +707,7 @@ export class StoresService {
     userRole?: UserRole,
     systemRole?: SystemRole
   ): Promise<{ message: string }> {
-    await this.assertStoreOwnership(storeId, userId, userRole, systemRole);
+    await this.assertStoreOwnership(storeId, userId, userRole, systemRole, { write: true });
 
     await this.databaseService.db
       .update(stores)

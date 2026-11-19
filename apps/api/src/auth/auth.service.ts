@@ -1,4 +1,9 @@
-import { getSubscriptionDaysLeft, getMaxAllowedStores } from '../subscriptions/subscriptions.constants.js';
+import {
+  getSubscriptionDaysLeft,
+  getMaxAllowedStores,
+  isSubscriptionActive,
+  isBusinessSubscriptionTier
+} from '../subscriptions/subscriptions.constants.js';
 import {
   Injectable,
   ConflictException,
@@ -8,7 +13,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { DatabaseService } from '../database/database.service.js';
-import { users, refreshTokens, eq, and, gt } from '@bizx/database';
+import { users, refreshTokens, stores, eq, and, gt, inArray, isNull } from '@bizx/database';
 import {
   normalizePhone,
   type RegisterDto,
@@ -179,10 +184,11 @@ export class AuthService {
       throw new UnauthorizedException('Неверный логин или пароль');
     }
 
-    const userProfile = this.mapToProfile(user);
+    const reconciledUser = await this.reconcileExpiredSubscription(user);
+    const userProfile = this.mapToProfile(reconciledUser);
 
-    const tokens = await this.generateTokens(user);
-    await this.storeRefreshToken(user.id, tokens.refreshToken, metadata);
+    const tokens = await this.generateTokens(reconciledUser);
+    await this.storeRefreshToken(reconciledUser.id, tokens.refreshToken, metadata);
 
     return {
       user: userProfile,
@@ -218,10 +224,11 @@ export class AuthService {
       throw new UnauthorizedException('Пользователь не найден');
     }
 
-    const userProfile = this.mapToProfile(user);
+    const reconciledUser = await this.reconcileExpiredSubscription(user);
+    const userProfile = this.mapToProfile(reconciledUser);
 
-    const tokens = await this.generateTokens(user);
-    await this.storeRefreshToken(user.id, tokens.refreshToken, metadata);
+    const tokens = await this.generateTokens(reconciledUser);
+    await this.storeRefreshToken(reconciledUser.id, tokens.refreshToken, metadata);
 
     return {
       user: userProfile,
@@ -257,13 +264,51 @@ export class AuthService {
     }
   }
 
-  async getProfile(userId: string): Promise<UserProfile> {
-    const [user] = await this.databaseService.db.select().from(users).where(eq(users.id, userId));
+  private async reconcileExpiredSubscription(user: any): Promise<any> {
+    if (!user) return user;
+    const isStaff = user.systemRole === 'platform_admin' || user.role === 'admin';
+    let currentUser = user;
 
-    if (!user) {
+    if (
+      user.subscriptionExpiresAt &&
+      new Date(user.subscriptionExpiresAt).getTime() <= Date.now() &&
+      user.subscriptionStatus === 'active'
+    ) {
+      const [updated] = await this.databaseService.db
+        .update(users)
+        .set({ subscriptionStatus: 'expired', updatedAt: new Date() })
+        .where(eq(users.id, user.id))
+        .returning();
+      if (updated) currentUser = updated;
+    }
+
+    const hasActiveBizSub =
+      isSubscriptionActive(currentUser) && isBusinessSubscriptionTier(currentUser.subscriptionTier);
+
+    if (!isStaff && !hasActiveBizSub) {
+      await this.databaseService.db
+        .update(stores)
+        .set({ status: 'suspended', updatedAt: new Date() })
+        .where(
+          and(
+            eq(stores.ownerId, currentUser.id),
+            inArray(stores.status, ['active', 'pending']),
+            isNull(stores.archivedAt)
+          )
+        );
+    }
+
+    return currentUser;
+  }
+
+  async getProfile(userId: string): Promise<UserProfile> {
+    const [rawUser] = await this.databaseService.db.select().from(users).where(eq(users.id, userId));
+
+    if (!rawUser) {
       throw new NotFoundException('Пользователь не найден');
     }
 
+    const user = await this.reconcileExpiredSubscription(rawUser);
     return this.mapToProfile(user);
   }
 

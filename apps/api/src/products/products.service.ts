@@ -71,7 +71,7 @@ export class ProductsService {
     dto: CreateProductCategoryDto,
     systemRole?: SystemRole
   ): Promise<ProductCategoryRecord> {
-    await this.storesService.assertStoreAccess(storeId, userId, ['owner', 'manager'], systemRole);
+    await this.storesService.assertStoreAccess(storeId, userId, ['owner', 'manager'], systemRole, { write: true });
 
     const [category] = await this.databaseService.db
       .insert(productCategories)
@@ -100,7 +100,7 @@ export class ProductsService {
       throw new NotFoundException('Категория товаров не найдена');
     }
 
-    await this.storesService.assertStoreAccess(category.storeId, userId, ['owner', 'manager'], systemRole);
+    await this.storesService.assertStoreAccess(category.storeId, userId, ['owner', 'manager'], systemRole, { write: true });
 
     await this.databaseService.db
       .update(productCategories)
@@ -121,7 +121,7 @@ export class ProductsService {
     dto: CreateProductDto,
     systemRole?: SystemRole
   ): Promise<ProductRecord> {
-    await this.storesService.assertStoreAccess(storeId, userId, ['owner', 'manager'], systemRole);
+    await this.storesService.assertStoreAccess(storeId, userId, ['owner', 'manager'], systemRole, { write: true });
 
     if (dto.categoryId) {
       const [category] = await this.databaseService.db
@@ -266,7 +266,7 @@ export class ProductsService {
       throw new NotFoundException('Товар не найден');
     }
 
-    await this.storesService.assertStoreAccess(product.storeId, userId, ['owner', 'manager'], systemRole);
+    await this.storesService.assertStoreAccess(product.storeId, userId, ['owner', 'manager'], systemRole, { write: true });
     return product;
   }
 

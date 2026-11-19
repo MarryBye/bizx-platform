@@ -152,7 +152,6 @@ export class StoresController {
   }
 
   @Post()
-  @Roles('business_owner', 'admin')
   @UsePipes(new ZodValidationPipe(createStoreDtoSchema))
   async createStore(
     @CurrentUser('sub') userId: string,
@@ -192,7 +191,7 @@ export class StoresController {
     @CurrentUser('systemRole') systemRole: SystemRole | undefined,
     @UploadedFile() rawFile?: UploadedFileDto
   ): Promise<ApiResponse<StoreRecord>> {
-    await this.storesService.assertStoreOwnership(id, userId, userRole, systemRole);
+    await this.storesService.assertStoreOwnership(id, userId, userRole, systemRole, { write: true });
     const file = validateImageFile(rawFile);
     const fileKey = this.storageService.generateFileKey('stores/logos', file.originalname);
     const publicUrl = await this.storageService.uploadBuffer(fileKey, file.buffer, file.mimetype);
@@ -220,7 +219,7 @@ export class StoresController {
     @CurrentUser('systemRole') systemRole: SystemRole | undefined,
     @UploadedFile() rawFile?: UploadedFileDto
   ): Promise<ApiResponse<StoreRecord>> {
-    await this.storesService.assertStoreOwnership(id, userId, userRole, systemRole);
+    await this.storesService.assertStoreOwnership(id, userId, userRole, systemRole, { write: true });
     const file = validateImageFile(rawFile);
     const fileKey = this.storageService.generateFileKey('stores/banners', file.originalname);
     const publicUrl = await this.storageService.uploadBuffer(fileKey, file.buffer, file.mimetype);
