@@ -82,7 +82,9 @@ const DEFAULT_MANAGER_STORE_CODES: StorePermissionCode[] = [
   'roles.read',
   'roles.write',
   'roles.edit',
-  'roles.archive'
+  'roles.archive',
+  'marketing.broadcasts.read',
+  'marketing.broadcasts.send'
 ];
 
 const DEFAULT_STAFF_STORE_CODES: StorePermissionCode[] = [
@@ -120,13 +122,19 @@ const DEFAULT_OPS_PLATFORM_CODES: PlatformPermissionCode[] = [
   'platform.analytics.read',
   'platform.analytics.export',
   'platform.staff.read',
-  'platform.roles.read'
+  'platform.roles.read',
+  'platform.broadcasts.read',
+  'platform.broadcasts.send',
+  'platform.support.read',
+  'platform.support.reply'
 ];
 
 const DEFAULT_SUPPORT_PLATFORM_CODES: PlatformPermissionCode[] = [
   'platform.stores.read',
   'platform.users.read',
-  'platform.analytics.read'
+  'platform.analytics.read',
+  'platform.support.read',
+  'platform.support.reply'
 ];
 
 @Injectable()
@@ -350,6 +358,12 @@ export class RbacService implements OnModuleInit {
             permissionId: PERM_BY_CODE.get(c)!.id
           }))
         ])
+        .onConflictDoNothing();
+    } else {
+      // Синхронізуємо нові права платформи для існуючої системної ролі власника
+      await this.databaseService.db
+        .insert(rolePermissions)
+        .values(PLATFORM_PERMISSIONS.map((p) => ({ roleId: ownerRoleId!, permissionId: p.id })))
         .onConflictDoNothing();
     }
 

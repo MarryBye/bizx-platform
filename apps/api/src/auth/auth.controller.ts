@@ -13,6 +13,7 @@ import {
   UnauthorizedException
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import { AuthService } from './auth.service.js';
 import { StorageService } from '../storage/storage.service.js';
@@ -67,6 +68,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ default: { limit: 6, ttl: 60_000 } })
   @Post('register')
   @UsePipes(new ZodValidationPipe(registerDtoSchema))
   async register(
@@ -92,6 +94,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ default: { limit: 12, ttl: 60_000 } })
   @Post('login')
   @UsePipes(new ZodValidationPipe(loginDtoSchema))
   async login(
@@ -117,6 +120,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Post('refresh')
   async refresh(
     @Body() body: RefreshTokenDto | undefined,

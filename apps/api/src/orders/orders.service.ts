@@ -9,6 +9,7 @@ import { DatabaseService } from '../database/database.service.js';
 import { StoresService } from '../stores/stores.service.js';
 import { RbacService } from '../rbac/rbac.service.js';
 import { StorageService } from '../storage/storage.service.js';
+import { BroadcastsService } from '../broadcasts/broadcasts.service.js';
 import { validateChatAttachmentFile, type UploadedFileDto } from '../common/file-upload.utils.js';
 import {
   orders,
@@ -85,7 +86,8 @@ export class OrdersService {
     private readonly databaseService: DatabaseService,
     private readonly storesService: StoresService,
     private readonly rbacService: RbacService,
-    private readonly storageService: StorageService
+    private readonly storageService: StorageService,
+    private readonly broadcastsService: BroadcastsService
   ) {}
 
   private generateOrderNumber(): string {
@@ -360,6 +362,17 @@ export class OrdersService {
         review: null
       };
     });
+
+    // Фіксуємо вибір маркетингової підписки на 1-му замовленні (Strict Opt-In, не ламає замовлення при помилці)
+    try {
+      await this.broadcastsService.recordFirstOrderCheckoutConsent(
+        dto.storeId,
+        customerId,
+        dto.subscribeToStoreMarketing
+      );
+    } catch {
+      // ignore non-critical marketing preference write failure
+    }
 
     return created;
   }

@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service.js';
 import { StoresService } from '../stores/stores.service.js';
 import { RbacService } from '../rbac/rbac.service.js';
+import { BroadcastsService } from '../broadcasts/broadcasts.service.js';
 import {
   products,
   productCategories,
@@ -50,7 +51,8 @@ export class ProductsService {
   constructor(
     private readonly databaseService: DatabaseService,
     private readonly storesService: StoresService,
-    private readonly rbacService: RbacService
+    private readonly rbacService: RbacService,
+    private readonly broadcastsService: BroadcastsService
   ) {}
 
   private async canInspectUnpublishedStore(storeId: string, callerUserId?: string): Promise<boolean> {
@@ -187,6 +189,14 @@ export class ProductsService {
         isActive: dto.isActive ?? true
       })
       .returning();
+
+    void this.broadcastsService.triggerAutoDiscountBroadcastIfEligible({
+      storeId,
+      actorUserId: userId,
+      product: newProduct,
+      previousPrice: null,
+      previousOldPrice: null
+    });
 
     return newProduct;
   }
@@ -389,6 +399,14 @@ export class ProductsService {
       })
       .where(eq(products.id, id))
       .returning();
+
+    void this.broadcastsService.triggerAutoDiscountBroadcastIfEligible({
+      storeId: product.storeId,
+      actorUserId: userId,
+      product: updated,
+      previousPrice: existing.price,
+      previousOldPrice: existing.oldPrice
+    });
 
     return updated;
   }
