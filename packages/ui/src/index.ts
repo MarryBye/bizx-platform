@@ -11,6 +11,7 @@ export * from './lib/utils';
 export * from './components/auth-card';
 export * from './components/country-flag';
 export * from './components/language-selector';
+export * from './components/sidebar-account-menu';
 export * from './components/phone-input';
 export * from './components/role-icon';
 export * from './components/permission-matrix';
