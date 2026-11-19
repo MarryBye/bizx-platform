@@ -358,6 +358,8 @@ export const uk = {
     detailedAnalytics: 'Детальна аналітика',
     products: 'Товари та меню',
     orders: 'Замовлення',
+    marketing: 'Маркетинг і розсилки',
+    customers: 'Клієнти',
     staff: 'Команда',
     roles: 'Ролі та доступи',
     rolesTitle: 'Ролі та доступи закладу',
@@ -523,6 +525,9 @@ export const uk = {
     tabBusinessesPending: 'Очікують підтвердження',
     tabUsers: 'Користувачі',
     tabDisputes: 'Скарги',
+    tabCommunications: 'Комунікації',
+    tabSupport: 'Звернення підтримки',
+    tabBroadcasts: 'Розсилки BizX',
     tabStaff: 'Команда BizX',
     tabRoles: 'Ролі та доступи',
     rolesTitle: 'Ролі платформи BizX Core',
@@ -632,6 +637,12 @@ export const uk = {
       edit: 'Редагування ролей та зміна пріоритету',
       archive: 'Архівація (видалення) ролей'
     },
+    marketing: {
+      broadcasts: {
+        read: 'Перегляд підписників, лімітів та історії розсилок закладу',
+        send: 'Надсилання акційних розсилок та керування авто-знижками'
+      }
+    },
     platform: {
       admin: 'Адміністратор платформи (повний доступ з урахуванням ієрархії)',
       stores: {
@@ -674,6 +685,14 @@ export const uk = {
       strikes: {
         issue: 'Ручна видача страйків закладам через керування',
         revoke: 'Зняття страйків та дострокове розблокування закладів'
+      },
+      broadcasts: {
+        read: 'Перегляд журналу офіційних та технічних розсилок BizX',
+        send: 'Надсилання офіційних та технічних розсилок користувачам BizX'
+      },
+      support: {
+        read: 'Перегляд звернень користувачів у службу підтримки BizX',
+        reply: 'Відповіді користувачам у тікетах техпідтримки BizX'
       }
     }
   },
@@ -685,13 +704,15 @@ export const uk = {
     store: 'Налаштування закладу',
     staff: 'Команда та працівники',
     roles: 'Ролі та ієрархія',
+    marketing: 'Маркетинг і розсилки',
     platform_admin: 'Адміністрування платформи',
     platform_stores: 'Торгові точки платформи',
     platform_users: 'Користувачі BizX ID',
     platform_analytics: 'Аналітика платформи',
     platform_staff: 'Команда BizX',
     platform_roles: 'Ролі платформи',
-    platform_disputes: 'Скарги та страйки'
+    platform_disputes: 'Скарги та страйки',
+    platform_communications: 'Комунікації, розсилки та підтримка'
   },
   disputes: {
     categories: {
@@ -1032,6 +1053,8 @@ export const en: typeof uk = {
     detailedAnalytics: 'Detailed Analytics',
     products: 'Products & Menu',
     orders: 'Orders',
+    marketing: 'Marketing & Broadcasts',
+    customers: 'Customers',
     staff: 'Team',
     roles: 'Roles & Permissions',
     rolesTitle: 'Store Roles & Permissions',
@@ -1197,6 +1220,9 @@ export const en: typeof uk = {
     tabBusinessesPending: 'Pending Approval',
     tabUsers: 'Users',
     tabDisputes: 'Disputes',
+    tabCommunications: 'Communications',
+    tabSupport: 'Support Tickets',
+    tabBroadcasts: 'BizX Broadcasts',
     tabStaff: 'BizX Team',
     tabRoles: 'Roles & Permissions',
     rolesTitle: 'BizX Core Platform Roles',
@@ -1306,6 +1332,12 @@ export const en: typeof uk = {
       edit: 'Edit roles & change priority order',
       archive: 'Archive (remove) roles'
     },
+    marketing: {
+      broadcasts: {
+        read: 'View store subscribers, daily quotas & campaign history',
+        send: 'Send promotional broadcasts & manage auto-discount alerts'
+      }
+    },
     platform: {
       admin: 'Platform Administrator (full console access respecting hierarchy)',
       stores: {
@@ -1348,6 +1380,14 @@ export const en: typeof uk = {
       strikes: {
         issue: 'Issue manual strikes to stores',
         revoke: 'Revoke store strikes & lift suspension early'
+      },
+      broadcasts: {
+        read: 'View official & technical BizX broadcast logs',
+        send: 'Send official & technical broadcasts to BizX users'
+      },
+      support: {
+        read: 'View incoming BizX support tickets',
+        reply: 'Reply to users in BizX support tickets'
       }
     }
   },
@@ -1359,13 +1399,15 @@ export const en: typeof uk = {
     store: 'Store Settings',
     staff: 'Team & Staff',
     roles: 'Roles & Hierarchy',
+    marketing: 'Marketing & Broadcasts',
     platform_admin: 'Platform Administration',
     platform_stores: 'Platform Stores',
     platform_users: 'BizX ID Users',
     platform_analytics: 'Platform Analytics',
     platform_staff: 'BizX Staff',
     platform_roles: 'Platform Roles',
-    platform_disputes: 'Disputes & Strikes'
+    platform_disputes: 'Disputes & Strikes',
+    platform_communications: 'Communications, Broadcasts & Support'
   },
   disputes: {
     categories: {

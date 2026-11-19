@@ -33,6 +33,7 @@ export const subscriptionPlanSchema = z.object({
   priceUah: z.number(),
   period: z.string(),
   maxStores: z.number(),
+  dailyBroadcastLimit: z.number().int().min(0).optional(),
   badge: z.string().optional(),
   popular: z.boolean().optional(),
   features: z.array(z.string())
@@ -54,17 +55,25 @@ export const userSubscriptionDetailsSchema = z.object({
 });
 export type UserSubscriptionDetails = z.infer<typeof userSubscriptionDetailsSchema>;
 
-export const SUBSCRIPTION_TIER_LIMITS: Record<SubscriptionTier, { maxStores: number; target: 'client' | 'business' }> = {
-  free: { maxStores: 0, target: 'client' },
-  client_premium: { maxStores: 0, target: 'client' },
-  business_starter: { maxStores: 1, target: 'business' },
-  business_pro: { maxStores: 3, target: 'business' },
-  business_enterprise: { maxStores: 10, target: 'business' }
+export const SUBSCRIPTION_TIER_LIMITS: Record<
+  SubscriptionTier,
+  { maxStores: number; dailyBroadcastLimit: number; target: 'client' | 'business' }
+> = {
+  free: { maxStores: 0, dailyBroadcastLimit: 0, target: 'client' },
+  client_premium: { maxStores: 0, dailyBroadcastLimit: 0, target: 'client' },
+  business_starter: { maxStores: 1, dailyBroadcastLimit: 1, target: 'business' },
+  business_pro: { maxStores: 3, dailyBroadcastLimit: 3, target: 'business' },
+  business_enterprise: { maxStores: 10, dailyBroadcastLimit: 10, target: 'business' }
 };
 
 export function getMaxAllowedStoresForTier(tier?: string | null): number {
   if (!tier || !(tier in SUBSCRIPTION_TIER_LIMITS)) return 0;
   return SUBSCRIPTION_TIER_LIMITS[tier as SubscriptionTier].maxStores;
+}
+
+export function getDailyBroadcastLimitForTier(tier?: string | null): number {
+  if (!tier || !(tier in SUBSCRIPTION_TIER_LIMITS)) return 0;
+  return SUBSCRIPTION_TIER_LIMITS[tier as SubscriptionTier].dailyBroadcastLimit;
 }
 
 export function isBusinessTier(tier?: string | null): boolean {
@@ -182,7 +191,10 @@ export const STORE_PERMISSIONS: PermissionDefinition[] = [
   { id: 151, code: 'roles.read', scope: 'store', category: 'roles', action: 'read', ownerOnly: false },
   { id: 152, code: 'roles.write', scope: 'store', category: 'roles', action: 'write', ownerOnly: false },
   { id: 153, code: 'roles.edit', scope: 'store', category: 'roles', action: 'edit', ownerOnly: false },
-  { id: 154, code: 'roles.archive', scope: 'store', category: 'roles', action: 'archive', ownerOnly: false }
+  { id: 154, code: 'roles.archive', scope: 'store', category: 'roles', action: 'archive', ownerOnly: false },
+  // Маркетинг та розсилки
+  { id: 161, code: 'marketing.broadcasts.read', scope: 'store', category: 'marketing', action: 'read', ownerOnly: false },
+  { id: 162, code: 'marketing.broadcasts.send', scope: 'store', category: 'marketing', action: 'manage', ownerOnly: false }
 ];
 
 export const PLATFORM_PERMISSIONS: PermissionDefinition[] = [
@@ -218,7 +230,12 @@ export const PLATFORM_PERMISSIONS: PermissionDefinition[] = [
   { id: 251, code: 'platform.disputes.read', scope: 'platform', category: 'platform_disputes', action: 'read', ownerOnly: false },
   { id: 252, code: 'platform.disputes.resolve', scope: 'platform', category: 'platform_disputes', action: 'manage', ownerOnly: false },
   { id: 253, code: 'platform.strikes.revoke', scope: 'platform', category: 'platform_disputes', action: 'manage', ownerOnly: false },
-  { id: 254, code: 'platform.strikes.issue', scope: 'platform', category: 'platform_disputes', action: 'manage', ownerOnly: false }
+  { id: 254, code: 'platform.strikes.issue', scope: 'platform', category: 'platform_disputes', action: 'manage', ownerOnly: false },
+  // Комунікації, розсилки та підтримка
+  { id: 261, code: 'platform.broadcasts.read', scope: 'platform', category: 'platform_communications', action: 'read', ownerOnly: false },
+  { id: 262, code: 'platform.broadcasts.send', scope: 'platform', category: 'platform_communications', action: 'manage', ownerOnly: false },
+  { id: 263, code: 'platform.support.read', scope: 'platform', category: 'platform_communications', action: 'read', ownerOnly: false },
+  { id: 264, code: 'platform.support.reply', scope: 'platform', category: 'platform_communications', action: 'manage', ownerOnly: false }
 ];
 
 export const ALL_PERMISSIONS: PermissionDefinition[] = [
@@ -248,7 +265,9 @@ export type StorePermissionCode =
   | 'roles.read'
   | 'roles.write'
   | 'roles.edit'
-  | 'roles.archive';
+  | 'roles.archive'
+  | 'marketing.broadcasts.read'
+  | 'marketing.broadcasts.send';
 
 export type PlatformPermissionCode =
   | 'platform.admin'
@@ -276,7 +295,11 @@ export type PlatformPermissionCode =
   | 'platform.disputes.read'
   | 'platform.disputes.resolve'
   | 'platform.strikes.revoke'
-  | 'platform.strikes.issue';
+  | 'platform.strikes.issue'
+  | 'platform.broadcasts.read'
+  | 'platform.broadcasts.send'
+  | 'platform.support.read'
+  | 'platform.support.reply';
 
 export const OWNER_ROLE_PRIORITY = 10000;
 
@@ -567,6 +590,7 @@ export const storeSchema = z.object({
   payoutBalance: z.number().int().optional(),
   ratingAvg: z.number().optional(),
   ratingCount: z.number().int().optional(),
+  autoDiscountBroadcastEnabled: z.boolean().optional(),
   activeStrikesCount: z.number().int().optional(),
   myRoleName: z.string().nullable().optional(),
   myRoleIcon: z.string().nullable().optional(),
@@ -717,6 +741,8 @@ export const createOrderDtoSchema = z.object({
   deliveryAddress: z.string().trim().max(500).optional(),
   paymentMethod: z.enum(['card', 'cash', 'online']).default('card'),
   notes: z.string().trim().max(2000).optional(),
+  /** Явна згода (strict opt-in) на акційні розсилки закладу на першому замовленні */
+  subscribeToStoreMarketing: z.boolean().optional(),
   items: z.array(createOrderItemDtoSchema).min(1, 'Корзина не может быть пустой').max(100)
 });
 export type CreateOrderDto = z.infer<typeof createOrderDtoSchema>;
@@ -1255,3 +1281,149 @@ export const updatePlatformUserSubscriptionDtoSchema = z.object({
 export type UpdatePlatformUserSubscriptionDto = z.infer<
   typeof updatePlatformUserSubscriptionDtoSchema
 >;
+
+/**
+ * ============================================================================
+ * Маркетингові підписки на заклади, розсилки (BizX + Бізнес), авто-знижки та підтримка
+ * ============================================================================
+ */
+
+export const marketingSubscriptionStatusSchema = z.enum(['subscribed', 'unsubscribed', 'none']);
+export type MarketingSubscriptionStatus = z.infer<typeof marketingSubscriptionStatusSchema>;
+
+export const updateStoreMarketingSubscriptionDtoSchema = z.object({
+  subscribed: z.boolean(),
+  source: z
+    .enum(['storefront_button', 'inbox_unsubscribe', 'checkout_opt_in'])
+    .default('storefront_button')
+    .optional()
+});
+export type UpdateStoreMarketingSubscriptionDto = z.infer<
+  typeof updateStoreMarketingSubscriptionDtoSchema
+>;
+
+export interface StoreMarketingSubscriptionState {
+  storeId: string;
+  subscribed: boolean;
+  status: MarketingSubscriptionStatus;
+  /** Чи вже показували/фіксували вибір на 1-му замовленні (щоб не нав'язувати повторно) */
+  promptShown: boolean;
+  hasOrderedBefore: boolean;
+  /** Чи показувати необов'язковий неотмічений чекбокс підписки на поточному checkout */
+  showCheckoutOptIn: boolean;
+  updatedAt: string | null;
+}
+
+export const broadcastCampaignTypeSchema = z.enum([
+  'technical',
+  'official',
+  'promo',
+  'auto_discount'
+]);
+export type BroadcastCampaignType = z.infer<typeof broadcastCampaignTypeSchema>;
+
+export const platformBroadcastAudienceSchema = z
+  .object({
+    kind: z.enum(['all', 'business_owners', 'tier', 'store_owner', 'user']),
+    tier: subscriptionTierSchema.optional(),
+    storeId: z.string().uuid().optional(),
+    userId: z.string().uuid().optional()
+  })
+  .refine(
+    (v) =>
+      (v.kind !== 'tier' || Boolean(v.tier)) &&
+      (v.kind !== 'store_owner' || Boolean(v.storeId)) &&
+      (v.kind !== 'user' || Boolean(v.userId)),
+    { message: 'Оберіть конкретну цільову аудиторію для вибраного типу' }
+  );
+export type PlatformBroadcastAudience = z.infer<typeof platformBroadcastAudienceSchema>;
+
+export const sendPlatformBroadcastDtoSchema = z.object({
+  type: z.enum(['technical', 'official']).default('technical'),
+  targetAudience: platformBroadcastAudienceSchema,
+  subject: z.string().trim().min(3, 'Вкажіть тему розсилки (мін. 3 символи)').max(200),
+  body: z.string().trim().min(5, 'Вкажіть текст повідомлення (мін. 5 символів)').max(4000),
+  attachmentUrl: safeMediaUrlSchema.nullable().optional()
+});
+export type SendPlatformBroadcastDto = z.infer<typeof sendPlatformBroadcastDtoSchema>;
+
+export const sendStoreBroadcastDtoSchema = z.object({
+  subject: z.string().trim().min(3, 'Вкажіть заголовок акції (мін. 3 символи)').max(200),
+  body: z.string().trim().min(5, 'Вкажіть текст акції (мін. 5 символів)').max(4000),
+  attachmentUrl: safeMediaUrlSchema.nullable().optional(),
+  relatedProductId: z.string().uuid().nullable().optional()
+});
+export type SendStoreBroadcastDto = z.infer<typeof sendStoreBroadcastDtoSchema>;
+
+export const updateStoreBroadcastSettingsDtoSchema = z.object({
+  autoDiscountBroadcastEnabled: z.boolean()
+});
+export type UpdateStoreBroadcastSettingsDto = z.infer<
+  typeof updateStoreBroadcastSettingsDtoSchema
+>;
+
+export interface BroadcastCampaignItem {
+  id: string;
+  scope: 'platform' | 'store';
+  storeId: string | null;
+  storeName?: string | null;
+  createdByUserId: string | null;
+  createdByName?: string | null;
+  createdByEmail?: string | null;
+  type: BroadcastCampaignType;
+  targetAudience: {
+    kind: string;
+    tier?: string;
+    userId?: string;
+    storeId?: string;
+  };
+  subject: string;
+  body: string;
+  attachmentUrl: string | null;
+  relatedProductId: string | null;
+  relatedProductName?: string | null;
+  recipientsCount: number;
+  createdAt: string;
+}
+
+export interface StoreBroadcastSummary {
+  storeId: string;
+  storeName: string;
+  storeStatus: string;
+  ownerTier: SubscriptionTier;
+  subscribersCount: number;
+  checkoutSubscribersCount: number;
+  storefrontSubscribersCount: number;
+  unsubscribedCount: number;
+  dailyLimit: number;
+  usedToday: number;
+  remainingToday: number;
+  autoDiscountBroadcastEnabled: boolean;
+  campaigns: BroadcastCampaignItem[];
+}
+
+export interface PlatformBroadcastAudienceCounts {
+  allUsers: number;
+  businessOwners: number;
+  byTier: Record<SubscriptionTier, number>;
+}
+
+export interface PlatformBroadcastSummary {
+  audienceCounts: PlatformBroadcastAudienceCounts;
+  campaigns: BroadcastCampaignItem[];
+}
+
+export interface PlatformSupportThreadItem extends InboxThreadItem {
+  userName: string | null;
+  userEmail: string | null;
+  userPhone: string | null;
+  userAvatarUrl: string | null;
+  unreadByStaffCount: number;
+  messagesCount: number;
+}
+
+export interface PlatformSupportUnreadSummary {
+  unreadThreadsCount: number;
+  unreadMessagesCount: number;
+  totalThreadsCount: number;
+}
