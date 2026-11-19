@@ -164,7 +164,9 @@ export default function PricingPage() {
           }`}
         >
           {filteredPlans.map((plan) => {
-            const isCurrent = user?.subscriptionTier === plan.id;
+            const isCurrent =
+              user?.subscriptionTier === plan.id &&
+              (plan.id === 'free' || user?.subscriptionStatus === 'active');
             const isPopular = plan.popular;
 
             return (

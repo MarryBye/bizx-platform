@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }): React.JSX.Element {
   return (
-    <html lang="ru">
+    <html lang="uk">
       <body className="min-h-screen bg-background font-sans antialiased text-foreground">
         {children}
       </body>

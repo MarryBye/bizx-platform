@@ -1059,7 +1059,9 @@ export default function AccountPage() {
                       {allPlans
                         .filter((p) => p.target === 'business')
                         .map((plan) => {
-                          const isCurrent = user?.subscriptionTier === plan.id;
+                          const isCurrent =
+                            user?.subscriptionTier === plan.id &&
+                            (plan.id === 'free' || user?.subscriptionStatus === 'active');
                           return (
                             <div
                               key={plan.id}
