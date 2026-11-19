@@ -727,7 +727,8 @@ export const analyticsQuerySchema = z.object({
   status: orderStatusSchema.optional(),
   minAmount: z.coerce.number().int().nonnegative().optional(),
   maxAmount: z.coerce.number().int().nonnegative().optional(),
-  storeId: z.string().uuid().optional()
+  storeId: z.string().uuid().optional(),
+  topLimit: z.coerce.number().int().min(1).max(500).optional()
 });
 export type AnalyticsQuery = z.infer<typeof analyticsQuerySchema>;
 
