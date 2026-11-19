@@ -289,4 +289,6 @@ Supplementary internal engineering specifications and testing feedback are archi
 
 ## License
 
-This project is proprietary software developed by Viktor Lukianov. All rights reserved.
+This project is proprietary, source-available (view-only) software developed by **Viktor Lukianov**. All rights reserved.
+
+Viewing the source code is permitted for reference only. Copying, using, modifying, or distributing any part of this project without prior written permission is strictly prohibited. See [LICENSE](./LICENSE) for full terms.
