@@ -18,9 +18,7 @@ import {
 import type {
   AnalyticsQuery,
   StoreAnalytics,
-  PlatformAnalytics,
-  UserRole,
-  SystemRole
+  PlatformAnalytics
 } from '@bizx/common-types';
 
 @Injectable()
@@ -63,9 +61,7 @@ export class AnalyticsService {
   async getStoreAnalytics(
     storeId: string,
     userId: string,
-    userRole?: UserRole,
-    query: AnalyticsQuery = { period: 'all' },
-    systemRole?: SystemRole
+    query: AnalyticsQuery = { period: 'all' }
   ): Promise<StoreAnalytics> {
     await this.rbacService.assertStorePermission(storeId, userId, 'analytics.read', {
       write: false,

@@ -20,7 +20,7 @@ import {
   type OrderRecord,
   type OrderItemRecord
 } from '@bizx/database';
-import type { CreateOrderDto, UpdateOrderStatusDto, UserRole, SystemRole } from '@bizx/common-types';
+import type { CreateOrderDto, UpdateOrderStatusDto } from '@bizx/common-types';
 
 export interface OrderWithItems extends OrderRecord {
   items: OrderItemRecord[];
@@ -227,12 +227,7 @@ export class OrdersService {
     }));
   }
 
-  async getStoreOrders(
-    storeId: string,
-    userId: string,
-    userRole?: UserRole,
-    systemRole?: SystemRole
-  ): Promise<OrderWithItems[]> {
+  async getStoreOrders(storeId: string, userId: string): Promise<OrderWithItems[]> {
     await this.rbacService.assertStorePermission(storeId, userId, 'orders.read', {
       write: false,
       allowPlatformPermission: 'platform.stores.read'
@@ -267,12 +262,7 @@ export class OrdersService {
     }));
   }
 
-  async getOrderById(
-    orderId: string,
-    userId: string,
-    userRole?: UserRole,
-    systemRole?: SystemRole
-  ): Promise<OrderDetailWithStore> {
+  async getOrderById(orderId: string, userId: string): Promise<OrderDetailWithStore> {
     const [order] = await this.databaseService.db
       .select({
         id: orders.id,
@@ -323,9 +313,7 @@ export class OrdersService {
   async updateOrderStatus(
     orderId: string,
     userId: string,
-    userRole?: UserRole,
-    dto?: UpdateOrderStatusDto,
-    systemRole?: SystemRole
+    dto?: UpdateOrderStatusDto
   ): Promise<OrderRecord> {
     const [order] = await this.databaseService.db
       .select({

@@ -20,9 +20,6 @@ import type {
   UpdateProductDto,
   ProductFilterQuery,
   CreateProductCategoryDto,
-  UserRole,
-  SystemRole,
-  StoreMemberRole,
   PaginatedResult
 } from '@bizx/common-types';
 
@@ -69,9 +66,7 @@ export class ProductsService {
   async createProductCategory(
     storeId: string,
     userId: string,
-    userRole: UserRole | undefined,
-    dto: CreateProductCategoryDto,
-    systemRole?: SystemRole
+    dto: CreateProductCategoryDto
   ): Promise<ProductCategoryRecord> {
     await this.rbacService.assertStorePermission(storeId, userId, 'products.write', { write: true });
 
@@ -89,9 +84,7 @@ export class ProductsService {
 
   async deleteProductCategory(
     categoryId: string,
-    userId: string,
-    userRole?: UserRole,
-    systemRole?: SystemRole
+    userId: string
   ): Promise<{ message: string }> {
     const [category] = await this.databaseService.db
       .select()
@@ -119,9 +112,7 @@ export class ProductsService {
   async createProduct(
     storeId: string,
     userId: string,
-    userRole: UserRole | undefined,
-    dto: CreateProductDto,
-    systemRole?: SystemRole
+    dto: CreateProductDto
   ): Promise<ProductRecord> {
     await this.rbacService.assertStorePermission(storeId, userId, 'products.write', { write: true });
 
@@ -253,12 +244,7 @@ export class ProductsService {
     return product;
   }
 
-  async assertProductOwnership(
-    id: string,
-    userId: string,
-    userRole?: UserRole,
-    systemRole?: SystemRole
-  ): Promise<ProductRecord> {
+  async assertProductOwnership(id: string, userId: string): Promise<ProductRecord> {
     const [product] = await this.databaseService.db
       .select()
       .from(products)
@@ -275,11 +261,9 @@ export class ProductsService {
   async updateProduct(
     id: string,
     userId: string,
-    userRole: UserRole | undefined,
-    dto: UpdateProductDto,
-    systemRole?: SystemRole
+    dto: UpdateProductDto
   ): Promise<ProductRecord> {
-    const product = await this.assertProductOwnership(id, userId, userRole, systemRole);
+    const product = await this.assertProductOwnership(id, userId);
 
     if (dto.categoryId) {
       const [category] = await this.databaseService.db
@@ -309,13 +293,8 @@ export class ProductsService {
     return updated;
   }
 
-  async deleteProduct(
-    id: string,
-    userId: string,
-    userRole?: UserRole,
-    systemRole?: SystemRole
-  ): Promise<{ message: string }> {
-    await this.assertProductOwnership(id, userId, userRole, systemRole);
+  async deleteProduct(id: string, userId: string): Promise<{ message: string }> {
+    await this.assertProductOwnership(id, userId);
 
     await this.databaseService.db
       .update(products)

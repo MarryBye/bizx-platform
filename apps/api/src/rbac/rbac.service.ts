@@ -121,9 +121,7 @@ export class RbacService implements OnModuleInit {
           scope: perm.scope,
           category: perm.category,
           action: perm.action,
-          ownerOnly: perm.ownerOnly,
-          descriptionUk: perm.descriptionUk,
-          descriptionEn: perm.descriptionEn
+          ownerOnly: perm.ownerOnly
         })
         .onConflictDoUpdate({
           target: permissionsTable.id,
@@ -132,9 +130,7 @@ export class RbacService implements OnModuleInit {
             scope: perm.scope,
             category: perm.category,
             action: perm.action,
-            ownerOnly: perm.ownerOnly,
-            descriptionUk: perm.descriptionUk,
-            descriptionEn: perm.descriptionEn
+            ownerOnly: perm.ownerOnly
           }
         });
     }
@@ -153,7 +149,7 @@ export class RbacService implements OnModuleInit {
         scope: 'store',
         storeId,
         name: 'Власник',
-        icon: '👑',
+        icon: 'crown',
         color: '#0f172a',
         priority: OWNER_ROLE_PRIORITY,
         isSystem: true
@@ -166,7 +162,7 @@ export class RbacService implements OnModuleInit {
         scope: 'store',
         storeId,
         name: 'Керуючий',
-        icon: '💼',
+        icon: 'briefcase',
         color: '#2563eb',
         priority: 500,
         isSystem: false
@@ -179,7 +175,7 @@ export class RbacService implements OnModuleInit {
         scope: 'store',
         storeId,
         name: 'Персонал',
-        icon: '🛒',
+        icon: 'shopping-bag',
         color: '#475569',
         priority: 100,
         isSystem: false
@@ -224,10 +220,15 @@ export class RbacService implements OnModuleInit {
     if (existingRoles.length > 0) return;
 
     await this.ensurePermissionsCatalog();
-    const { ownerRoleId, managerRoleId, staffRoleId } = await this.provisionDefaultStoreRoles(
+    const { ownerRoleId, staffRoleId } = await this.provisionDefaultStoreRoles(
       this.databaseService.db,
       storeId
     );
+
+    const [store] = await this.databaseService.db
+      .select({ ownerId: stores.ownerId })
+      .from(stores)
+      .where(eq(stores.id, storeId));
 
     // Оновлюємо існуючих учасників без roleId
     const existingMembers = await this.databaseService.db
@@ -237,8 +238,7 @@ export class RbacService implements OnModuleInit {
 
     for (const m of existingMembers) {
       if (!m.roleId && !m.isCustom) {
-        const mappedRoleId =
-          m.role === 'owner' ? ownerRoleId : m.role === 'manager' ? managerRoleId : staffRoleId;
+        const mappedRoleId = store?.ownerId === m.userId ? ownerRoleId : staffRoleId;
         await this.databaseService.db
           .update(storeMembers)
           .set({ roleId: mappedRoleId, updatedAt: new Date() })
@@ -248,7 +248,7 @@ export class RbacService implements OnModuleInit {
   }
 
   /**
-   * Ідемпотентно створює дефолтні ролі платформи BizX Core та прив'язує існуючих platform_admin
+   * Ідемпотентно створює дефолтні ролі платформи BizX Core
    */
   async ensureDefaultPlatformRoles(): Promise<{ ownerRoleId: string }> {
     const existing = await this.databaseService.db
@@ -265,7 +265,7 @@ export class RbacService implements OnModuleInit {
           scope: 'platform',
           storeId: null,
           name: 'Власник платформи',
-          icon: '👑',
+          icon: 'crown',
           color: '#0f172a',
           priority: OWNER_ROLE_PRIORITY,
           isSystem: true
@@ -279,7 +279,7 @@ export class RbacService implements OnModuleInit {
           scope: 'platform',
           storeId: null,
           name: 'Операційний менеджер',
-          icon: '⚡',
+          icon: 'zap',
           color: '#2563eb',
           priority: 500,
           isSystem: false
@@ -292,7 +292,7 @@ export class RbacService implements OnModuleInit {
           scope: 'platform',
           storeId: null,
           name: 'Підтримка та модерація',
-          icon: '🎧',
+          icon: 'headphones',
           color: '#059669',
           priority: 100,
           isSystem: false
@@ -315,32 +315,6 @@ export class RbacService implements OnModuleInit {
         .onConflictDoNothing();
     }
 
-    // Прив'язуємо існуючих platform_admin користувачів, якщо platform_members порожній
-    const existingMembers = await this.databaseService.db
-      .select({ id: platformMembers.id })
-      .from(platformMembers)
-      .where(isNull(platformMembers.archivedAt));
-
-    if (existingMembers.length === 0) {
-      const adminUsers = await this.databaseService.db
-        .select({ id: users.id })
-        .from(users)
-        .where(eq(users.systemRole, 'platform_admin'));
-
-      for (const adminUser of adminUsers) {
-        await this.databaseService.db
-          .insert(platformMembers)
-          .values({
-            userId: adminUser.id,
-            roleId: ownerRoleId,
-            isCustom: false,
-            isOwner: true,
-            department: 'Керівництво'
-          })
-          .onConflictDoNothing();
-      }
-    }
-
     return { ownerRoleId };
   }
 
@@ -360,7 +334,12 @@ export class RbacService implements OnModuleInit {
       return { hasActiveBizSub: false, maxAllowedStores: 0, isStaff: false };
     }
 
-    const isStaff = owner.systemRole === 'platform_admin' || owner.role === 'admin';
+    const [platRow] = await this.databaseService.db
+      .select({ id: platformMembers.id })
+      .from(platformMembers)
+      .where(and(eq(platformMembers.userId, ownerId), isNull(platformMembers.archivedAt)))
+      .limit(1);
+    const isStaff = Boolean(platRow);
     let currentStatus = owner.subscriptionStatus;
 
     if (
@@ -727,12 +706,12 @@ export class RbacService implements OnModuleInit {
       }
       if (def.ownerOnly && !actor.isOwner) {
         throw new ForbiddenException(
-          `Право «${def.descriptionUk}» може видавати виключно власник`
+          `Право «${def.code}» може видавати виключно власник`
         );
       }
       if (!actor.isOwner && !actorPermSet.has(pid)) {
         throw new ForbiddenException(
-          `Ви не можете видавати право «${def.descriptionUk}», якого не маєте самі`
+          `Ви не можете видавати право «${def.code}», якого не маєте самі`
         );
       }
     }
@@ -763,6 +742,18 @@ export class RbacService implements OnModuleInit {
   // ==================== ДОВІДНИК ДОСТУПІВ ====================
 
   async getPermissionsForStore(storeId: string, userId: string): Promise<PermissionsResponse> {
+    const [store] = await this.databaseService.db
+      .select({ id: stores.id, ownerId: stores.ownerId })
+      .from(stores)
+      .where(eq(stores.id, storeId));
+
+    if (!store) {
+      throw new NotFoundException('Магазин не знайдено');
+    }
+
+    const { hasActiveBizSub, isStaff } = await this.reconcileOwnerStores(store.ownerId);
+    const ownerHasActiveSubscription = isStaff || hasActiveBizSub;
+
     const access = await this.getStoreMemberAccess(storeId, userId);
     if (!access.isMember) {
       const platformAccess = await this.getPlatformMemberAccess(userId);
@@ -775,10 +766,15 @@ export class RbacService implements OnModuleInit {
           ...platformAccess,
           permissions: STORE_PERMISSIONS.map((p) => p.code),
           permissionIds: STORE_PERMISSIONS.map((p) => p.id)
-        }
+        },
+        ownerHasActiveSubscription: true
       };
     }
-    return { catalog: STORE_PERMISSIONS, myAccess: access };
+    return {
+      catalog: STORE_PERMISSIONS,
+      myAccess: access,
+      ownerHasActiveSubscription
+    };
   }
 
   async getPermissionsForPlatform(userId: string): Promise<PermissionsResponse> {
@@ -920,7 +916,7 @@ export class RbacService implements OnModuleInit {
           scope,
           storeId: scope === 'store' ? storeId : null,
           name: dto.name.trim(),
-          icon: dto.icon || '🛡️',
+          icon: dto.icon !== undefined ? dto.icon || null : null,
           color: dto.color || '#334155',
           priority: targetPriority,
           isSystem: false
@@ -1006,7 +1002,7 @@ export class RbacService implements OnModuleInit {
         .update(rolesTable)
         .set({
           name: dto.name !== undefined ? dto.name.trim() : role.name,
-          icon: dto.icon !== undefined ? dto.icon : role.icon,
+          icon: dto.icon !== undefined ? dto.icon || null : role.icon,
           color: dto.color !== undefined ? dto.color : role.color,
           priority: dto.priority !== undefined ? dto.priority : role.priority,
           updatedAt: new Date()
@@ -1149,7 +1145,7 @@ export class RbacService implements OnModuleInit {
       if (scope === 'store') {
         await tx
           .update(storeMembers)
-          .set({ roleId: null, isCustom: true, role: 'custom', customPriority: 0, updatedAt: new Date() })
+          .set({ roleId: null, isCustom: true, customPriority: 0, updatedAt: new Date() })
           .where(and(eq(storeMembers.roleId, roleId), isNull(storeMembers.archivedAt)));
       } else {
         await tx
@@ -1216,7 +1212,6 @@ export class RbacService implements OnModuleInit {
         id: storeMembers.id,
         storeId: storeMembers.storeId,
         userId: storeMembers.userId,
-        role: storeMembers.role,
         roleId: storeMembers.roleId,
         isCustom: storeMembers.isCustom,
         customPriority: storeMembers.customPriority,
@@ -1287,10 +1282,9 @@ export class RbacService implements OnModuleInit {
         id: r.id,
         storeId: r.storeId,
         userId: r.userId,
-        role: (isOwner ? 'owner' : r.isCustom ? 'custom' : r.role) as StoreMember['role'],
         roleId: r.roleId,
-        roleName: isOwner ? r.roleName || 'Власник' : r.isCustom ? 'Custom' : r.roleName || r.role,
-        roleIcon: isOwner ? r.roleIcon || '👑' : r.isCustom ? '⚙️' : r.roleIcon || '🛡️',
+        roleName: isOwner ? r.roleName || 'Власник' : r.isCustom ? 'Custom' : r.roleName || null,
+        roleIcon: isOwner ? (r.roleIcon ?? 'crown') : r.isCustom ? null : (r.roleIcon ?? null),
         roleColor: isOwner ? r.roleColor || '#0f172a' : r.isCustom ? '#7c3aed' : r.roleColor || '#334155',
         priority: effectivePriority,
         isCustom: !isOwner && r.isCustom,
@@ -1320,7 +1314,6 @@ export class RbacService implements OnModuleInit {
     resolvedRoleId: string | null;
     resolvedCustomPermIds: number[];
     resolvedCustomPriority: number;
-    legacyRole: 'manager' | 'staff' | 'custom';
   }> {
     if (isCustom) {
       const validPermIds = this.validateGrantablePermissions(scope, permissionIds || [], actor);
@@ -1329,8 +1322,7 @@ export class RbacService implements OnModuleInit {
         resolvedIsCustom: true,
         resolvedRoleId: null,
         resolvedCustomPermIds: validPermIds,
-        resolvedCustomPriority: customPriority,
-        legacyRole: 'custom'
+        resolvedCustomPriority: customPriority
       };
     }
 
@@ -1378,8 +1370,7 @@ export class RbacService implements OnModuleInit {
       resolvedIsCustom: false,
       resolvedRoleId: role.id,
       resolvedCustomPermIds: [],
-      resolvedCustomPriority: 0,
-      legacyRole: role.priority >= 400 ? 'manager' : 'staff'
+      resolvedCustomPriority: 0
     };
   }
 
@@ -1395,35 +1386,12 @@ export class RbacService implements OnModuleInit {
 
     const targetUser = await this.findUserByEmailOrPhone(dto.email, dto.phone);
 
-    // Сумісність: якщо передано лише legacy `role: 'manager' | 'staff'` без `roleId`
-    let targetRoleId = dto.roleId;
-    if (!dto.isCustom && !targetRoleId && dto.role) {
-      const storeRoles = await this.databaseService.db
-        .select()
-        .from(rolesTable)
-        .where(
-          and(
-            eq(rolesTable.scope, 'store'),
-            eq(rolesTable.storeId, storeId),
-            eq(rolesTable.isSystem, false),
-            isNull(rolesTable.archivedAt)
-          )
-        )
-        .orderBy(desc(rolesTable.priority));
-
-      if (dto.role === 'manager') {
-        targetRoleId = storeRoles[0]?.id;
-      } else {
-        targetRoleId = storeRoles[storeRoles.length - 1]?.id;
-      }
-    }
-
     const assignment = await this.validateRoleAssignmentForScope(
       'store',
       storeId,
       actor,
       Boolean(dto.isCustom),
-      targetRoleId,
+      dto.roleId,
       dto.permissionIds
     );
 
@@ -1443,7 +1411,6 @@ export class RbacService implements OnModuleInit {
         await tx
           .update(storeMembers)
           .set({
-            role: assignment.legacyRole,
             roleId: assignment.resolvedRoleId,
             isCustom: assignment.resolvedIsCustom,
             customPriority: assignment.resolvedCustomPriority,
@@ -1458,7 +1425,6 @@ export class RbacService implements OnModuleInit {
           .values({
             storeId,
             userId: targetUser.id,
-            role: assignment.legacyRole,
             roleId: assignment.resolvedRoleId,
             isCustom: assignment.resolvedIsCustom,
             customPriority: assignment.resolvedCustomPriority
@@ -1553,7 +1519,6 @@ export class RbacService implements OnModuleInit {
       await tx
         .update(storeMembers)
         .set({
-          role: assignment.legacyRole,
           roleId: assignment.resolvedRoleId,
           isCustom: assignment.resolvedIsCustom,
           customPriority: assignment.resolvedCustomPriority,
@@ -1713,7 +1678,7 @@ export class RbacService implements OnModuleInit {
         userId: r.userId,
         roleId: r.roleId,
         roleName: r.isOwner ? r.roleName || 'Власник платформи' : r.isCustom ? 'Custom' : r.roleName,
-        roleIcon: r.isOwner ? r.roleIcon || '👑' : r.isCustom ? '⚙️' : r.roleIcon || '🛡️',
+        roleIcon: r.isOwner ? (r.roleIcon ?? 'crown') : r.isCustom ? null : (r.roleIcon ?? null),
         roleColor: r.isOwner ? r.roleColor || '#0f172a' : r.isCustom ? '#7c3aed' : r.roleColor || '#334155',
         priority: effectivePriority,
         isCustom: !r.isOwner && r.isCustom,
@@ -1786,12 +1751,6 @@ export class RbacService implements OnModuleInit {
           .returning();
         memberId = inserted.id;
       }
-
-      // Надаємо systemRole = 'platform_admin' для входу у консоль BizX Core
-      await tx
-        .update(users)
-        .set({ systemRole: 'platform_admin', updatedAt: new Date() })
-        .where(eq(users.id, targetUser.id));
 
       await tx
         .delete(platformMemberPermissions)
@@ -1928,17 +1887,10 @@ export class RbacService implements OnModuleInit {
       );
     }
 
-    await this.databaseService.db.transaction(async (tx) => {
-      await tx
-        .update(platformMembers)
-        .set({ archivedAt: new Date(), updatedAt: new Date() })
-        .where(eq(platformMembers.id, memberId));
-
-      await tx
-        .update(users)
-        .set({ systemRole: 'user', updatedAt: new Date() })
-        .where(eq(users.id, target.userId));
-    });
+    await this.databaseService.db
+      .update(platformMembers)
+      .set({ archivedAt: new Date(), updatedAt: new Date() })
+      .where(eq(platformMembers.id, memberId));
 
     return { message: 'Співробітника платформи успішно архівовано' };
   }
@@ -1948,26 +1900,60 @@ export class RbacService implements OnModuleInit {
   async listPlatformUsers(userId: string) {
     await this.assertPlatformPermission(userId, 'platform.users.read');
 
-    const allUsers = await this.databaseService.db
-      .select({
-        id: users.id,
-        name: users.name,
-        email: users.email,
-        phone: users.phone,
-        role: users.role,
-        systemRole: users.systemRole,
-        status: users.status,
-        subscriptionTier: users.subscriptionTier,
-        subscriptionStatus: users.subscriptionStatus,
-        createdAt: users.createdAt
-      })
-      .from(users)
-      .orderBy(desc(users.createdAt));
+    const [allUsers, activePlatformRows, ownedStoresRows] = await Promise.all([
+      this.databaseService.db
+        .select({
+          id: users.id,
+          name: users.name,
+          email: users.email,
+          phone: users.phone,
+          status: users.status,
+          subscriptionTier: users.subscriptionTier,
+          subscriptionStatus: users.subscriptionStatus,
+          createdAt: users.createdAt
+        })
+        .from(users)
+        .orderBy(desc(users.createdAt)),
+      this.databaseService.db
+        .select({
+          userId: platformMembers.userId,
+          isOwner: platformMembers.isOwner,
+          isCustom: platformMembers.isCustom,
+          roleName: rolesTable.name
+        })
+        .from(platformMembers)
+        .leftJoin(rolesTable, eq(platformMembers.roleId, rolesTable.id))
+        .where(isNull(platformMembers.archivedAt)),
+      this.databaseService.db
+        .select({ ownerId: stores.ownerId })
+        .from(stores)
+        .where(isNull(stores.archivedAt))
+    ]);
 
-    return allUsers.map((u) => ({
-      ...u,
-      createdAt: u.createdAt.toISOString()
-    }));
+    const platformMap = new Map(activePlatformRows.map((r) => [r.userId, r]));
+    const ownedCountMap = new Map<string, number>();
+    for (const s of ownedStoresRows) {
+      ownedCountMap.set(s.ownerId, (ownedCountMap.get(s.ownerId) || 0) + 1);
+    }
+
+    return allUsers.map((u) => {
+      const pm = platformMap.get(u.id);
+      const storesCount = ownedCountMap.get(u.id) || 0;
+      return {
+        ...u,
+        isPlatformStaff: Boolean(pm),
+        platformRoleName: pm
+          ? pm.isOwner
+            ? pm.roleName || 'Власник платформи'
+            : pm.isCustom
+              ? 'Custom'
+              : pm.roleName || null
+          : null,
+        isBusinessOwner: storesCount > 0,
+        storesCount,
+        createdAt: u.createdAt.toISOString()
+      };
+    });
   }
 
   async updatePlatformUserStatus(

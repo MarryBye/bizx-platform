@@ -14,9 +14,9 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
 import { StorageService } from './storage.service.js';
+import { RbacService } from '../rbac/rbac.service.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
-import { RolesGuard } from '../auth/guards/roles.guard.js';
-import { Public, Roles } from '../auth/decorators/auth.decorators.js';
+import { Public, CurrentUser } from '../auth/decorators/auth.decorators.js';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
 import { validateImageFile, type UploadedFileDto } from '../common/file-upload.utils.js';
 import {
@@ -29,7 +29,10 @@ import {
 
 @Controller('storage')
 export class StorageController {
-  constructor(private readonly storageService: StorageService) {}
+  constructor(
+    private readonly storageService: StorageService,
+    private readonly rbacService: RbacService
+  ) {}
 
   /**
    * Статичні SVG заглушки (avatar, store, product, banner)
@@ -122,11 +125,12 @@ export class StorageController {
    * Видалення файлу з бакету R2
    */
   @Delete('file/*key')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('business_owner', 'admin')
+  @UseGuards(JwtAuthGuard)
   async deleteFile(
-    @Param('key') keyParam: string | string[]
+    @Param('key') keyParam: string | string[],
+    @CurrentUser('sub') userId: string
   ): Promise<ApiResponse<{ message: string }>> {
+    await this.rbacService.assertPlatformPermission(userId, 'platform.stores.moderate');
     const rawKey = Array.isArray(keyParam) ? keyParam.join('/') : keyParam;
     const fileKey = rawKey.replace(/^file\//, '').replace(/^\/+/, '');
 

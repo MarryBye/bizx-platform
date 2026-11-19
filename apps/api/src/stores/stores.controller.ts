@@ -17,8 +17,7 @@ import { StoresService, type StoreListItem, type StoreDetailItem } from './store
 import { StorageService } from '../storage/storage.service.js';
 import { RbacService } from '../rbac/rbac.service.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
-import { RolesGuard } from '../auth/guards/roles.guard.js';
-import { CurrentUser, Roles, Public, PlatformAdmin } from '../auth/decorators/auth.decorators.js';
+import { CurrentUser, Public } from '../auth/decorators/auth.decorators.js';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
 import { validateImageFile, type UploadedFileDto } from '../common/file-upload.utils.js';
 import type { StoreRecord, StoreCategoryRecord } from '@bizx/database';
@@ -28,22 +27,17 @@ import {
   createStoreDtoSchema,
   updateStoreDtoSchema,
   storeFilterQuerySchema,
-  addStoreMemberDtoSchema,
   type CreateStoreCategoryDto,
   type UpdateStoreCategoryDto,
   type CreateStoreDto,
   type UpdateStoreDto,
   type StoreFilterQuery,
-  type AddStoreMemberDto,
-  type StoreMember,
-  type SystemRole,
-  type UserRole,
   type ApiResponse,
   type PaginatedResult
 } from '@bizx/common-types';
 
 @Controller('stores')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard)
 export class StoresController {
   constructor(
     private readonly storesService: StoresService,
@@ -179,11 +173,9 @@ export class StoresController {
   async updateStore(
     @Param('id') id: string,
     @CurrentUser('sub') userId: string,
-    @CurrentUser('role') userRole: UserRole,
-    @CurrentUser('systemRole') systemRole: SystemRole | undefined,
     @Body() dto: UpdateStoreDto
   ): Promise<ApiResponse<StoreRecord>> {
-    const updated = await this.storesService.updateStore(id, userId, userRole, dto, systemRole);
+    const updated = await this.storesService.updateStore(id, userId, dto);
     return {
       success: true,
       data: updated,
@@ -196,8 +188,6 @@ export class StoresController {
   async uploadStoreLogo(
     @Param('id') id: string,
     @CurrentUser('sub') userId: string,
-    @CurrentUser('role') userRole: UserRole,
-    @CurrentUser('systemRole') systemRole: SystemRole | undefined,
     @UploadedFile() rawFile?: UploadedFileDto
   ): Promise<ApiResponse<StoreRecord>> {
     await this.rbacService.assertStorePermission(id, userId, 'store.edit', { write: true });
@@ -205,13 +195,7 @@ export class StoresController {
     const fileKey = this.storageService.generateFileKey('stores/logos', file.originalname);
     const publicUrl = await this.storageService.uploadBuffer(fileKey, file.buffer, file.mimetype);
 
-    const updated = await this.storesService.updateStore(
-      id,
-      userId,
-      userRole,
-      { logoUrl: publicUrl },
-      systemRole
-    );
+    const updated = await this.storesService.updateStore(id, userId, { logoUrl: publicUrl });
     return {
       success: true,
       data: updated,
@@ -224,8 +208,6 @@ export class StoresController {
   async uploadStoreBanner(
     @Param('id') id: string,
     @CurrentUser('sub') userId: string,
-    @CurrentUser('role') userRole: UserRole,
-    @CurrentUser('systemRole') systemRole: SystemRole | undefined,
     @UploadedFile() rawFile?: UploadedFileDto
   ): Promise<ApiResponse<StoreRecord>> {
     await this.rbacService.assertStorePermission(id, userId, 'store.edit', { write: true });
@@ -233,13 +215,7 @@ export class StoresController {
     const fileKey = this.storageService.generateFileKey('stores/banners', file.originalname);
     const publicUrl = await this.storageService.uploadBuffer(fileKey, file.buffer, file.mimetype);
 
-    const updated = await this.storesService.updateStore(
-      id,
-      userId,
-      userRole,
-      { bannerUrl: publicUrl },
-      systemRole
-    );
+    const updated = await this.storesService.updateStore(id, userId, { bannerUrl: publicUrl });
     return {
       success: true,
       data: updated,
@@ -250,11 +226,9 @@ export class StoresController {
   @Delete(':id')
   async deleteStore(
     @Param('id') id: string,
-    @CurrentUser('sub') userId: string,
-    @CurrentUser('role') userRole: UserRole,
-    @CurrentUser('systemRole') systemRole: SystemRole | undefined
+    @CurrentUser('sub') userId: string
   ): Promise<ApiResponse<{ message: string }>> {
-    const result = await this.storesService.deleteStore(id, userId, userRole, systemRole);
+    const result = await this.storesService.deleteStore(id, userId);
     return {
       success: true,
       data: result,

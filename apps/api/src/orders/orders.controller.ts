@@ -6,7 +6,6 @@ import {
   type OrderDetailWithStore
 } from './orders.service.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
-import { RolesGuard } from '../auth/guards/roles.guard.js';
 import { CurrentUser } from '../auth/decorators/auth.decorators.js';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
 import type { OrderRecord } from '@bizx/database';
@@ -15,13 +14,11 @@ import {
   updateOrderStatusDtoSchema,
   type CreateOrderDto,
   type UpdateOrderStatusDto,
-  type UserRole,
-  type SystemRole,
   type ApiResponse
 } from '@bizx/common-types';
 
 @Controller('orders')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard)
 export class OrdersController {
   constructor(private readonly ordersService: OrdersService) {}
 
@@ -54,11 +51,9 @@ export class OrdersController {
   @Get('store/:storeId')
   async getStoreOrders(
     @Param('storeId') storeId: string,
-    @CurrentUser('sub') userId: string,
-    @CurrentUser('role') userRole: UserRole,
-    @CurrentUser('systemRole') systemRole: SystemRole | undefined
+    @CurrentUser('sub') userId: string
   ): Promise<ApiResponse<OrderWithItems[]>> {
-    const orders = await this.ordersService.getStoreOrders(storeId, userId, userRole, systemRole);
+    const orders = await this.ordersService.getStoreOrders(storeId, userId);
     return {
       success: true,
       data: orders,
@@ -69,11 +64,9 @@ export class OrdersController {
   @Get(':id')
   async getOrderById(
     @Param('id') id: string,
-    @CurrentUser('sub') userId: string,
-    @CurrentUser('role') userRole: UserRole,
-    @CurrentUser('systemRole') systemRole: SystemRole | undefined
+    @CurrentUser('sub') userId: string
   ): Promise<ApiResponse<OrderDetailWithStore>> {
-    const order = await this.ordersService.getOrderById(id, userId, userRole, systemRole);
+    const order = await this.ordersService.getOrderById(id, userId);
     return {
       success: true,
       data: order,
@@ -86,11 +79,9 @@ export class OrdersController {
   async updateOrderStatus(
     @Param('id') id: string,
     @CurrentUser('sub') userId: string,
-    @CurrentUser('role') userRole: UserRole,
-    @CurrentUser('systemRole') systemRole: SystemRole | undefined,
     @Body() dto: UpdateOrderStatusDto
   ): Promise<ApiResponse<OrderRecord>> {
-    const updated = await this.ordersService.updateOrderStatus(id, userId, userRole, dto, systemRole);
+    const updated = await this.ordersService.updateOrderStatus(id, userId, dto);
     return {
       success: true,
       data: updated,
