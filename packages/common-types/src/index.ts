@@ -179,19 +179,39 @@ export const updateUserProfileDtoSchema = z.object({
 
 export type UpdateUserProfileDto = z.infer<typeof updateUserProfileDtoSchema>;
 
+/**
+ * Нормалізація номеру телефону до формату E.164 (+380XXXXXXXXX)
+ */
+export function normalizePhone(raw?: string | null): string | null {
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const digits = trimmed.replace(/\D/g, '');
+  if (digits.length < 7 || digits.length > 15) return null;
+  return `+${digits}`;
+}
+
 export const registerDtoSchema = z.object({
   email: z.string().email({ message: 'Некорректный email адрес' }),
   password: z.string().min(6, { message: 'Пароль должен содержать минимум 6 символов' }),
   name: z.string().min(2, { message: 'Имя должно содержать минимум 2 символа' }),
+  phone: z.string().nullable().optional(),
   role: z.literal('client').optional().default('client')
 });
 
 export type RegisterDto = z.infer<typeof registerDtoSchema>;
 
-export const loginDtoSchema = z.object({
-  email: z.string().email({ message: 'Некорректный email адрес' }),
-  password: z.string().min(1, { message: 'Введите пароль' })
-});
+export const loginDtoSchema = z
+  .object({
+    email: z.string().email({ message: 'Некорректный email адрес' }).optional(),
+    phone: z.string().min(7, { message: 'Некорректный номер телефона' }).optional(),
+    identifier: z.string().min(3, { message: 'Введите email или телефон' }).optional(),
+    password: z.string().min(1, { message: 'Введите пароль' })
+  })
+  .refine((data) => Boolean(data.email || data.phone || data.identifier), {
+    message: 'Укажите email или номер телефона',
+    path: ['email']
+  });
 
 export type LoginDto = z.infer<typeof loginDtoSchema>;
 
@@ -442,13 +462,23 @@ export type AnalyticsPeriod = z.infer<typeof analyticsPeriodSchema>;
 
 export const analyticsQuerySchema = z.object({
   period: analyticsPeriodSchema.default('month'),
-  startDate: z.string().datetime().optional(),
-  endDate: z.string().datetime().optional()
+  startDate: z.string().optional(),
+  endDate: z.string().optional(),
+  status: orderStatusSchema.optional(),
+  minAmount: z.coerce.number().int().nonnegative().optional(),
+  maxAmount: z.coerce.number().int().nonnegative().optional(),
+  storeId: z.string().uuid().optional()
 });
 export type AnalyticsQuery = z.infer<typeof analyticsQuerySchema>;
 
 export interface DailySalesMetric {
   date: string;
+  revenue: number;
+  ordersCount: number;
+}
+
+export interface MonthlySalesMetric {
+  month: string;
   revenue: number;
   ordersCount: number;
 }
@@ -467,6 +497,7 @@ export interface StoreAnalytics {
   averageOrderValue: number;
   statusBreakdown: Record<string, number>;
   dailySales: DailySalesMetric[];
+  monthlySales?: MonthlySalesMetric[];
   topProducts: TopProductMetric[];
 }
 
@@ -476,6 +507,9 @@ export interface PlatformAnalytics {
   totalStores: number;
   activeStores: number;
   totalProducts: number;
+  statusBreakdown?: Record<string, number>;
+  dailySales?: DailySalesMetric[];
+  monthlySales?: MonthlySalesMetric[];
   topStoresByRevenue: {
     storeId: string;
     storeName: string;

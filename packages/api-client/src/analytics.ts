@@ -3,7 +3,8 @@ import type {
   ApiResponse,
   StoreAnalytics,
   PlatformAnalytics,
-  AnalyticsPeriod
+  AnalyticsPeriod,
+  AnalyticsQuery
 } from '@bizx/common-types';
 
 export class AnalyticsModule {
@@ -14,17 +15,45 @@ export class AnalyticsModule {
    */
   async getStoreAnalytics(
     storeId: string,
-    period: AnalyticsPeriod = 'month'
+    queryOrPeriod: AnalyticsPeriod | Partial<AnalyticsQuery> = 'month'
   ): Promise<ApiResponse<StoreAnalytics>> {
+    const params: Record<string, string | number | boolean | undefined> =
+      typeof queryOrPeriod === 'string'
+        ? { period: queryOrPeriod }
+        : {
+            period: queryOrPeriod.period ?? 'month',
+            startDate: queryOrPeriod.startDate,
+            endDate: queryOrPeriod.endDate,
+            status: queryOrPeriod.status,
+            minAmount: queryOrPeriod.minAmount,
+            maxAmount: queryOrPeriod.maxAmount
+          };
+
     return this.client.get<ApiResponse<StoreAnalytics>>(`/analytics/stores/${storeId}`, {
-      params: { period }
+      params
     });
   }
 
   /**
    * Отримання платформної аналітики (GET /analytics/platform)
    */
-  async getPlatformAnalytics(): Promise<ApiResponse<PlatformAnalytics>> {
-    return this.client.get<ApiResponse<PlatformAnalytics>>('/analytics/platform');
+  async getPlatformAnalytics(
+    query?: Partial<AnalyticsQuery>
+  ): Promise<ApiResponse<PlatformAnalytics>> {
+    const params: Record<string, string | number | boolean | undefined> | undefined = query
+      ? {
+          period: query.period ?? 'all',
+          startDate: query.startDate,
+          endDate: query.endDate,
+          status: query.status,
+          minAmount: query.minAmount,
+          maxAmount: query.maxAmount,
+          storeId: query.storeId
+        }
+      : undefined;
+
+    return this.client.get<ApiResponse<PlatformAnalytics>>('/analytics/platform', {
+      params
+    });
   }
 }
