@@ -1,17 +1,18 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { cn } from '../lib/utils';
 import { ChevronDown, Check, Globe } from 'lucide-react';
+import { CountryFlag } from './country-flag';
 
 export interface LanguageOption {
   code: 'uk' | 'en';
   label: string;
   shortLabel: string;
-  flag: string;
+  flagIso: string;
 }
 
 export const LANGUAGE_OPTIONS: LanguageOption[] = [
-  { code: 'uk', label: 'Українська', shortLabel: 'UA', flag: '🇺🇦' },
-  { code: 'en', label: 'English', shortLabel: 'EN', flag: '🇬🇧' }
+  { code: 'uk', label: 'Українська', shortLabel: 'UA', flagIso: 'UA' },
+  { code: 'en', label: 'English', shortLabel: 'EN', flagIso: 'GB' }
 ];
 
 export interface LanguageSelectorProps {
@@ -63,24 +64,25 @@ export const LanguageSelector: React.FC<LanguageSelectorProps> = ({
   };
 
   return (
-    <div ref={containerRef} className={cn('relative inline-block text-left', variant === 'full' && 'w-full', className)}>
+    <div
+      ref={containerRef}
+      className={cn('relative inline-block text-left', variant === 'full' && 'w-full', className)}
+    >
       {variant === 'minimal' && (
         <button
           type="button"
           onClick={() => setIsOpen((prev) => !prev)}
           aria-haspopup="listbox"
           aria-expanded={isOpen}
-          className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-medium text-slate-500 hover:text-slate-900 hover:bg-slate-100/80 transition-colors"
+          className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 transition-colors"
         >
-          <span className="text-sm leading-none" aria-hidden="true">
-            {active.flag}
-          </span>
-          <span className="text-[11px] font-semibold uppercase tracking-wide">
+          <CountryFlag iso={active.flagIso} className="w-[18px] h-[13px]" />
+          <span className="text-[11px] font-semibold uppercase tracking-wide leading-none">
             {active.shortLabel}
           </span>
           <ChevronDown
             className={cn(
-              'w-3.5 h-3.5 text-slate-400 transition-transform duration-150',
+              'w-3.5 h-3.5 text-slate-400 transition-transform duration-150 shrink-0',
               isOpen && 'rotate-180 text-slate-700'
             )}
           />
@@ -102,13 +104,13 @@ export const LanguageSelector: React.FC<LanguageSelectorProps> = ({
             </span>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
-            <span className="text-sm leading-none" aria-hidden="true">
-              {active.flag}
+            <CountryFlag iso={active.flagIso} className="w-[18px] h-[13px]" />
+            <span className="text-[11px] font-bold text-slate-800 leading-none">
+              {active.shortLabel}
             </span>
-            <span className="text-[11px] font-bold text-slate-800">{active.shortLabel}</span>
             <ChevronDown
               className={cn(
-                'w-3.5 h-3.5 text-slate-400 transition-transform duration-150',
+                'w-3.5 h-3.5 text-slate-400 transition-transform duration-150 shrink-0',
                 isOpen && 'rotate-180 text-slate-700'
               )}
             />
@@ -125,14 +127,12 @@ export const LanguageSelector: React.FC<LanguageSelectorProps> = ({
           className="w-full flex items-center justify-between gap-2 px-3.5 py-2.5 bg-white border border-slate-300 hover:border-slate-400 rounded-lg text-sm transition-colors"
         >
           <div className="flex items-center gap-2.5">
-            <span className="text-base leading-none" aria-hidden="true">
-              {active.flag}
-            </span>
-            <span className="font-semibold text-slate-900">{active.label}</span>
+            <CountryFlag iso={active.flagIso} className="w-5 h-3.5" />
+            <span className="font-semibold text-slate-900 leading-none">{active.label}</span>
           </div>
           <ChevronDown
             className={cn(
-              'w-4 h-4 text-slate-400 transition-transform duration-150',
+              'w-4 h-4 text-slate-400 transition-transform duration-150 shrink-0',
               isOpen && 'rotate-180 text-slate-700'
             )}
           />
@@ -166,10 +166,8 @@ export const LanguageSelector: React.FC<LanguageSelectorProps> = ({
                 )}
               >
                 <span className="flex items-center gap-2.5">
-                  <span className="text-base leading-none" aria-hidden="true">
-                    {opt.flag}
-                  </span>
-                  <span>{opt.label}</span>
+                  <CountryFlag iso={opt.flagIso} className="w-5 h-3.5" />
+                  <span className="leading-none">{opt.label}</span>
                 </span>
                 {isSelected && <Check className="w-3.5 h-3.5 text-slate-900 shrink-0" />}
               </button>

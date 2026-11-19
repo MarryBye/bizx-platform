@@ -1,34 +1,34 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { cn } from '../lib/utils';
 import { ChevronDown, Check, Search } from 'lucide-react';
+import { CountryFlag } from './country-flag';
 
 export interface PhoneCountry {
   iso: string;
   name: string;
   nameUk: string;
-  dialCode: string; // digits only, e.g. '380'
-  flag: string;
+  dialCode: string;
   placeholder: string;
   maxDigits: number;
-  groups: number[]; // digit grouping, e.g. [2, 3, 2, 2] for UA (67) 123-45-67
+  groups: number[];
 }
 
 export const PHONE_COUNTRIES: PhoneCountry[] = [
-  { iso: 'UA', name: 'Ukraine', nameUk: 'Україна', dialCode: '380', flag: '🇺🇦', placeholder: '(67) 123-45-67', maxDigits: 9, groups: [2, 3, 2, 2] },
-  { iso: 'PL', name: 'Poland', nameUk: 'Польща', dialCode: '48', flag: '🇵🇱', placeholder: '512 345 678', maxDigits: 9, groups: [3, 3, 3] },
-  { iso: 'DE', name: 'Germany', nameUk: 'Німеччина', dialCode: '49', flag: '🇩🇪', placeholder: '151 2345 6789', maxDigits: 11, groups: [3, 4, 4] },
-  { iso: 'GB', name: 'United Kingdom', nameUk: 'Велика Британія', dialCode: '44', flag: '🇬🇧', placeholder: '7700 900123', maxDigits: 10, groups: [4, 6] },
-  { iso: 'US', name: 'United States', nameUk: 'США', dialCode: '1', flag: '🇺🇸', placeholder: '(555) 123-4567', maxDigits: 10, groups: [3, 3, 4] },
-  { iso: 'CA', name: 'Canada', nameUk: 'Канада', dialCode: '1', flag: '🇨🇦', placeholder: '(416) 555-0123', maxDigits: 10, groups: [3, 3, 4] },
-  { iso: 'CZ', name: 'Czechia', nameUk: 'Чехія', dialCode: '420', flag: '🇨🇿', placeholder: '601 123 456', maxDigits: 9, groups: [3, 3, 3] },
-  { iso: 'FR', name: 'France', nameUk: 'Франція', dialCode: '33', flag: '🇫🇷', placeholder: '6 12 34 56 78', maxDigits: 9, groups: [1, 2, 2, 2, 2] },
-  { iso: 'IT', name: 'Italy', nameUk: 'Італія', dialCode: '39', flag: '🇮🇹', placeholder: '312 345 6789', maxDigits: 10, groups: [3, 3, 4] },
-  { iso: 'ES', name: 'Spain', nameUk: 'Іспанія', dialCode: '34', flag: '🇪🇸', placeholder: '612 345 678', maxDigits: 9, groups: [3, 3, 3] },
-  { iso: 'MD', name: 'Moldova', nameUk: 'Молдова', dialCode: '373', flag: '🇲🇩', placeholder: '68 123 456', maxDigits: 8, groups: [2, 3, 3] },
-  { iso: 'RO', name: 'Romania', nameUk: 'Румунія', dialCode: '40', flag: '🇷🇴', placeholder: '712 345 678', maxDigits: 9, groups: [3, 3, 3] },
-  { iso: 'LT', name: 'Lithuania', nameUk: 'Литва', dialCode: '370', flag: '🇱🇹', placeholder: '612 34567', maxDigits: 8, groups: [3, 5] },
-  { iso: 'GE', name: 'Georgia', nameUk: 'Грузія', dialCode: '995', flag: '🇬🇪', placeholder: '555 12 34 56', maxDigits: 9, groups: [3, 2, 2, 2] },
-  { iso: 'TR', name: 'Turkey', nameUk: 'Туреччина', dialCode: '90', flag: '🇹🇷', placeholder: '532 123 45 67', maxDigits: 10, groups: [3, 3, 2, 2] }
+  { iso: 'UA', name: 'Ukraine', nameUk: 'Україна', dialCode: '380', placeholder: '(67) 123-45-67', maxDigits: 9, groups: [2, 3, 2, 2] },
+  { iso: 'PL', name: 'Poland', nameUk: 'Польща', dialCode: '48', placeholder: '512 345 678', maxDigits: 9, groups: [3, 3, 3] },
+  { iso: 'DE', name: 'Germany', nameUk: 'Німеччина', dialCode: '49', placeholder: '151 2345 6789', maxDigits: 11, groups: [3, 4, 4] },
+  { iso: 'GB', name: 'United Kingdom', nameUk: 'Велика Британія', dialCode: '44', placeholder: '7700 900123', maxDigits: 10, groups: [4, 6] },
+  { iso: 'US', name: 'United States', nameUk: 'США', dialCode: '1', placeholder: '(555) 123-4567', maxDigits: 10, groups: [3, 3, 4] },
+  { iso: 'CA', name: 'Canada', nameUk: 'Канада', dialCode: '1', placeholder: '(416) 555-0123', maxDigits: 10, groups: [3, 3, 4] },
+  { iso: 'CZ', name: 'Czechia', nameUk: 'Чехія', dialCode: '420', placeholder: '601 123 456', maxDigits: 9, groups: [3, 3, 3] },
+  { iso: 'FR', name: 'France', nameUk: 'Франція', dialCode: '33', placeholder: '6 12 34 56 78', maxDigits: 9, groups: [1, 2, 2, 2, 2] },
+  { iso: 'IT', name: 'Italy', nameUk: 'Італія', dialCode: '39', placeholder: '312 345 6789', maxDigits: 10, groups: [3, 3, 4] },
+  { iso: 'ES', name: 'Spain', nameUk: 'Іспанія', dialCode: '34', placeholder: '612 345 678', maxDigits: 9, groups: [3, 3, 3] },
+  { iso: 'MD', name: 'Moldova', nameUk: 'Молдова', dialCode: '373', placeholder: '68 123 456', maxDigits: 8, groups: [2, 3, 3] },
+  { iso: 'RO', name: 'Romania', nameUk: 'Румунія', dialCode: '40', placeholder: '712 345 678', maxDigits: 9, groups: [3, 3, 3] },
+  { iso: 'LT', name: 'Lithuania', nameUk: 'Литва', dialCode: '370', placeholder: '612 34567', maxDigits: 8, groups: [3, 5] },
+  { iso: 'GE', name: 'Georgia', nameUk: 'Грузія', dialCode: '995', placeholder: '555 12 34 56', maxDigits: 9, groups: [3, 2, 2, 2] },
+  { iso: 'TR', name: 'Turkey', nameUk: 'Туреччина', dialCode: '90', placeholder: '532 123 45 67', maxDigits: 10, groups: [3, 3, 2, 2] }
 ];
 
 export function formatNationalNumber(digits: string, country: PhoneCountry): string {
@@ -75,7 +75,6 @@ export function parsePhoneToCountryAndNational(
   const digits = rawValue.replace(/\D/g, '');
   if (!digits) return { country: fallback, nationalDigits: '' };
 
-  // Sort by longest dialCode first so '380' matches before '3'
   const sorted = [...PHONE_COUNTRIES].sort((a, b) => b.dialCode.length - a.dialCode.length);
   for (const c of sorted) {
     if (digits.startsWith(c.dialCode)) {
@@ -122,7 +121,6 @@ export const PhoneInput: React.FC<PhoneInputProps> = ({
   const [search, setSearch] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Sync external value changes (e.g. when profile loads)
   useEffect(() => {
     const expectedE164 = nationalDigits ? `+${selectedCountry.dialCode}${nationalDigits}` : '';
     const cleanIncoming = value ? `+${value.replace(/\D/g, '')}` : '';
@@ -157,7 +155,6 @@ export const PhoneInput: React.FC<PhoneInputProps> = ({
 
   const handleDigitsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value;
-    // Handle pasted full international number like "+380671234567"
     if (raw.trim().startsWith('+')) {
       const next = parsePhoneToCountryAndNational(raw, selectedCountry.iso);
       setSelectedCountry(next.country);
@@ -196,27 +193,25 @@ export const PhoneInput: React.FC<PhoneInputProps> = ({
     <div ref={containerRef} className={cn('relative', className)}>
       <div
         className={cn(
-          'flex items-stretch w-full border border-slate-300 rounded-lg bg-white overflow-hidden transition-colors focus-within:ring-1 focus-within:ring-slate-900 focus-within:border-slate-900',
+          'flex items-center h-9 w-full border border-slate-300 rounded-lg bg-white overflow-hidden transition-colors focus-within:ring-1 focus-within:ring-slate-900 focus-within:border-slate-900',
           disabled && 'bg-slate-100 opacity-75'
         )}
       >
-        {/* Country Code Dropdown Trigger */}
+        {/* Country Code Dropdown Trigger — strictly vertically centered */}
         <button
           type="button"
           disabled={disabled}
           onClick={() => setIsOpen((prev) => !prev)}
-          className="flex items-center gap-1.5 px-2.5 py-2 bg-slate-50 hover:bg-slate-100 border-r border-slate-200 text-xs font-semibold text-slate-800 shrink-0 transition-colors disabled:cursor-not-allowed"
+          className="h-full flex items-center justify-center gap-1.5 px-2.5 bg-slate-50 hover:bg-slate-100 border-r border-slate-200 text-xs font-semibold text-slate-800 shrink-0 transition-colors disabled:cursor-not-allowed"
           aria-label="Select country code"
         >
-          <span className="text-base leading-none" aria-hidden="true">
-            {selectedCountry.flag}
-          </span>
-          <span className="font-mono text-[11px] font-bold text-slate-700">
+          <CountryFlag iso={selectedCountry.iso} className="w-[18px] h-[13px]" />
+          <span className="font-mono text-[11px] font-bold text-slate-700 leading-none">
             +{selectedCountry.dialCode}
           </span>
           <ChevronDown
             className={cn(
-              'w-3 h-3 text-slate-400 transition-transform',
+              'w-3 h-3 text-slate-400 transition-transform shrink-0',
               isOpen && 'rotate-180 text-slate-700'
             )}
           />
@@ -234,7 +229,7 @@ export const PhoneInput: React.FC<PhoneInputProps> = ({
           onChange={handleDigitsChange}
           placeholder={selectedCountry.placeholder}
           className={cn(
-            'flex-1 min-w-0 px-3 py-2 text-xs font-medium text-slate-900 placeholder:text-slate-400 bg-transparent focus:outline-none disabled:cursor-not-allowed',
+            'h-full flex-1 min-w-0 px-3 text-xs font-medium text-slate-900 placeholder:text-slate-400 bg-transparent focus:outline-none disabled:cursor-not-allowed',
             inputClassName
           )}
         />
@@ -276,15 +271,17 @@ export const PhoneInput: React.FC<PhoneInputProps> = ({
                         : 'text-slate-700 hover:bg-slate-50 font-medium'
                     )}
                   >
-                    <span className="flex items-center gap-2 min-w-0">
-                      <span className="text-base leading-none shrink-0" aria-hidden="true">
-                        {c.flag}
+                    <span className="flex items-center gap-2.5 min-w-0">
+                      <CountryFlag iso={c.iso} className="w-5 h-3.5" />
+                      <span className="truncate leading-none">
+                        {locale === 'en' ? c.name : c.nameUk}
                       </span>
-                      <span className="truncate">{locale === 'en' ? c.name : c.nameUk}</span>
                     </span>
                     <span className="flex items-center gap-1.5 shrink-0">
-                      <span className="font-mono text-[11px] text-slate-500">+{c.dialCode}</span>
-                      {isSelected && <Check className="w-3.5 h-3.5 text-slate-900" />}
+                      <span className="font-mono text-[11px] text-slate-500 leading-none">
+                        +{c.dialCode}
+                      </span>
+                      {isSelected && <Check className="w-3.5 h-3.5 text-slate-900 shrink-0" />}
                     </span>
                   </button>
                 );
