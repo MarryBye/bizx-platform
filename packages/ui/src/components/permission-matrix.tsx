@@ -9,23 +9,7 @@ export interface PermissionDef {
   category: string;
   action: string;
   ownerOnly: boolean;
-  descriptionUk: string;
-  descriptionEn: string;
 }
-
-const CATEGORY_LABELS: Record<string, { uk: string; en: string }> = {
-  products: { uk: 'Товари та каталог', en: 'Products & Catalog' },
-  orders: { uk: 'Замовлення', en: 'Orders' },
-  analytics: { uk: 'Статистика та аналітика', en: 'Analytics & Reports' },
-  store: { uk: 'Дані закладу', en: 'Store Settings' },
-  staff: { uk: 'Команда закладу', en: 'Store Team' },
-  roles: { uk: 'Ролі та доступи', en: 'Roles & Permissions' },
-  platform_stores: { uk: 'Торгові точки', en: 'Platform Stores' },
-  platform_users: { uk: 'Користувачі BizX', en: 'BizX Users' },
-  platform_analytics: { uk: 'Аналітика платформи', en: 'Platform Analytics' },
-  platform_staff: { uk: 'Команда BizX', en: 'BizX Team' },
-  platform_roles: { uk: 'Ролі платформи', en: 'Platform Roles' }
-};
 
 const ACTION_COLORS: Record<string, string> = {
   read: 'bg-slate-100 text-slate-600',
@@ -42,6 +26,8 @@ export interface PermissionMatrixProps {
   actorPermissionIds: number[];
   actorIsOwner: boolean;
   locale?: 'uk' | 'en';
+  /** Функция перевода из @bizx/utils (принимает ключ вроде `permissions.${code}`) */
+  t?: (key: string) => string;
   disabled?: boolean;
   className?: string;
 }
@@ -53,11 +39,18 @@ export const PermissionMatrix: React.FC<PermissionMatrixProps> = ({
   actorPermissionIds,
   actorIsOwner,
   locale = 'uk',
+  t,
   disabled = false,
   className
 }) => {
   const actorSet = new Set(actorPermissionIds);
   const selectedSet = new Set(selectedIds);
+
+  const translateOrFallback = (key: string, fallback: string) => {
+    if (!t) return fallback;
+    const translated = t(key);
+    return translated === key ? fallback : translated;
+  };
 
   // Group permissions by category preserving order
   const categories: string[] = [];
@@ -109,7 +102,7 @@ export const PermissionMatrix: React.FC<PermissionMatrixProps> = ({
         const grantable = perms.filter(canToggle);
         const allGrantableChecked =
           grantable.length > 0 && grantable.every((p) => selectedSet.has(p.id));
-        const catTitle = CATEGORY_LABELS[cat]?.[locale] || cat;
+        const catTitle = translateOrFallback(`permissionCategories.${cat}`, cat);
 
         return (
           <div
@@ -141,6 +134,12 @@ export const PermissionMatrix: React.FC<PermissionMatrixProps> = ({
               {perms.map((perm) => {
                 const checked = selectedSet.has(perm.id);
                 const allowed = canToggle(perm);
+                const permLabel = translateOrFallback(`permissions.${perm.code}`, perm.code);
+                const actionLabel = translateOrFallback(
+                  `permissionActions.${perm.action}`,
+                  perm.action
+                );
+
                 return (
                   <button
                     key={perm.id}
@@ -178,7 +177,7 @@ export const PermissionMatrix: React.FC<PermissionMatrixProps> = ({
                     </span>
                     <span className="flex-1 min-w-0">
                       <span className="block text-xs font-semibold text-slate-800 leading-snug">
-                        {locale === 'en' ? perm.descriptionEn : perm.descriptionUk}
+                        {permLabel}
                       </span>
                       <span className="mt-1 flex items-center gap-1.5 flex-wrap">
                         <span
@@ -187,7 +186,7 @@ export const PermissionMatrix: React.FC<PermissionMatrixProps> = ({
                             ACTION_COLORS[perm.action] || 'bg-slate-100 text-slate-600'
                           )}
                         >
-                          {perm.action}
+                          {actionLabel}
                         </span>
                         {perm.ownerOnly && (
                           <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-900">

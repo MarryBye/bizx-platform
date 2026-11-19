@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { cn } from '../lib/utils';
 import { PhoneInput } from './phone-input';
 import { PermissionMatrix, type PermissionDef } from './permission-matrix';
+import { RoleIcon } from './role-icon';
 import type { RbacRole, RbacActorAccess } from './roles-manager';
 import {
   Users,
@@ -50,6 +51,7 @@ export interface TeamManagerProps {
   showDepartment?: boolean;
   isLoading?: boolean;
   locale?: 'uk' | 'en';
+  t?: (key: string) => string;
   resolveAvatarUrl?: (url?: string | null) => string | null;
   onAddMember: (dto: {
     email?: string;
@@ -88,6 +90,7 @@ export const TeamManager: React.FC<TeamManagerProps> = ({
   showDepartment = false,
   isLoading = false,
   locale = 'uk',
+  t,
   resolveAvatarUrl,
   onAddMember,
   onUpdateMember,
@@ -345,7 +348,16 @@ export const TeamManager: React.FC<TeamManagerProps> = ({
                           color: roleColor
                         }}
                       >
-                        <span>{m.roleIcon || (m.isCustom ? '⚙️' : '🛡️')}</span>
+                        {m.isCustom ? (
+                          <Sliders className="w-3.5 h-3.5 shrink-0" />
+                        ) : m.roleIcon ? (
+                          <RoleIcon icon={m.roleIcon} className="w-3.5 h-3.5 shrink-0" />
+                        ) : (
+                          <span
+                            className="w-2 h-2 rounded-full shrink-0"
+                            style={{ backgroundColor: roleColor }}
+                          />
+                        )}
                         <span>{m.roleName || (m.isCustom ? 'Custom' : 'Staff')}</span>
                       </span>
                       <span className="text-[10px] text-slate-400 mt-0.5">
@@ -533,12 +545,12 @@ export const TeamManager: React.FC<TeamManagerProps> = ({
                 >
                   {assignableRoles.map((r) => (
                     <option key={r.id} value={r.id}>
-                      {r.icon} {r.name} ({r.permissionIds.length}{' '}
+                      {r.name} ({r.permissionIds.length}{' '}
                       {locale === 'en' ? 'perms' : 'доступів'})
                     </option>
                   ))}
                   <option value={CUSTOM_ROLE_KEY}>
-                    ⚙️ Custom —{' '}
+                    Custom —{' '}
                     {locale === 'en' ? 'Select individual permissions' : 'Обрати доступи вручну'}
                   </option>
                 </select>
@@ -562,6 +574,7 @@ export const TeamManager: React.FC<TeamManagerProps> = ({
                     actorPermissionIds={myAccess.permissionIds}
                     actorIsOwner={myAccess.isOwner}
                     locale={locale}
+                    t={t}
                     disabled={isSubmitting}
                   />
                 </div>

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { cn } from '../lib/utils';
 import { PermissionMatrix, type PermissionDef } from './permission-matrix';
+import { RoleIcon, ROLE_ICON_OPTIONS } from './role-icon';
 import {
   Shield,
   Plus,
@@ -13,13 +14,14 @@ import {
   X,
   AlertCircle,
   Users,
-  Check
+  Check,
+  Ban
 } from 'lucide-react';
 
 export interface RbacRole {
   id: string;
   name: string;
-  icon: string;
+  icon: string | null;
   color: string;
   priority: number;
   isSystem: boolean;
@@ -34,7 +36,6 @@ export interface RbacActorAccess {
   permissions: string[];
 }
 
-const ROLE_ICONS = ['🛡️', '👑', '⚡', '💼', '📦', '📊', '🛒', '🔧', '🎯', '☕', '🔥', '🌟', '💎', '🧾', '🎧', '🔑'];
 const ROLE_COLORS = [
   '#0f172a',
   '#2563eb',
@@ -57,15 +58,16 @@ export interface RolesManagerProps {
   readOnly?: boolean;
   isLoading?: boolean;
   locale?: 'uk' | 'en';
+  t?: (key: string) => string;
   onCreateRole: (dto: {
     name: string;
-    icon: string;
+    icon: string | null;
     color: string;
     permissionIds: number[];
   }) => Promise<void>;
   onUpdateRole: (
     roleId: string,
-    dto: { name: string; icon: string; color: string; permissionIds: number[] }
+    dto: { name: string; icon: string | null; color: string; permissionIds: number[] }
   ) => Promise<void>;
   onReorderRoles: (orderedRoleIds: string[]) => Promise<void>;
   onArchiveRole: (roleId: string) => Promise<void>;
@@ -82,6 +84,7 @@ export const RolesManager: React.FC<RolesManagerProps> = ({
   readOnly = false,
   isLoading = false,
   locale = 'uk',
+  t,
   onCreateRole,
   onUpdateRole,
   onReorderRoles,
@@ -96,7 +99,7 @@ export const RolesManager: React.FC<RolesManagerProps> = ({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRole, setEditingRole] = useState<RbacRole | null>(null);
   const [name, setName] = useState('');
-  const [icon, setIcon] = useState('🛡️');
+  const [icon, setIcon] = useState<string | null>('shield');
   const [color, setColor] = useState('#2563eb');
   const [selectedPerms, setSelectedPerms] = useState<number[]>([]);
   const [isSaving, setIsSaving] = useState(false);
@@ -109,7 +112,7 @@ export const RolesManager: React.FC<RolesManagerProps> = ({
   const openCreateModal = () => {
     setEditingRole(null);
     setName('');
-    setIcon('🛡️');
+    setIcon('shield');
     setColor('#2563eb');
     setSelectedPerms([]);
     setModalError(null);
@@ -120,7 +123,7 @@ export const RolesManager: React.FC<RolesManagerProps> = ({
   const openEditModal = (role: RbacRole) => {
     setEditingRole(role);
     setName(role.name);
-    setIcon(role.icon || '🛡️');
+    setIcon(role.icon || null);
     setColor(role.color || '#334155');
     setSelectedPerms([...role.permissionIds]);
     setModalError(null);
@@ -335,10 +338,17 @@ export const RolesManager: React.FC<RolesManagerProps> = ({
 
                     {/* Role Icon + Color Pill */}
                     <div
-                      className="w-9 h-9 rounded-lg flex items-center justify-center text-base shrink-0 border border-black/10"
-                      style={{ backgroundColor: `${role.color}18` }}
+                      className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 border border-black/10"
+                      style={{ backgroundColor: `${role.color}18`, color: role.color }}
                     >
-                      <span>{role.icon}</span>
+                      {role.icon ? (
+                        <RoleIcon icon={role.icon} className="w-4 h-4" />
+                      ) : (
+                        <span
+                          className="w-3 h-3 rounded-full"
+                          style={{ backgroundColor: role.color }}
+                        />
+                      )}
                     </div>
 
                     {/* Name & Meta */}
@@ -435,10 +445,14 @@ export const RolesManager: React.FC<RolesManagerProps> = ({
             <div className="px-6 py-4 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <span
-                  className="w-8 h-8 rounded-lg flex items-center justify-center text-base border border-black/10"
-                  style={{ backgroundColor: `${color}18` }}
+                  className="w-8 h-8 rounded-lg flex items-center justify-center border border-black/10"
+                  style={{ backgroundColor: `${color}18`, color }}
                 >
-                  {icon}
+                  {icon ? (
+                    <RoleIcon icon={icon} className="w-4 h-4" />
+                  ) : (
+                    <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
+                  )}
                 </span>
                 <div>
                   <h2 className="text-sm font-black text-slate-900">
@@ -516,27 +530,46 @@ export const RolesManager: React.FC<RolesManagerProps> = ({
                 </div>
               </div>
 
-              {/* Icon / Emoji Picker */}
+              {/* Vector Icon Picker (+ Empty Icon Option) */}
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-700">
-                  {locale === 'en' ? 'Role icon / emoji' : 'Емодзи або значок ролі'}
+                  {locale === 'en' ? 'Role icon' : 'Іконка ролі'}
                 </label>
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  {ROLE_ICONS.map((emoji) => (
-                    <button
-                      key={emoji}
-                      type="button"
-                      onClick={() => setIcon(emoji)}
-                      className={cn(
-                        'w-9 h-9 rounded-lg border text-base flex items-center justify-center transition-all',
-                        icon === emoji
-                          ? 'border-slate-900 bg-slate-100 ring-1 ring-slate-900'
-                          : 'border-slate-200 bg-white hover:bg-slate-50'
-                      )}
-                    >
-                      {emoji}
-                    </button>
-                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setIcon(null)}
+                    title={locale === 'en' ? 'No icon' : 'Без іконки'}
+                    className={cn(
+                      'h-9 px-2.5 rounded-lg border text-[11px] font-semibold flex items-center gap-1.5 transition-all',
+                      icon === null
+                        ? 'border-slate-900 bg-slate-900 text-white'
+                        : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                    )}
+                  >
+                    <Ban className="w-3.5 h-3.5 shrink-0" />
+                    <span>{locale === 'en' ? 'None' : 'Без іконки'}</span>
+                  </button>
+                  {ROLE_ICON_OPTIONS.map((iconKey) => {
+                    const selected = icon === iconKey;
+                    return (
+                      <button
+                        key={iconKey}
+                        type="button"
+                        onClick={() => setIcon(iconKey)}
+                        title={iconKey}
+                        className={cn(
+                          'w-9 h-9 rounded-lg border flex items-center justify-center transition-all',
+                          selected
+                            ? 'border-slate-900 bg-slate-100 ring-1 ring-slate-900'
+                            : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                        )}
+                        style={selected ? { color } : undefined}
+                      >
+                        <RoleIcon icon={iconKey} className="w-4 h-4" />
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -554,6 +587,7 @@ export const RolesManager: React.FC<RolesManagerProps> = ({
                   actorPermissionIds={myAccess.permissionIds}
                   actorIsOwner={myAccess.isOwner}
                   locale={locale}
+                  t={t}
                   disabled={isSaving}
                 />
               </div>
