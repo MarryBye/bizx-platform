@@ -2,13 +2,19 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { api } from '../../lib/api';
-import { OrderChatBox, type OrderChatMessage } from '@bizx/ui';
 import {
-  formatCompactCount,
-  type InboxThreadItem,
-  type InboxMessageItem,
-  type InboxBadgeType,
-  type OrderMessageAttachmentDto
+  OrderChatBox,
+  Modal,
+  InboxBadge,
+  CountBadge,
+  Button,
+  AlertBanner,
+  type OrderChatMessage
+} from '@bizx/ui';
+import type {
+  InboxThreadItem,
+  InboxMessageItem,
+  OrderMessageAttachmentDto
 } from '@bizx/common-types';
 import {
   Mail,
@@ -18,7 +24,6 @@ import {
   Headphones,
   Lock,
   Plus,
-  X,
   Send,
   RefreshCw,
   ArrowLeft,
@@ -158,34 +163,6 @@ export const AccountInbox: React.FC<AccountInboxProps> = ({ locale, onUnreadChan
     }));
   }, [messages]);
 
-  const renderBadge = (badge: InboxBadgeType) => {
-    if (badge === 'bizx') {
-      return (
-        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-black bg-indigo-100 text-indigo-800 border border-indigo-200 shrink-0">
-          <ShieldCheck className="w-2.5 h-2.5" />
-          <span>BizX</span>
-        </span>
-      );
-    }
-    if (badge === 'promo') {
-      return (
-        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-black bg-amber-100 text-amber-800 border border-amber-200 shrink-0">
-          <Megaphone className="w-2.5 h-2.5" />
-          <span>{locale === 'en' ? 'Ad' : 'Реклама'}</span>
-        </span>
-      );
-    }
-    if (badge === 'support') {
-      return (
-        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200 shrink-0">
-          <Headphones className="w-2.5 h-2.5" />
-          <span>{locale === 'en' ? 'Support' : 'Підтримка'}</span>
-        </span>
-      );
-    }
-    return null;
-  };
-
   const renderAvatar = (thread: InboxThreadItem) => {
     if (thread.senderAvatarUrl) {
       return (
@@ -288,25 +265,25 @@ export const AccountInbox: React.FC<AccountInboxProps> = ({ locale, onUnreadChan
         </div>
 
         <div className="flex items-center gap-2 self-start sm:self-auto">
-          <button
-            type="button"
+          <Button
+            variant="outline"
+            size="icon"
             onClick={() => void loadThreads(false)}
-            className="p-2 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600"
             title={locale === 'en' ? 'Refresh' : 'Оновити'}
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isLoadingThreads ? 'animate-spin' : ''}`} />
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
             onClick={() => {
               setShowNewSupport(true);
               setSupportError(null);
             }}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-colors"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>{locale === 'en' ? 'Contact Support' : 'Написати в підтримку'}</span>
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -391,7 +368,7 @@ export const AccountInbox: React.FC<AccountInboxProps> = ({ locale, onUnreadChan
                           <span className="text-xs font-black text-slate-900 truncate">
                             {t.senderName}
                           </span>
-                          {renderBadge(t.badgeType)}
+                          <InboxBadge type={t.badgeType} locale={locale} />
                         </div>
                         <span className="text-[10px] text-slate-400 shrink-0">
                           {new Date(t.lastMessageAt).toLocaleDateString('uk-UA', {
@@ -413,11 +390,7 @@ export const AccountInbox: React.FC<AccountInboxProps> = ({ locale, onUnreadChan
                               <Lock className="w-3 h-3 text-slate-400" />
                             </span>
                           )}
-                          {t.unreadCount > 0 && (
-                            <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full text-[10px] font-bold bg-blue-600 text-white">
-                              {formatCompactCount(t.unreadCount)}
-                            </span>
-                          )}
+                          <CountBadge count={t.unreadCount} tone="blue" />
                         </div>
                       </div>
                     </div>
@@ -452,7 +425,7 @@ export const AccountInbox: React.FC<AccountInboxProps> = ({ locale, onUnreadChan
                       <span className="text-xs font-black text-slate-900 truncate">
                         {selectedThread.senderName}
                       </span>
-                      {renderBadge(selectedThread.badgeType)}
+                      <InboxBadge type={selectedThread.badgeType} locale={locale} />
                     </div>
                     <div className="text-[11px] font-semibold text-slate-600 truncate">
                       {selectedThread.subject}
@@ -479,23 +452,24 @@ export const AccountInbox: React.FC<AccountInboxProps> = ({ locale, onUnreadChan
                   resolveMediaUrl={(u) => api.storage.resolveMediaUrl(u) || u}
                   onSendMessage={handleSendReply}
                   onUploadAttachment={selectedThread.canReply ? handleUploadAttachment : undefined}
+                  readOnlyNotice={
+                    !selectedThread.canReply ? (
+                      <div className="flex items-center justify-center gap-1.5">
+                        <Lock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <span>
+                          {selectedThread.senderType === 'promo'
+                            ? locale === 'en'
+                              ? 'Promotional announcement from a partner business — replies are disabled.'
+                              : 'Рекламне повідомлення від закладу — відповіді в цьому діалозі вимкнено.'
+                            : locale === 'en'
+                              ? 'Official BizX platform message — replies are disabled.'
+                              : 'Офіційне повідомлення від платформи BizX — відповіді в цьому діалозі вимкнено.'}
+                        </span>
+                      </div>
+                    ) : undefined
+                  }
                   className="flex-1 border-0 shadow-none"
                 />
-
-                {!selectedThread.canReply && (
-                  <div className="mt-2 p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-[11px] text-slate-500 flex items-center justify-center gap-1.5 text-center">
-                    <Lock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                    <span>
-                      {selectedThread.senderType === 'promo'
-                        ? locale === 'en'
-                          ? 'Promotional announcement from a partner business — replies are disabled.'
-                          : 'Рекламне повідомлення від закладу — відповіді в цьому діалозі вимкнено.'
-                        : locale === 'en'
-                        ? 'Official BizX platform message — replies are disabled.'
-                        : 'Офіційне повідомлення від платформи BizX — відповіді в цьому діалозі вимкнено.'}
-                    </span>
-                  </div>
-                )}
               </div>
             </>
           ) : (
@@ -514,98 +488,67 @@ export const AccountInbox: React.FC<AccountInboxProps> = ({ locale, onUnreadChan
         </div>
       </div>
 
-      {/* New Support Thread Modal */}
-      {showNewSupport && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm"
-          onClick={() => setShowNewSupport(false)}
-        >
-          <div
-            className="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="p-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Headphones className="w-4 h-4 text-emerald-600" />
-                <h3 className="text-sm font-black text-slate-900">
-                  {locale === 'en' ? 'New message to BizX Support' : 'Звернення до підтримки BizX'}
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowNewSupport(false)}
-                className="p-1 text-slate-400 hover:text-slate-700"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
+      {/* New Support Thread Modal — Unified Light Modal */}
+      <Modal
+        isOpen={showNewSupport}
+        onClose={() => setShowNewSupport(false)}
+        size="md"
+        tone="success"
+        icon={<Headphones className="w-4 h-4" />}
+        title={locale === 'en' ? 'New message to BizX Support' : 'Звернення до підтримки BizX'}
+      >
+        <form onSubmit={handleCreateSupportThread} className="space-y-4">
+          {supportError && <AlertBanner tone="danger">{supportError}</AlertBanner>}
 
-            <form onSubmit={handleCreateSupportThread} className="p-5 space-y-4">
-              {supportError && (
-                <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-700">
-                  {supportError}
-                </div>
-              )}
-
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700 block">
-                  {locale === 'en' ? 'Subject *' : 'Тема звернення *'}
-                </label>
-                <input
-                  type="text"
-                  required
-                  minLength={3}
-                  value={supportSubject}
-                  onChange={(e) => setSupportSubject(e.target.value)}
-                  placeholder={
-                    locale === 'en'
-                      ? 'e.g. Account verification or subscription'
-                      : 'Наприклад: Підключення домену або питання по підписці'
-                  }
-                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:bg-white focus:border-slate-900"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700 block">
-                  {locale === 'en' ? 'Message *' : 'Повідомлення *'}
-                </label>
-                <textarea
-                  required
-                  minLength={5}
-                  rows={4}
-                  value={supportBody}
-                  onChange={(e) => setSupportBody(e.target.value)}
-                  placeholder={
-                    locale === 'en'
-                      ? 'Describe your question...'
-                      : 'Опишіть ваше питання (для питань щодо конкретного замовлення використовуйте чат у самому замовленні)...'
-                  }
-                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:bg-white focus:border-slate-900 resize-none"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowNewSupport(false)}
-                  className="px-4 py-2 rounded-lg border border-slate-200 text-xs font-bold text-slate-600"
-                >
-                  {locale === 'en' ? 'Cancel' : 'Скасувати'}
-                </button>
-                <button
-                  type="submit"
-                  disabled={isCreatingSupport}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold disabled:opacity-50"
-                >
-                  <Send className="w-3.5 h-3.5" />
-                  <span>{locale === 'en' ? 'Send' : 'Надіслати'}</span>
-                </button>
-              </div>
-            </form>
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-slate-700 block">
+              {locale === 'en' ? 'Subject *' : 'Тема звернення *'}
+            </label>
+            <input
+              type="text"
+              required
+              minLength={3}
+              value={supportSubject}
+              onChange={(e) => setSupportSubject(e.target.value)}
+              placeholder={
+                locale === 'en'
+                  ? 'e.g. Account verification or subscription'
+                  : 'Наприклад: Підключення домену або питання по підписці'
+              }
+              className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:bg-white focus:border-slate-900"
+            />
           </div>
-        </div>
-      )}
+
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-slate-700 block">
+              {locale === 'en' ? 'Message *' : 'Повідомлення *'}
+            </label>
+            <textarea
+              required
+              minLength={5}
+              rows={4}
+              value={supportBody}
+              onChange={(e) => setSupportBody(e.target.value)}
+              placeholder={
+                locale === 'en'
+                  ? 'Describe your question...'
+                  : 'Опишіть ваше питання (для питань щодо конкретного замовлення використовуйте чат у самому замовленні)...'
+              }
+              className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:bg-white focus:border-slate-900 resize-none"
+            />
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+            <Button variant="outline" onClick={() => setShowNewSupport(false)}>
+              {locale === 'en' ? 'Cancel' : 'Скасувати'}
+            </Button>
+            <Button type="submit" variant="primary" disabled={isCreatingSupport}>
+              <Send className="w-3.5 h-3.5" />
+              <span>{locale === 'en' ? 'Send' : 'Надіслати'}</span>
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 };
