@@ -78,9 +78,14 @@ export const StoreSettingsView: React.FC<{ isReadOnly?: boolean; canEdit?: boole
     try {
       const ok = await uploadStoreMedia('logo', file);
       if (ok) {
-        setStatusMessage({ text: 'Логотип успішно оновлено в бакеті R2!' });
+        setStatusMessage({
+          text: locale === 'en' ? 'Logo updated successfully!' : 'Логотип успішно оновлено!'
+        });
       } else {
-        setStatusMessage({ text: 'Не вдалося завантажити логотип', isError: true });
+        setStatusMessage({
+          text: locale === 'en' ? 'Failed to upload logo' : 'Не вдалося завантажити логотип',
+          isError: true
+        });
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Помилка завантаження логотипу';
@@ -106,9 +111,14 @@ export const StoreSettingsView: React.FC<{ isReadOnly?: boolean; canEdit?: boole
     try {
       const ok = await uploadStoreMedia('banner', file);
       if (ok) {
-        setStatusMessage({ text: 'Банер успішно оновлено в бакеті R2!' });
+        setStatusMessage({
+          text: locale === 'en' ? 'Banner updated successfully!' : 'Банер успішно оновлено!'
+        });
       } else {
-        setStatusMessage({ text: 'Не вдалося завантажити банер', isError: true });
+        setStatusMessage({
+          text: locale === 'en' ? 'Failed to upload banner' : 'Не вдалося завантажити банер',
+          isError: true
+        });
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Помилка завантаження банера';
@@ -171,7 +181,7 @@ export const StoreSettingsView: React.FC<{ isReadOnly?: boolean; canEdit?: boole
       <Card className="border-slate-200 shadow-sm overflow-hidden">
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
-            <ImageIcon className="w-4 h-4 text-slate-600" /> Візуальні матеріали (Cloudflare R2)
+            <ImageIcon className="w-4 h-4 text-slate-600" /> {t('storeSettings.mediaBranding')}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">

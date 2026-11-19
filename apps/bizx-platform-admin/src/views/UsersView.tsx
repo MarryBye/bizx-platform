@@ -105,14 +105,11 @@ export const UsersView: React.FC<UsersViewProps> = ({ users, onSelectUser, isLoa
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-          База користувачів системи
-        </span>
-        <h1 className="text-2xl font-black tracking-tight text-slate-900 mt-0.5">
-          Облікові записи та доступ
+        <h1 className="text-2xl font-black tracking-tight text-slate-900">
+          {t('platform.usersTitle')}
         </h1>
         <p className="text-xs text-slate-500 mt-1">
-          Контроль акаунтів мерчантів, клієнтів та операторів. Безпека паролів збережена (хеші приховані).
+          {t('platform.usersSubtitle')}
         </p>
       </div>
 

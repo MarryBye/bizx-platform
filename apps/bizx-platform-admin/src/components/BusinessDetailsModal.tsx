@@ -213,7 +213,7 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
                   >
                     <Archive className="w-5 h-5 text-slate-500 mb-1" />
                     <span className="text-xs font-bold">Архівувати</span>
-                    <span className="text-[10px] text-slate-400">Soft delete</span>
+                    <span className="text-[10px] text-slate-400">Приховати в архів</span>
                   </button>
                 )}
               </div>

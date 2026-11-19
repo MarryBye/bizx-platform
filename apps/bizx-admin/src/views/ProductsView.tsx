@@ -364,7 +364,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
         description={
           editingProduct
             ? `Оновіть інформацію та параметри товару «${editingProduct.name}»`
-            : 'Заповніть інформацію про товар та додайте фотографію для бакету R2'
+            : 'Заповніть інформацію про товар та додайте зображення'
         }
       >
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -491,7 +491,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                   />
                 </label>
                 <p className="text-[11px] text-slate-400 mt-1">
-                  Файл автоматично завантажиться у Cloudflare R2
+                  Підтримуються формати PNG, JPG, SVG та WebP до 10 МБ
                 </p>
               </div>
             </div>

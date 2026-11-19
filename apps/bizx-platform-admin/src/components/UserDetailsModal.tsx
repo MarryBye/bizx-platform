@@ -208,7 +208,7 @@ export const UserDetailsModal: React.FC<UserDetailsModalProps> = ({
 
           <div className="p-3.5 border border-slate-200 rounded-xl bg-slate-50/70 text-[11px] text-slate-600 leading-relaxed">
             Надання або зміна платформних ролей та індивідуальних прав доступу виконується через розділ{' '}
-            <strong className="text-slate-900">«Команда BizX»</strong> з урахуванням ієрархії RBAC.
+            <strong className="text-slate-900">«Команда BizX»</strong> з урахуванням ієрархії ролей.
           </div>
         </div>
 

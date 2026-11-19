@@ -28,7 +28,9 @@ import {
   BarChart3,
   ScatterChart as ScatterIcon,
   Table2,
-  Loader2
+  Loader2,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 
 interface PlatformAnalyticsViewProps {
@@ -38,6 +40,9 @@ interface PlatformAnalyticsViewProps {
 }
 
 type TableTab = 'daily' | 'monthly' | 'stores';
+
+const TOP_LIMIT_OPTIONS = [5, 10, 20, 50, 500] as const;
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const;
 
 const ORDER_STATUSES: OrderStatus[] = [
   'pending',
@@ -67,6 +72,9 @@ export const PlatformAnalyticsView: React.FC<PlatformAnalyticsViewProps> = ({
   const [data, setData] = useState<PlatformAnalytics | null>(initialAnalytics);
   const [isLoading, setIsLoading] = useState(false);
   const [tableTab, setTableTab] = useState<TableTab>('stores');
+  const [topLimit, setTopLimit] = useState<number>(10);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(10);
 
   const fetchAnalytics = useCallback(async () => {
     setIsLoading(true);
@@ -77,7 +85,8 @@ export const PlatformAnalyticsView: React.FC<PlatformAnalyticsViewProps> = ({
         endDate: endDate || undefined,
         status: status || undefined,
         storeId: storeId || undefined,
-        minAmount: minAmountUah ? Math.round(Number(minAmountUah) * 100) : undefined
+        minAmount: minAmountUah ? Math.round(Number(minAmountUah) * 100) : undefined,
+        topLimit
       });
       if (res.success && res.data) {
         setData(res.data);
@@ -87,11 +96,15 @@ export const PlatformAnalyticsView: React.FC<PlatformAnalyticsViewProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [period, startDate, endDate, status, storeId, minAmountUah]);
+  }, [period, startDate, endDate, status, storeId, minAmountUah, topLimit]);
 
   useEffect(() => {
     fetchAnalytics();
   }, [fetchAnalytics]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [tableTab, pageSize, period, startDate, endDate, status, storeId, minAmountUah, minOrdersFilter, topLimit]);
 
   const handleResetFilters = () => {
     setPeriod('all');
@@ -152,6 +165,21 @@ export const PlatformAnalyticsView: React.FC<PlatformAnalyticsViewProps> = ({
       count
     }));
   }, [data, t]);
+
+  const activeRowsCount =
+    tableTab === 'stores'
+      ? storesChartData.length
+      : tableTab === 'daily'
+        ? dailyChartData.length
+        : monthlyChartData.length;
+  const totalPages = Math.max(1, Math.ceil(activeRowsCount / pageSize));
+  const safePage = Math.min(currentPage, totalPages);
+  const startIdx = (safePage - 1) * pageSize;
+  const paginatedStores = storesChartData.slice(startIdx, startIdx + pageSize);
+  const paginatedDaily = dailyChartData.slice(startIdx, startIdx + pageSize);
+  const paginatedMonthly = monthlyChartData.slice(startIdx, startIdx + pageSize);
+  const rangeFrom = activeRowsCount === 0 ? 0 : startIdx + 1;
+  const rangeTo = Math.min(startIdx + pageSize, activeRowsCount);
 
   const handleExportExcel = () => {
     if (!data) return;
@@ -486,12 +514,27 @@ export const PlatformAnalyticsView: React.FC<PlatformAnalyticsViewProps> = ({
           {/* Bar Charts Row: Top Stores + Monthly / Status */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-3">
-              <div>
-                <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
-                  <BarChart3 className="w-4 h-4 text-slate-600" />
-                  <span>{t('analytics.topStoresChart')}</span>
-                </h3>
-                <p className="text-[11px] text-slate-500">{t('platform.topStoresSubtitle')}</p>
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
+                    <BarChart3 className="w-4 h-4 text-slate-600" />
+                    <span>{t('analytics.topStoresChart')}</span>
+                  </h3>
+                  <p className="text-[11px] text-slate-500">{t('platform.topStoresSubtitle')}</p>
+                </div>
+                <select
+                  value={topLimit}
+                  onChange={(e) => setTopLimit(Number(e.target.value))}
+                  className="text-xs font-bold px-2 py-1 bg-white border border-slate-300 rounded-lg focus:outline-none focus:border-slate-900 text-slate-800 shrink-0"
+                >
+                  {TOP_LIMIT_OPTIONS.map((opt) => (
+                    <option key={opt} value={opt}>
+                      {opt === 500
+                        ? t('analytics.topAll')
+                        : t('platform.topCount', { count: opt })}
+                    </option>
+                  ))}
+                </select>
               </div>
               {storesChartData.length > 0 ? (
                 <div className="h-64 w-full">
@@ -618,30 +661,46 @@ export const PlatformAnalyticsView: React.FC<PlatformAnalyticsViewProps> = ({
             )}
           </div>
 
-          {/* Filtered Data Table */}
+          {/* Filtered Data Table with Pagination & Page Size Selector */}
           <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
                 <Table2 className="w-4 h-4 text-slate-600" />
                 <span>{t('analytics.tableTitle')}</span>
               </h3>
-              <div className="inline-flex p-1 bg-slate-100 rounded-lg text-xs font-bold">
-                {(['stores', 'daily', 'monthly'] as const).map((tabKey) => (
-                  <button
-                    key={tabKey}
-                    type="button"
-                    onClick={() => setTableTab(tabKey)}
-                    className={`px-3 py-1 rounded-md transition-colors ${
-                      tableTab === tabKey
-                        ? 'bg-white text-slate-900 shadow-xs'
-                        : 'text-slate-500 hover:text-slate-800'
-                    }`}
+              <div className="flex flex-wrap items-center gap-2.5">
+                <div className="inline-flex p-1 bg-slate-100 rounded-lg text-xs font-bold">
+                  {(['stores', 'daily', 'monthly'] as const).map((tabKey) => (
+                    <button
+                      key={tabKey}
+                      type="button"
+                      onClick={() => setTableTab(tabKey)}
+                      className={`px-3 py-1 rounded-md transition-colors ${
+                        tableTab === tabKey
+                          ? 'bg-white text-slate-900 shadow-xs'
+                          : 'text-slate-500 hover:text-slate-800'
+                      }`}
+                    >
+                      {tabKey === 'stores' && t('analytics.tabStores')}
+                      {tabKey === 'daily' && t('analytics.tabDaily')}
+                      {tabKey === 'monthly' && t('analytics.tabMonthly')}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex items-center gap-1.5 text-xs">
+                  <span className="text-slate-500 font-medium">{t('analytics.rowsPerPage')}</span>
+                  <select
+                    value={pageSize}
+                    onChange={(e) => setPageSize(Number(e.target.value))}
+                    className="text-xs font-bold px-2 py-1.5 bg-white border border-slate-300 rounded-lg focus:outline-none focus:border-slate-900 text-slate-800"
                   >
-                    {tabKey === 'stores' && t('analytics.tabStores')}
-                    {tabKey === 'daily' && t('analytics.tabDaily')}
-                    {tabKey === 'monthly' && t('analytics.tabMonthly')}
-                  </button>
-                ))}
+                    {PAGE_SIZE_OPTIONS.map((sz) => (
+                      <option key={sz} value={sz}>
+                        {sz}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
             </div>
 
@@ -658,14 +717,14 @@ export const PlatformAnalyticsView: React.FC<PlatformAnalyticsViewProps> = ({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {storesChartData.length === 0 ? (
+                    {paginatedStores.length === 0 ? (
                       <tr>
                         <td colSpan={5} className="py-6 text-center text-slate-400">
                           {t('common.noData')}
                         </td>
                       </tr>
                     ) : (
-                      storesChartData.map((s) => (
+                      paginatedStores.map((s) => (
                         <tr key={s.storeId} className="hover:bg-slate-50">
                           <td className="py-2.5 px-3 font-bold text-slate-900">{s.storeName}</td>
                           <td className="py-2.5 px-3 text-right font-mono text-slate-600">
@@ -698,14 +757,14 @@ export const PlatformAnalyticsView: React.FC<PlatformAnalyticsViewProps> = ({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {dailyChartData.length === 0 ? (
+                    {paginatedDaily.length === 0 ? (
                       <tr>
                         <td colSpan={4} className="py-6 text-center text-slate-400">
                           {t('common.noData')}
                         </td>
                       </tr>
                     ) : (
-                      dailyChartData.map((d) => (
+                      paginatedDaily.map((d) => (
                         <tr key={d.date} className="hover:bg-slate-50">
                           <td className="py-2.5 px-3 font-medium text-slate-900">{d.date}</td>
                           <td className="py-2.5 px-3 text-right font-mono text-slate-600">
@@ -734,14 +793,14 @@ export const PlatformAnalyticsView: React.FC<PlatformAnalyticsViewProps> = ({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {monthlyChartData.length === 0 ? (
+                    {paginatedMonthly.length === 0 ? (
                       <tr>
                         <td colSpan={3} className="py-6 text-center text-slate-400">
                           {t('common.noData')}
                         </td>
                       </tr>
                     ) : (
-                      monthlyChartData.map((m) => (
+                      paginatedMonthly.map((m) => (
                         <tr key={m.month} className="hover:bg-slate-50">
                           <td className="py-2.5 px-3 font-medium text-slate-900">{m.month}</td>
                           <td className="py-2.5 px-3 text-right font-mono text-slate-600">
@@ -757,6 +816,42 @@ export const PlatformAnalyticsView: React.FC<PlatformAnalyticsViewProps> = ({
                 </table>
               )}
             </div>
+
+            {/* Pagination Controls */}
+            {activeRowsCount > 0 && (
+              <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                <span className="text-slate-500 font-medium">
+                  {t('analytics.showingRange', {
+                    from: rangeFrom,
+                    to: rangeTo,
+                    total: activeRowsCount
+                  })}
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    disabled={safePage <= 1}
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 font-semibold hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                    <span>{t('analytics.prevPage')}</span>
+                  </button>
+                  <span className="px-2.5 py-1.5 font-semibold text-slate-700">
+                    {t('analytics.pageOf', { page: safePage, pages: totalPages })}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={safePage >= totalPages}
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 font-semibold hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <span>{t('analytics.nextPage')}</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </>
       )}
