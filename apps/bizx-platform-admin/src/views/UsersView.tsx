@@ -6,7 +6,8 @@ import {
   Search,
   Archive,
   ShieldCheck,
-  UserCheck
+  SlidersHorizontal,
+  CreditCard
 } from 'lucide-react';
 
 interface UsersViewProps {
@@ -14,6 +15,14 @@ interface UsersViewProps {
   onSelectUser: (user: PlatformUserRecord) => void;
   isLoading: boolean;
 }
+
+const TIER_SHORT_LABELS: Record<string, string> = {
+  free: 'Free',
+  client_premium: 'Client+',
+  business_starter: 'Starter',
+  business_pro: 'Pro',
+  business_enterprise: 'Enterprise'
+};
 
 export const UsersView: React.FC<UsersViewProps> = ({ users, onSelectUser, isLoading: _isLoading }) => {
   const { t } = useTranslation();
@@ -49,52 +58,86 @@ export const UsersView: React.FC<UsersViewProps> = ({ users, onSelectUser, isLoa
   const getAccountTypeBadge = (u: PlatformUserRecord) => {
     if (u.isPlatformStaff) {
       return (
-        <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-200">
-          {t('roles.platformAdmin')}
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-200 whitespace-nowrap">
+          <ShieldCheck className="w-3 h-3 shrink-0" />
+          <span className="truncate max-w-[115px]">{u.platformRoleName || t('roles.platformAdmin')}</span>
         </span>
       );
     }
     if (u.isBusinessOwner) {
       return (
-        <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+        <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 whitespace-nowrap">
           {t('auth.businessRole')} ({u.storesCount})
         </span>
       );
     }
     return (
-      <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+      <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200 whitespace-nowrap">
         {t('auth.clientRole')}
       </span>
     );
   };
 
-  const getStatusBadge = (status: string) => {
-    const label = t(`statuses.user.${status}`);
-    switch (status) {
+  const getSubscriptionBadge = (u: PlatformUserRecord) => {
+    const tier = u.subscriptionTier || 'free';
+    const isActive = u.subscriptionStatus === 'active' && tier !== 'free';
+    const label = TIER_SHORT_LABELS[tier] || tier;
+
+    return (
+      <div className="inline-flex flex-col items-start gap-0.5">
+        <span
+          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold border whitespace-nowrap ${
+            isActive
+              ? 'bg-amber-50 text-amber-900 border-amber-200'
+              : 'bg-slate-50 text-slate-500 border-slate-200'
+          }`}
+        >
+          <CreditCard className="w-2.5 h-2.5 shrink-0" />
+          <span>{label}</span>
+        </span>
+        {isActive && u.subscriptionExpiresAt && (
+          <span className="text-[10px] text-slate-400 font-mono whitespace-nowrap">
+            до {new Date(u.subscriptionExpiresAt).toLocaleDateString('uk-UA')}
+          </span>
+        )}
+      </div>
+    );
+  };
+
+  const getStatusBadge = (u: PlatformUserRecord) => {
+    const label = t(`statuses.user.${u.status}`);
+    switch (u.status) {
       case 'active':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
             <span>{label}</span>
           </span>
         );
       case 'suspended':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
-            <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-            <span>{label}</span>
-          </span>
+          <div className="inline-flex flex-col items-start gap-0.5">
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200 whitespace-nowrap">
+              <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
+              <span>{label}</span>
+            </span>
+            <span className="text-[10px] text-rose-600/80 font-medium pl-1 whitespace-nowrap">
+              {u.suspendedUntil
+                ? `до ${new Date(u.suspendedUntil).toLocaleDateString('uk-UA')}`
+                : 'безстроково'}
+            </span>
+          </div>
         );
       case 'archived':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-500 border border-slate-200">
-            <Archive className="w-3 h-3" />
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-500 border border-slate-200 whitespace-nowrap">
+            <Archive className="w-3 h-3 shrink-0" />
             <span>{label}</span>
           </span>
         );
       default:
         return (
-          <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-700">
+          <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-700 whitespace-nowrap">
             {label}
           </span>
         );
@@ -108,14 +151,11 @@ export const UsersView: React.FC<UsersViewProps> = ({ users, onSelectUser, isLoa
         <h1 className="text-2xl font-black tracking-tight text-slate-900">
           {t('platform.usersTitle')}
         </h1>
-        <p className="text-xs text-slate-500 mt-1">
-          {t('platform.usersSubtitle')}
-        </p>
+        <p className="text-xs text-slate-500 mt-1">{t('platform.usersSubtitle')}</p>
       </div>
 
       {/* Filter and Search Bar */}
       <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm flex flex-col md:flex-row items-center gap-3">
-        {/* Search Input */}
         <div className="relative flex-1 w-full">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
@@ -127,9 +167,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ users, onSelectUser, isLoa
           />
         </div>
 
-        {/* Filters */}
         <div className="flex items-center gap-2 w-full md:w-auto">
-          {/* Role Filter */}
           <select
             value={roleFilter}
             onChange={(e) => setRoleFilter(e.target.value)}
@@ -141,7 +179,6 @@ export const UsersView: React.FC<UsersViewProps> = ({ users, onSelectUser, isLoa
             <option value="platform_staff">Команда BizX</option>
           </select>
 
-          {/* Status Filter */}
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
@@ -155,18 +192,18 @@ export const UsersView: React.FC<UsersViewProps> = ({ users, onSelectUser, isLoa
         </div>
       </div>
 
-      {/* Table */}
+      {/* Table with stable column widths */}
       <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
+          <table className="w-full text-left text-xs table-fixed min-w-[820px]">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50/70 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                <th className="py-3 px-4">Користувач</th>
-                <th className="py-3 px-4">Роль</th>
-                <th className="py-3 px-4">Системний доступ</th>
-                <th className="py-3 px-4">Статус</th>
-                <th className="py-3 px-4">Реєстрація</th>
-                <th className="py-3 px-4 text-right">Дії</th>
+                <th className="py-3 px-4 w-[28%]">Користувач</th>
+                <th className="py-3 px-4 w-[18%]">Тип / Роль</th>
+                <th className="py-3 px-4 w-[16%]">Підписка</th>
+                <th className="py-3 px-4 w-[16%]">Статус</th>
+                <th className="py-3 px-4 w-[11%]">Реєстрація</th>
+                <th className="py-3 px-4 w-[11%] text-right">Дії</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -179,51 +216,46 @@ export const UsersView: React.FC<UsersViewProps> = ({ users, onSelectUser, isLoa
                 </tr>
               ) : (
                 filteredUsers.map((u) => (
-                  <tr key={u.id} className="hover:bg-slate-50/80 transition-colors group">
-                    {/* User Info */}
-                    <td className="py-3.5 px-4 font-medium">
-                      <div className="flex items-center gap-3">
+                  <tr key={u.id} className="hover:bg-slate-50/80 transition-colors">
+                    <td className="py-3.5 px-4 font-medium align-middle">
+                      <div className="flex items-center gap-3 min-w-0">
                         <div className="w-9 h-9 rounded-full bg-slate-900 text-white font-bold flex items-center justify-center text-xs shrink-0 shadow-sm">
                           {getInitials(u.name)}
                         </div>
-                        <div>
-                          <div className="font-black text-slate-900 text-xs">{u.name}</div>
-                          <div className="text-[10px] text-slate-400 font-mono">{u.email}</div>
+                        <div className="min-w-0">
+                          <div className="font-black text-slate-900 text-xs truncate">{u.name}</div>
+                          <div className="text-[10px] text-slate-400 font-mono truncate">
+                            {u.email}
+                          </div>
                         </div>
                       </div>
                     </td>
 
-                    {/* Account Type */}
-                    <td className="py-3.5 px-4">{getAccountTypeBadge(u)}</td>
-
-                    {/* Platform RBAC Access */}
-                    <td className="py-3.5 px-4">
-                      {u.isPlatformStaff ? (
-                        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded">
-                          <ShieldCheck className="w-3.5 h-3.5" /> {u.platformRoleName || 'BizX Staff'}
-                        </span>
-                      ) : (
-                        <span className="text-[11px] text-slate-400">Звичайний</span>
-                      )}
+                    <td className="py-3.5 px-4 align-middle whitespace-nowrap">
+                      {getAccountTypeBadge(u)}
                     </td>
 
-                    {/* Status */}
-                    <td className="py-3.5 px-4">{getStatusBadge(u.status)}</td>
+                    <td className="py-3.5 px-4 align-middle whitespace-nowrap">
+                      {getSubscriptionBadge(u)}
+                    </td>
 
-                    {/* Created At */}
-                    <td className="py-3.5 px-4 text-slate-500 font-mono text-[11px]">
+                    <td className="py-3.5 px-4 align-middle whitespace-nowrap">
+                      {getStatusBadge(u)}
+                    </td>
+
+                    <td className="py-3.5 px-4 text-slate-500 font-mono text-[11px] align-middle whitespace-nowrap">
                       {u.createdAt}
                     </td>
 
-                    {/* Uniform Action Button */}
-                    <td className="py-3.5 px-4 text-right">
+                    <td className="py-3.5 px-4 text-right align-middle whitespace-nowrap">
                       <button
                         type="button"
+                        title="Керування акаунтом"
                         onClick={() => onSelectUser(u)}
-                        className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-900 hover:text-white hover:border-slate-900 text-slate-700 font-bold text-xs transition-all shadow-sm w-28"
+                        className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-900 hover:text-white hover:border-slate-900 text-slate-700 font-bold text-xs transition-all shadow-2xs"
                       >
-                        <UserCheck className="w-3.5 h-3.5" />
-                        <span>Керування</span>
+                        <SlidersHorizontal className="w-3.5 h-3.5" />
+                        <span className="hidden lg:inline">Керування</span>
                       </button>
                     </td>
                   </tr>
@@ -235,8 +267,10 @@ export const UsersView: React.FC<UsersViewProps> = ({ users, onSelectUser, isLoa
 
         {/* Footer info */}
         <div className="p-3 bg-slate-50 border-t border-slate-100 text-[11px] text-slate-400 flex items-center justify-between px-4">
-          <div>Всього облікових записів: {filteredUsers.length}</div>
-          <div>Шифрування паролів BCrypt (rounds: 10)</div>
+          <div>
+            Показано облікових записів: {filteredUsers.length} з {users.length}
+          </div>
+          <div>● Реєстр акаунтів BizX ID</div>
         </div>
       </div>
     </div>

@@ -61,7 +61,8 @@ export const DisputesView: React.FC<DisputesViewProps> = ({
   const [isResolving, setIsResolving] = useState(false);
   const [notice, setNotice] = useState<{ text: string; isError?: boolean } | null>(null);
 
-  // 3rd-Strike Suspension Confirmation Modal (shown BEFORE sending API request!)
+  // Confirmation Modals (shown BEFORE sending API request for BOTH decisions!)
+  const [confirmDecision, setConfirmDecision] = useState<'business' | 'customer' | null>(null);
   const [showThirdStrikeModal, setShowThirdStrikeModal] = useState(false);
   const [selectedSuspensionDays, setSelectedSuspensionDays] = useState<number | null>(7);
 
@@ -154,6 +155,7 @@ export const DisputesView: React.FC<DisputesViewProps> = ({
       });
       if (res.success && res.data) {
         setShowThirdStrikeModal(false);
+        setConfirmDecision(null);
         await Promise.all([loadDetail(detail.dispute.id), loadDisputes()]);
         onDisputesChanged?.();
         setNotice({
@@ -180,7 +182,7 @@ export const DisputesView: React.FC<DisputesViewProps> = ({
     }
   };
 
-  const handleClickCustomerDecision = () => {
+  const handleClickDecision = (decision: 'business' | 'customer') => {
     if (!detail) return;
     if (resolutionNote.trim().length < 3) {
       setNotice({
@@ -193,14 +195,15 @@ export const DisputesView: React.FC<DisputesViewProps> = ({
       return;
     }
 
-    // ЯКЩО видається страйк і у закладу вже >= 2 активних страйків → спочатку модалка вибору терміну та попередження!
-    if (issueStrike && detail.dispute.storeActiveStrikes >= 2) {
+    // ЯКЩО на користь клієнта + видається страйк і у закладу вже >= 2 активних страйків → модалка 3-го страйку!
+    if (decision === 'customer' && issueStrike && detail.dispute.storeActiveStrikes >= 2) {
       setSelectedSuspensionDays(7);
       setShowThirdStrikeModal(true);
       return;
     }
 
-    void executeResolution('customer');
+    // В усіх інших випадках (і для бізнесу, і для клієнта) — обовʼязкова модалка підтвердження!
+    setConfirmDecision(decision);
   };
 
   const handleRevokeStrike = async (e: React.FormEvent) => {
@@ -669,14 +672,14 @@ export const DisputesView: React.FC<DisputesViewProps> = ({
                         )}
                       </div>
 
-                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2.5 pt-1">
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2 border-t border-slate-200/80">
                         <button
                           type="button"
                           disabled={isResolving}
-                          onClick={() => void executeResolution('business')}
-                          className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold disabled:opacity-50 transition-colors"
+                          onClick={() => handleClickDecision('business')}
+                          className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-white hover:bg-slate-900 text-slate-800 hover:text-white border border-slate-300 hover:border-slate-900 text-xs font-bold disabled:opacity-50 transition-colors shadow-2xs"
                         >
-                          <CheckCircle2 className="w-4 h-4 shrink-0" />
+                          <Building2 className="w-4 h-4 shrink-0" />
                           <span>
                             {locale === 'en'
                               ? 'Resolve for Business'
@@ -687,10 +690,10 @@ export const DisputesView: React.FC<DisputesViewProps> = ({
                         <button
                           type="button"
                           disabled={isResolving}
-                          onClick={handleClickCustomerDecision}
-                          className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold disabled:opacity-50 transition-colors"
+                          onClick={() => handleClickDecision('customer')}
+                          className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-white hover:bg-slate-900 text-slate-800 hover:text-white border border-slate-300 hover:border-slate-900 text-xs font-bold disabled:opacity-50 transition-colors shadow-2xs"
                         >
-                          <XCircle className="w-4 h-4 shrink-0" />
+                          <UserIcon className="w-4 h-4 shrink-0" />
                           <span>
                             {locale === 'en'
                               ? 'Resolve for Customer (Refund)'
@@ -846,6 +849,82 @@ export const DisputesView: React.FC<DisputesViewProps> = ({
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Standard Confirmation Modal (for BOTH Business & Customer verdicts) */}
+      {confirmDecision && detail && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-sm"
+          onClick={() => setConfirmDecision(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden"
+          >
+            <div className="px-5 py-4 bg-slate-900 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Scale className="w-4 h-4 text-slate-300 shrink-0" />
+                <h3 className="text-sm font-black">
+                  {confirmDecision === 'business'
+                    ? locale === 'en'
+                      ? 'Confirm Resolution for Business'
+                      : 'Підтвердження рішення на користь бізнесу'
+                    : locale === 'en'
+                      ? 'Confirm Resolution for Customer'
+                      : 'Підтвердження рішення на користь клієнта'}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setConfirmDecision(null)}
+                className="text-slate-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 text-xs">
+              <p className="text-slate-700 leading-relaxed">
+                {confirmDecision === 'business'
+                  ? locale === 'en'
+                    ? `You are closing dispute for order ${detail.dispute.orderNumber} in favor of «${detail.dispute.storeName}». No refund or strike will be issued.`
+                    : `Ви закриваєте скаргу по замовленню ${detail.dispute.orderNumber} на користь закладу «${detail.dispute.storeName}». Кошти залишаться за бізнесом, страйк не видається.`
+                  : locale === 'en'
+                    ? `You are resolving dispute for order ${detail.dispute.orderNumber} in favor of customer (${formatMoney(detail.dispute.orderTotalAmount)} UAH refund).${issueStrike ? ' 1 strike will be issued to the store.' : ''}`
+                    : `Ви закриваєте скаргу по замовленню ${detail.dispute.orderNumber} на користь клієнта з поверненням ${formatMoney(detail.dispute.orderTotalAmount)} ₴.${issueStrike ? ` Закладу «${detail.dispute.storeName}» буде видано страйк (${detail.dispute.storeActiveStrikes + 1}/3).` : ''}`}
+              </p>
+
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
+                <div className="text-[10px] font-bold text-slate-400 uppercase">
+                  {locale === 'en' ? 'Explanation' : 'Обґрунтування рішення'}
+                </div>
+                <p className="text-slate-800 whitespace-pre-wrap">{resolutionNote.trim()}</p>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setConfirmDecision(null)}
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50"
+                >
+                  {t('common.cancel')}
+                </button>
+                <button
+                  type="button"
+                  disabled={isResolving}
+                  onClick={() => void executeResolution(confirmDecision)}
+                  className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold disabled:opacity-50"
+                >
+                  {isResolving
+                    ? t('common.loading')
+                    : locale === 'en'
+                      ? 'Confirm Decision'
+                      : 'Підтвердити рішення'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
