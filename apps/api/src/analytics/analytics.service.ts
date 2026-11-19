@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service.js';
 import { StoresService } from '../stores/stores.service.js';
+import { RbacService } from '../rbac/rbac.service.js';
 import {
   orders,
   orderItems,
@@ -26,7 +27,8 @@ import type {
 export class AnalyticsService {
   constructor(
     private readonly databaseService: DatabaseService,
-    private readonly storesService: StoresService
+    private readonly storesService: StoresService,
+    private readonly rbacService: RbacService
   ) {}
 
   private getDateRange(query: AnalyticsQuery): {
@@ -65,7 +67,10 @@ export class AnalyticsService {
     query: AnalyticsQuery = { period: 'all' },
     systemRole?: SystemRole
   ): Promise<StoreAnalytics> {
-    await this.storesService.assertStoreAccess(storeId, userId, ['owner', 'manager'], systemRole);
+    await this.rbacService.assertStorePermission(storeId, userId, 'analytics.read', {
+      write: false,
+      allowPlatformPermission: 'platform.analytics.read'
+    });
 
     const { startDate, endDate } = this.getDateRange(query);
     const conditions = [eq(orders.storeId, storeId)];

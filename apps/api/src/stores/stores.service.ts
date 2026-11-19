@@ -6,6 +6,7 @@ import {
   ForbiddenException
 } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service.js';
+import { RbacService } from '../rbac/rbac.service.js';
 import {
   stores,
   storeCategories,
@@ -63,7 +64,10 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 
 @Injectable()
 export class StoresService {
-  constructor(private readonly databaseService: DatabaseService) {}
+  constructor(
+    private readonly databaseService: DatabaseService,
+    private readonly rbacService: RbacService
+  ) {}
 
   // ==================== КАТЕГОРИИ МАГАЗИНОВ ====================
 
@@ -280,10 +284,14 @@ export class StoresService {
 
       await tx.update(users).set({ role: 'business_owner', updatedAt: new Date() }).where(eq(users.id, ownerId));
 
+      const { ownerRoleId } = await this.rbacService.provisionDefaultStoreRoles(tx, insertedStore.id);
+
       await tx.insert(storeMembers).values({
         storeId: insertedStore.id,
         userId: ownerId,
-        role: 'owner'
+        role: 'owner',
+        roleId: ownerRoleId,
+        isCustom: false
       });
 
       return insertedStore;
@@ -539,53 +547,9 @@ export class StoresService {
     storeId: string,
     callerUserId: string,
     dto: AddStoreMemberDto,
-    systemRole?: SystemRole
+    _systemRole?: SystemRole
   ): Promise<StoreMember> {
-    await this.assertStoreAccess(storeId, callerUserId, ['owner'], systemRole, { write: true });
-
-    const [targetUser] = await this.databaseService.db
-      .select()
-      .from(users)
-      .where(eq(users.email, dto.email.toLowerCase()));
-
-    if (!targetUser) {
-      throw new NotFoundException('Користувача з такою електронною поштою не знайдено в BizX');
-    }
-
-    const [existingMember] = await this.databaseService.db
-      .select()
-      .from(storeMembers)
-      .where(
-        and(
-          eq(storeMembers.storeId, storeId),
-          eq(storeMembers.userId, targetUser.id)
-        )
-      );
-
-    if (existingMember) {
-      throw new ConflictException('Користувач вже є учасником цього магазину');
-    }
-
-    const [newMember] = await this.databaseService.db
-      .insert(storeMembers)
-      .values({
-        storeId,
-        userId: targetUser.id,
-        role: dto.role
-      })
-      .returning();
-
-    return {
-      id: newMember.id,
-      storeId: newMember.storeId,
-      userId: newMember.userId,
-      role: newMember.role as StoreMemberRole,
-      userName: targetUser.name,
-      userEmail: targetUser.email,
-      userAvatarUrl: targetUser.avatarUrl,
-      createdAt: newMember.createdAt.toISOString(),
-      updatedAt: newMember.updatedAt.toISOString()
-    };
+    return this.rbacService.addStoreMember(storeId, callerUserId, dto);
   }
 
   async removeStoreMember(
@@ -628,15 +592,51 @@ export class StoresService {
   async updateStore(
     storeId: string,
     userId: string,
-    userRole?: UserRole,
+    _userRole?: UserRole,
     dto?: UpdateStoreDto,
-    systemRole?: SystemRole
+    _systemRole?: SystemRole
   ): Promise<StoreRecord> {
-    const store = await this.assertStoreOwnership(storeId, userId, userRole, systemRole, {
-      write: true
-    });
+    const hasStatusChange = dto?.status !== undefined;
+    const hasDataChange = Boolean(
+      dto &&
+        (dto.name !== undefined ||
+          dto.slug !== undefined ||
+          dto.categoryId !== undefined ||
+          dto.description !== undefined ||
+          dto.logoUrl !== undefined ||
+          dto.bannerUrl !== undefined ||
+          dto.address !== undefined ||
+          dto.phone !== undefined ||
+          dto.email !== undefined)
+    );
 
-    if (dto?.status && systemRole !== 'platform_admin') {
+    let store: StoreRecord;
+    let viaPlatform = false;
+
+    if (hasStatusChange) {
+      const check = await this.rbacService.assertStorePermission(
+        storeId,
+        userId,
+        'store.status.manage',
+        {
+          write: true,
+          allowPlatformPermission: 'platform.stores.moderate'
+        }
+      );
+      store = check.store;
+      viaPlatform = check.viaPlatform;
+    } else {
+      const check = await this.rbacService.assertStorePermission(storeId, userId, 'store.edit', {
+        write: true
+      });
+      store = check.store;
+    }
+
+    if (hasStatusChange && hasDataChange && !viaPlatform) {
+      await this.rbacService.assertStorePermission(storeId, userId, 'store.edit', { write: true });
+    }
+
+    if (dto?.status && !viaPlatform) {
       if (dto.status === 'active') {
         throw new ForbiddenException(
           'Активація магазину можлива лише після схвалення адміністраторами платформи BizX'
@@ -704,10 +704,11 @@ export class StoresService {
   async deleteStore(
     storeId: string,
     userId: string,
-    userRole?: UserRole,
-    systemRole?: SystemRole
+    _userRole?: UserRole,
+    _systemRole?: SystemRole
   ): Promise<{ message: string }> {
-    await this.assertStoreOwnership(storeId, userId, userRole, systemRole, { write: true });
+    // Видалення (архівація) магазину заборонено для бізнес-ролей — доступно лише модераторам платформи BizX
+    await this.rbacService.assertPlatformPermission(userId, 'platform.stores.moderate');
 
     await this.databaseService.db
       .update(stores)

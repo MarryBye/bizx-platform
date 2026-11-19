@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service.js';
 import { StoresService } from '../stores/stores.service.js';
+import { RbacService } from '../rbac/rbac.service.js';
 import {
   orders,
   orderItems,
@@ -42,7 +43,8 @@ export interface OrderDetailWithStore extends OrderRecord {
 export class OrdersService {
   constructor(
     private readonly databaseService: DatabaseService,
-    private readonly storesService: StoresService
+    private readonly storesService: StoresService,
+    private readonly rbacService: RbacService
   ) {}
 
   private generateOrderNumber(): string {
@@ -231,7 +233,10 @@ export class OrdersService {
     userRole?: UserRole,
     systemRole?: SystemRole
   ): Promise<OrderWithItems[]> {
-    await this.storesService.assertStoreAccess(storeId, userId, ['owner', 'manager', 'staff'], systemRole);
+    await this.rbacService.assertStorePermission(storeId, userId, 'orders.read', {
+      write: false,
+      allowPlatformPermission: 'platform.stores.read'
+    });
 
     const storeOrders = await this.databaseService.db
       .select()
@@ -298,7 +303,10 @@ export class OrdersService {
     // Проверка прав доступа: покупатель, участник магазина (owner, manager, staff) или platform_admin
     const isCustomer = order.customerId === userId;
     if (!isCustomer) {
-      await this.storesService.assertStoreAccess(order.storeId, userId, ['owner', 'manager', 'staff'], systemRole);
+      await this.rbacService.assertStorePermission(order.storeId, userId, 'orders.read', {
+        write: false,
+        allowPlatformPermission: 'platform.stores.read'
+      });
     }
 
     const items = await this.databaseService.db
@@ -333,7 +341,7 @@ export class OrdersService {
       throw new NotFoundException('Заказ не найден');
     }
 
-    await this.storesService.assertStoreAccess(order.storeId, userId, ['owner', 'manager', 'staff'], systemRole, { write: true });
+    await this.rbacService.assertStorePermission(order.storeId, userId, 'orders.edit', { write: true });
 
     const [updated] = await this.databaseService.db
       .update(orders)

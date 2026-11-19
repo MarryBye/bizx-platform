@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service.js';
 import { StoresService } from '../stores/stores.service.js';
+import { RbacService } from '../rbac/rbac.service.js';
 import {
   products,
   productCategories,
@@ -51,7 +52,8 @@ export interface ProductDetailItem extends ProductListItem {
 export class ProductsService {
   constructor(
     private readonly databaseService: DatabaseService,
-    private readonly storesService: StoresService
+    private readonly storesService: StoresService,
+    private readonly rbacService: RbacService
   ) {}
 
   // ==================== КАТЕГОРИИ ТОВАРОВ ====================
@@ -71,7 +73,7 @@ export class ProductsService {
     dto: CreateProductCategoryDto,
     systemRole?: SystemRole
   ): Promise<ProductCategoryRecord> {
-    await this.storesService.assertStoreAccess(storeId, userId, ['owner', 'manager'], systemRole, { write: true });
+    await this.rbacService.assertStorePermission(storeId, userId, 'products.write', { write: true });
 
     const [category] = await this.databaseService.db
       .insert(productCategories)
@@ -100,7 +102,7 @@ export class ProductsService {
       throw new NotFoundException('Категория товаров не найдена');
     }
 
-    await this.storesService.assertStoreAccess(category.storeId, userId, ['owner', 'manager'], systemRole, { write: true });
+    await this.rbacService.assertStorePermission(category.storeId, userId, 'products.edit', { write: true });
 
     await this.databaseService.db
       .update(productCategories)
@@ -121,7 +123,7 @@ export class ProductsService {
     dto: CreateProductDto,
     systemRole?: SystemRole
   ): Promise<ProductRecord> {
-    await this.storesService.assertStoreAccess(storeId, userId, ['owner', 'manager'], systemRole, { write: true });
+    await this.rbacService.assertStorePermission(storeId, userId, 'products.write', { write: true });
 
     if (dto.categoryId) {
       const [category] = await this.databaseService.db
@@ -266,7 +268,7 @@ export class ProductsService {
       throw new NotFoundException('Товар не найден');
     }
 
-    await this.storesService.assertStoreAccess(product.storeId, userId, ['owner', 'manager'], systemRole, { write: true });
+    await this.rbacService.assertStorePermission(product.storeId, userId, 'products.edit', { write: true });
     return product;
   }
 
