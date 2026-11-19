@@ -9,12 +9,13 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { DatabaseService } from '../database/database.service.js';
 import { users, refreshTokens, eq, and, gt } from '@bizx/database';
-import type {
-  RegisterDto,
-  LoginDto,
-  UserProfile,
-  AuthResponse,
-  UpdateUserProfileDto
+import {
+  normalizePhone,
+  type RegisterDto,
+  type LoginDto,
+  type UserProfile,
+  type AuthResponse,
+  type UpdateUserProfileDto
 } from '@bizx/common-types';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'node:crypto';
@@ -102,6 +103,18 @@ export class AuthService {
       throw new ConflictException('Пользователь с таким email уже зарегистрирован');
     }
 
+    const normalizedPhone = normalizePhone(dto.phone);
+    if (normalizedPhone) {
+      const [existingPhone] = await this.databaseService.db
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.phone, normalizedPhone));
+
+      if (existingPhone) {
+        throw new ConflictException('Пользователь с таким номером телефона уже зарегистрирован');
+      }
+    }
+
     const passwordHash = await bcrypt.hash(dto.password, 10);
 
     const [newUser] = await this.databaseService.db
@@ -109,17 +122,11 @@ export class AuthService {
       .values({
         email: dto.email.toLowerCase(),
         name: dto.name,
+        phone: normalizedPhone,
         passwordHash,
         role: 'client'
       })
-      .returning({
-        id: users.id,
-        email: users.email,
-        name: users.name,
-        role: users.role,
-        systemRole: users.systemRole,
-        createdAt: users.createdAt
-      });
+      .returning();
 
     const userProfile = this.mapToProfile(newUser);
 
@@ -137,18 +144,39 @@ export class AuthService {
     dto: LoginDto,
     metadata: { userAgent?: string; ipAddress?: string } = {}
   ): Promise<AuthResponse> {
-    const [user] = await this.databaseService.db
-      .select()
-      .from(users)
-      .where(eq(users.email, dto.email.toLowerCase()));
+    let user: any = null;
+
+    const rawIdentifier = dto.identifier?.trim();
+    const phoneInput =
+      dto.phone || (rawIdentifier && !rawIdentifier.includes('@') ? rawIdentifier : undefined);
+    const emailInput =
+      dto.email || (rawIdentifier && rawIdentifier.includes('@') ? rawIdentifier : undefined);
+
+    if (phoneInput) {
+      const normalizedPhone = normalizePhone(phoneInput);
+      if (!normalizedPhone) {
+        throw new UnauthorizedException('Неверный номер телефона или пароль');
+      }
+      const [foundByPhone] = await this.databaseService.db
+        .select()
+        .from(users)
+        .where(eq(users.phone, normalizedPhone));
+      user = foundByPhone;
+    } else if (emailInput) {
+      const [foundByEmail] = await this.databaseService.db
+        .select()
+        .from(users)
+        .where(eq(users.email, emailInput.toLowerCase()));
+      user = foundByEmail;
+    }
 
     if (!user) {
-      throw new UnauthorizedException('Неверный email или пароль');
+      throw new UnauthorizedException('Неверный логин или пароль');
     }
 
     const isMatch = await bcrypt.compare(dto.password, user.passwordHash);
     if (!isMatch) {
-      throw new UnauthorizedException('Неверный email или пароль');
+      throw new UnauthorizedException('Неверный логин или пароль');
     }
 
     const userProfile = this.mapToProfile(user);
@@ -190,14 +218,7 @@ export class AuthService {
       throw new UnauthorizedException('Пользователь не найден');
     }
 
-    const userProfile: UserProfile = {
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      role: user.role as UserProfile['role'],
-      systemRole: (user.systemRole || 'user') as UserProfile['systemRole'],
-      createdAt: user.createdAt.toISOString()
-    };
+    const userProfile = this.mapToProfile(user);
 
     const tokens = await this.generateTokens(user);
     await this.storeRefreshToken(user.id, tokens.refreshToken, metadata);
@@ -258,7 +279,19 @@ export class AuthService {
     };
 
     if (dto.name !== undefined) updateData.name = dto.name;
-    if (dto.phone !== undefined) updateData.phone = dto.phone;
+    if (dto.phone !== undefined) {
+      const normalizedPhone = dto.phone ? normalizePhone(dto.phone) : null;
+      if (normalizedPhone) {
+        const [existingPhone] = await this.databaseService.db
+          .select({ id: users.id })
+          .from(users)
+          .where(eq(users.phone, normalizedPhone));
+        if (existingPhone && existingPhone.id !== userId) {
+          throw new ConflictException('Пользователь с таким номером телефона уже зарегистрирован');
+        }
+      }
+      updateData.phone = normalizedPhone;
+    }
     if (dto.avatarUrl !== undefined) updateData.avatarUrl = dto.avatarUrl;
     if (dto.preferredLanguage !== undefined) updateData.preferredLanguage = dto.preferredLanguage;
 
@@ -289,15 +322,6 @@ export class AuthService {
       throw new NotFoundException('Пользователь не найден');
     }
 
-    return {
-      id: updated.id,
-      email: updated.email,
-      name: updated.name,
-      role: updated.role as UserProfile['role'],
-      systemRole: (updated.systemRole || 'user') as UserProfile['systemRole'],
-      phone: updated.phone,
-      avatarUrl: updated.avatarUrl,
-      createdAt: updated.createdAt.toISOString()
-    };
+    return this.mapToProfile(updated);
   }
 }
