@@ -9,3 +9,5 @@ export * from './components/placeholders';
 export * from './components/store-media-image';
 export * from './lib/utils';
 export * from './components/auth-card';
+export * from './components/language-selector';
+export * from './components/phone-input';
