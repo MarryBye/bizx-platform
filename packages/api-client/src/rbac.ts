@@ -28,6 +28,25 @@ export interface PlatformUserListItem {
   createdAt: string;
 }
 
+export interface PlatformStoreListItem {
+  id: string;
+  ownerId: string;
+  categoryId: string | null;
+  name: string;
+  slug: string;
+  description: string | null;
+  logoUrl: string | null;
+  bannerUrl: string | null;
+  address: string | null;
+  phone: string | null;
+  email: string | null;
+  status: 'draft' | 'pending' | 'active' | 'suspended' | 'closed' | 'archived';
+  createdAt: string;
+  categoryName: string | null;
+  ownerName: string | null;
+  ownerEmail: string | null;
+}
+
 export class RbacModule {
   constructor(private client: ApiClient) {}
 
@@ -147,6 +166,10 @@ export class RbacModule {
 
   async removePlatformMember(memberId: string): Promise<ApiResponse<{ message: string }>> {
     return this.client.delete<ApiResponse<{ message: string }>>(`/platform/members/${memberId}`);
+  }
+
+  async getPlatformStores(): Promise<ApiResponse<PlatformStoreListItem[]>> {
+    return this.client.get<ApiResponse<PlatformStoreListItem[]>>('/platform/stores');
   }
 
   async getPlatformUsers(): Promise<ApiResponse<PlatformUserListItem[]>> {

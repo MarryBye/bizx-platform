@@ -587,8 +587,10 @@ export const uk = {
   permissions: {
     products: {
       read: 'Перегляд товарів та категорій',
-      write: 'Додавання нових товарів та категорій',
-      edit: 'Редагування та архівація товарів'
+      write: 'Створення нових товарів та категорій',
+      edit: 'Редагування даних, цін та фото товарів',
+      status: 'Зміна статусу товару (Активний / Чернетка)',
+      archive: 'Архівація (видалення) товарів та категорій'
     },
     orders: {
       read: 'Перегляд замовлень клієнтів',
@@ -599,6 +601,7 @@ export const uk = {
       export: 'Експорт аналітики в Excel / CSV'
     },
     store: {
+      admin: 'Адміністратор (повний доступ, крім прав власника)',
       read: 'Перегляд даних та налаштувань закладу',
       edit: 'Редагування даних, логотипу та банера',
       status: {
@@ -608,24 +611,29 @@ export const uk = {
     staff: {
       read: 'Перегляд списку працівників',
       write: 'Додавання нових працівників',
-      edit: 'Редагування ролей та архівація працівників'
+      edit: 'Зміна ролей та доступів працівників',
+      archive: 'Архівація (видалення) працівників із команди'
     },
     roles: {
       read: 'Перегляд ролей та їх прав',
       write: 'Створення нових ролей',
-      edit: 'Редагування, пріоритет та архівація ролей'
+      edit: 'Редагування ролей та зміна пріоритету',
+      archive: 'Архівація (видалення) ролей'
     },
     platform: {
+      admin: 'Адміністратор платформи (повний доступ з урахуванням ієрархії)',
       stores: {
         read: 'Перегляд усіх торгових точок платформи',
-        moderate: 'Модерація та зміна статусів закладів'
+        moderate: 'Модерація та зміна статусів закладів',
+        archive: 'Архівація (видалення) торгових точок'
       },
       categories: {
         manage: 'Керування категоріями закладів'
       },
       users: {
         read: 'Перегляд реєстру користувачів BizX ID',
-        edit: 'Блокування та керування користувачами'
+        edit: 'Блокування та відновлення користувачів',
+        archive: 'Архівація облікових записів користувачів'
       },
       analytics: {
         read: 'Перегляд метрик та аналітики платформи',
@@ -634,22 +642,26 @@ export const uk = {
       staff: {
         read: 'Перегляд команди платформи BizX',
         write: 'Додавання співробітників BizX',
-        edit: 'Редагування ролей та архівація команди BizX'
+        edit: 'Редагування ролей співробітників BizX',
+        archive: 'Архівація (видалення) співробітників BizX'
       },
       roles: {
         read: 'Перегляд ролей платформи',
         write: 'Створення ролей платформи',
-        edit: 'Редагування, пріоритет та архівація ролей'
+        edit: 'Редагування та пріоритет ролей платформи',
+        archive: 'Архівація (видалення) ролей платформи'
       }
     }
   },
   permissionCategories: {
+    admin: 'Адміністрування',
     products: 'Товари та каталог',
     orders: 'Замовлення',
     analytics: 'Статистика та аналітика',
     store: 'Налаштування закладу',
     staff: 'Команда та працівники',
     roles: 'Ролі та ієрархія',
+    platform_admin: 'Адміністрування платформи',
     platform_stores: 'Торгові точки платформи',
     platform_users: 'Користувачі BizX ID',
     platform_analytics: 'Аналітика платформи',
@@ -661,7 +673,8 @@ export const uk = {
     write: 'Створення',
     edit: 'Редагування',
     manage: 'Керування',
-    export: 'Експорт'
+    export: 'Експорт',
+    archive: 'Архівація'
   }
 };
 
@@ -1205,8 +1218,10 @@ export const en: typeof uk = {
   permissions: {
     products: {
       read: 'View products & categories',
-      write: 'Create products & categories',
-      edit: 'Edit & archive products'
+      write: 'Create new products & categories',
+      edit: 'Edit product details, prices & photos',
+      status: 'Toggle product status (Active / Draft)',
+      archive: 'Archive (remove) products & categories'
     },
     orders: {
       read: 'View customer orders',
@@ -1217,6 +1232,7 @@ export const en: typeof uk = {
       export: 'Export analytics to Excel / CSV'
     },
     store: {
+      admin: 'Administrator (full access except owner-only rights)',
       read: 'View store settings & details',
       edit: 'Edit store info, logo & banner',
       status: {
@@ -1226,24 +1242,29 @@ export const en: typeof uk = {
     staff: {
       read: 'View store team members',
       write: 'Add new team members',
-      edit: 'Edit roles & archive team members'
+      edit: 'Edit member roles & permissions',
+      archive: 'Archive (remove) team members'
     },
     roles: {
       read: 'View roles & permissions',
       write: 'Create new roles',
-      edit: 'Edit, reorder & archive roles'
+      edit: 'Edit roles & change priority order',
+      archive: 'Archive (remove) roles'
     },
     platform: {
+      admin: 'Platform Administrator (full console access respecting hierarchy)',
       stores: {
         read: 'View all platform stores',
-        moderate: 'Moderate & change store statuses'
+        moderate: 'Moderate & change store statuses',
+        archive: 'Archive (remove) platform stores'
       },
       categories: {
         manage: 'Manage store categories'
       },
       users: {
         read: 'View BizX ID users registry',
-        edit: 'Suspend & manage users'
+        edit: 'Suspend & restore user accounts',
+        archive: 'Archive user accounts'
       },
       analytics: {
         read: 'View platform metrics & analytics',
@@ -1252,22 +1273,26 @@ export const en: typeof uk = {
       staff: {
         read: 'View BizX platform team',
         write: 'Add BizX platform staff',
-        edit: 'Edit roles & archive BizX staff'
+        edit: 'Edit BizX staff roles',
+        archive: 'Archive (remove) BizX staff'
       },
       roles: {
         read: 'View platform roles',
         write: 'Create platform roles',
-        edit: 'Edit, reorder & archive platform roles'
+        edit: 'Edit & reorder platform roles',
+        archive: 'Archive (remove) platform roles'
       }
     }
   },
   permissionCategories: {
+    admin: 'Administration',
     products: 'Products & Catalog',
     orders: 'Orders',
     analytics: 'Analytics & Reports',
     store: 'Store Settings',
     staff: 'Team & Staff',
     roles: 'Roles & Hierarchy',
+    platform_admin: 'Platform Administration',
     platform_stores: 'Platform Stores',
     platform_users: 'BizX ID Users',
     platform_analytics: 'Platform Analytics',
@@ -1279,7 +1304,8 @@ export const en: typeof uk = {
     write: 'Create',
     edit: 'Edit',
     manage: 'Manage',
-    export: 'Export'
+    export: 'Export',
+    archive: 'Archive'
   }
 };
 
