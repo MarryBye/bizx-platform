@@ -18,7 +18,8 @@ import {
   type OrderMessageItem,
   type OrderMessageAttachmentDto,
   type DisputeCategory,
-  type StoreReviewsResponse
+  type StoreReviewsResponse,
+  type StorePreviewReadiness
 } from '@bizx/common-types';
 import { LanguageSelector, OrderChatBox, PhoneInput } from '@bizx/ui';
 import {
@@ -66,6 +67,8 @@ export default function StorefrontPage() {
   const [reviewsData, setReviewsData] = useState<StoreReviewsResponse | null>(null);
   const [isLoadingStore, setIsLoadingStore] = useState(true);
   const [storeNotFound, setStoreNotFound] = useState(false);
+  const [isPreviewMode, setIsPreviewMode] = useState(false);
+  const [previewReadiness, setPreviewReadiness] = useState<StorePreviewReadiness | null>(null);
 
   const [activeTab, setActiveTab] = useState<StorefrontTab>('catalog');
 
@@ -117,18 +120,21 @@ export default function StorefrontPage() {
       maximumFractionDigits: 2
     });
 
-  // Load Store, Catalog, Reviews & Auth
+  // Load Store, Catalog, Reviews & Auth (supports private BizX Moderation Preview via ?preview=<token>)
   useEffect(() => {
     let cancelled = false;
     const init = async () => {
       setIsLoadingStore(true);
       setStoreNotFound(false);
+      setIsPreviewMode(false);
+      setPreviewReadiness(null);
       try {
-        const [meRes, storeRes] = await Promise.all([
-          api.auth.me().catch(() => ({ success: false, data: null })),
-          api.stores.getStore(slug).catch(() => ({ success: false, data: null }))
-        ]);
+        const previewToken =
+          typeof window !== 'undefined'
+            ? new URLSearchParams(window.location.search).get('preview')
+            : null;
 
+        const meRes = await api.auth.me().catch(() => ({ success: false, data: null }));
         if (cancelled) return;
         if (meRes.success && meRes.data) {
           setUser(meRes.data);
@@ -136,7 +142,41 @@ export default function StorefrontPage() {
           setContactPhone(meRes.data.phone || '+380');
         }
 
+        if (previewToken) {
+          const prevRes = await api.stores
+            .getStorePreview(slug, previewToken)
+            .catch(() => ({ success: false, data: null }));
+          if (cancelled) return;
+          if (!prevRes.success || !prevRes.data) {
+            setStoreNotFound(true);
+            setIsLoadingStore(false);
+            return;
+          }
+          setStore(prevRes.data.store);
+          setCategories(prevRes.data.categories || []);
+          setProducts(prevRes.data.products || []);
+          setPreviewReadiness(prevRes.data.readiness || null);
+          setIsPreviewMode(true);
+          return;
+        }
+
+        const storeRes = await api.stores.getStore(slug).catch(() => ({ success: false, data: null }));
+        if (cancelled) return;
+
         if (!storeRes.success || !storeRes.data) {
+          // If the store is draft/pending/suspended, try authenticated staff/owner preview
+          const fallbackPreview = await api.stores
+            .getStorePreview(slug)
+            .catch(() => ({ success: false, data: null }));
+          if (cancelled) return;
+          if (fallbackPreview.success && fallbackPreview.data) {
+            setStore(fallbackPreview.data.store);
+            setCategories(fallbackPreview.data.categories || []);
+            setProducts(fallbackPreview.data.products || []);
+            setPreviewReadiness(fallbackPreview.data.readiness || null);
+            setIsPreviewMode(true);
+            return;
+          }
           setStoreNotFound(true);
           setIsLoadingStore(false);
           return;
@@ -271,6 +311,14 @@ export default function StorefrontPage() {
 
   const handlePlaceOrder = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isPreviewMode) {
+      setCheckoutError(
+        locale === 'en'
+          ? 'Checkout is disabled in storefront preview mode'
+          : 'Оформлення замовлень недоступне в режимі попереднього перегляду'
+      );
+      return;
+    }
     if (!store || cart.length === 0) return;
     if (!user) {
       setIsAuthOpen(true);
@@ -474,6 +522,65 @@ export default function StorefrontPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col">
+      {/* Moderation / Staff Private Storefront Preview Banner */}
+      {isPreviewMode && (
+        <div className="bg-amber-950 text-amber-50 border-b border-amber-800 px-4 py-3">
+          <div className="max-w-6xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-2.5 text-xs">
+            <div className="flex items-start sm:items-center gap-2">
+              <Eye className="w-4 h-4 text-amber-400 shrink-0 mt-0.5 sm:mt-0" />
+              <div>
+                <span className="font-black text-amber-200 uppercase tracking-wider mr-2">
+                  Режим попереднього перегляду ({store.status})
+                </span>
+                <span className="text-amber-100/90">
+                  Ця сторінка доступна лише співробітникам BizX та власнику. Покупці її ще не бачать.
+                </span>
+              </div>
+            </div>
+
+            {previewReadiness && (
+              <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-bold">
+                <span
+                  className={`px-2 py-0.5 rounded ${
+                    previewReadiness.hasLogo ? 'bg-emerald-800 text-emerald-100' : 'bg-amber-900 text-amber-300'
+                  }`}
+                >
+                  {previewReadiness.hasLogo ? '✓ Лого' : '✕ Лого'}
+                </span>
+                <span
+                  className={`px-2 py-0.5 rounded ${
+                    previewReadiness.hasBanner ? 'bg-emerald-800 text-emerald-100' : 'bg-amber-900 text-amber-300'
+                  }`}
+                >
+                  {previewReadiness.hasBanner ? '✓ Банер' : '✕ Банер'}
+                </span>
+                <span
+                  className={`px-2 py-0.5 rounded ${
+                    previewReadiness.hasDescription ? 'bg-emerald-800 text-emerald-100' : 'bg-amber-900 text-amber-300'
+                  }`}
+                >
+                  {previewReadiness.hasDescription ? '✓ Опис' : '✕ Опис'}
+                </span>
+                <span
+                  className={`px-2 py-0.5 rounded ${
+                    previewReadiness.hasContacts ? 'bg-emerald-800 text-emerald-100' : 'bg-amber-900 text-amber-300'
+                  }`}
+                >
+                  {previewReadiness.hasContacts ? '✓ Контакти' : '✕ Контакти'}
+                </span>
+                <span
+                  className={`px-2 py-0.5 rounded ${
+                    previewReadiness.productsCount > 0 ? 'bg-emerald-800 text-emerald-100' : 'bg-rose-900 text-rose-200'
+                  }`}
+                >
+                  Товарів: {previewReadiness.productsCount}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Store Top Navigation Bar */}
       <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-slate-200">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-3">
