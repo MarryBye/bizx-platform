@@ -21,6 +21,8 @@ import {
   updateStoreMemberDtoSchema,
   addPlatformMemberDtoSchema,
   updatePlatformMemberDtoSchema,
+  updatePlatformUserStatusDtoSchema,
+  updatePlatformUserSubscriptionDtoSchema,
   type CreateRoleDto,
   type UpdateRoleDto,
   type ReorderRolesDto,
@@ -28,17 +30,14 @@ import {
   type UpdateStoreMemberDto,
   type AddPlatformMemberDto,
   type UpdatePlatformMemberDto,
+  type UpdatePlatformUserStatusDto,
+  type UpdatePlatformUserSubscriptionDto,
   type ApiResponse,
   type RoleItem,
   type PermissionsResponse,
   type StoreMember,
   type PlatformMember
 } from '@bizx/common-types';
-import { z } from 'zod';
-
-const updateUserStatusSchema = z.object({
-  status: z.enum(['active', 'suspended', 'archived'])
-});
 
 @Controller()
 @UseGuards(JwtAuthGuard)
@@ -260,13 +259,38 @@ export class RbacController {
   }
 
   @Patch('platform/users/:targetUserId/status')
-  @UsePipes(new ZodValidationPipe(updateUserStatusSchema))
   async updatePlatformUserStatus(
     @Param('targetUserId') targetUserId: string,
     @CurrentUser('sub') userId: string,
-    @Body() dto: { status: 'active' | 'suspended' | 'archived' }
-  ): Promise<ApiResponse<{ id: string; status: string }>> {
-    const data = await this.rbacService.updatePlatformUserStatus(targetUserId, userId, dto.status);
+    @Body(new ZodValidationPipe(updatePlatformUserStatusDtoSchema))
+    dto: UpdatePlatformUserStatusDto
+  ): Promise<
+    ApiResponse<{
+      id: string;
+      status: string;
+      suspendedUntil: string | null;
+      suspensionReason: string | null;
+    }>
+  > {
+    const data = await this.rbacService.updatePlatformUserStatus(targetUserId, userId, dto);
+    return { success: true, data, timestamp: new Date().toISOString() };
+  }
+
+  @Patch('platform/users/:targetUserId/subscription')
+  async updatePlatformUserSubscription(
+    @Param('targetUserId') targetUserId: string,
+    @CurrentUser('sub') userId: string,
+    @Body(new ZodValidationPipe(updatePlatformUserSubscriptionDtoSchema))
+    dto: UpdatePlatformUserSubscriptionDto
+  ): Promise<
+    ApiResponse<{
+      id: string;
+      subscriptionTier: string;
+      subscriptionStatus: string;
+      subscriptionExpiresAt: string | null;
+    }>
+  > {
+    const data = await this.rbacService.updatePlatformUserSubscription(targetUserId, userId, dto);
     return { success: true, data, timestamp: new Date().toISOString() };
   }
 }

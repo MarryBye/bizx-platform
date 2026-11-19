@@ -520,7 +520,7 @@ export class StoresService {
       await this.rbacService.assertPlatformPermission(userId, 'platform.stores.approve');
     }
 
-    // Блокування дострокового виходу із суспенду через 3 страйки без права platform.strikes.revoke
+    // Блокування дострокового виходу із суспенду або архіву без відповідного права
     if (dto?.status && ['active', 'pending'].includes(dto.status) && store.status === 'suspended') {
       const now = new Date();
       const [strikeRes] = await this.databaseService.db
@@ -535,13 +535,43 @@ export class StoresService {
         );
       const activeStrikesCount = Number(strikeRes?.cnt || 0);
       const stillLockedByTime = Boolean(store.suspendedUntil && store.suspendedUntil > now);
-      if (activeStrikesCount >= 3 || stillLockedByTime) {
-        const platAccess = await this.rbacService.getPlatformMemberAccess(userId);
+      const isPlatformLock = Boolean(store.suspensionReason || stillLockedByTime);
+      const platAccess = await this.rbacService.getPlatformMemberAccess(userId);
+
+      if (activeStrikesCount >= 3) {
         if (!platAccess.permissions.includes('platform.strikes.revoke')) {
           throw new ForbiddenException(
             'Заклад заблоковано через 3 активні страйки. Достроково зняти блокування може лише уповноважений співробітник BizX із правом зняття страйків.'
           );
         }
+      } else if (viaPlatform || isPlatformLock) {
+        const canUnblock =
+          platAccess.permissions.includes('platform.stores.unblock') ||
+          platAccess.permissions.includes('platform.strikes.revoke');
+        if (!canUnblock) {
+          throw new ForbiddenException(
+            'Дострокове розблокування призупиненого закладу доступне лише співробітнику BizX із правом розблокування закладів.'
+          );
+        }
+      }
+    } else if (dto?.status === 'active' && store.status === 'archived') {
+      const platAccess = await this.rbacService.getPlatformMemberAccess(userId);
+      const canRestore =
+        platAccess.permissions.includes('platform.stores.unblock') ||
+        platAccess.permissions.includes('platform.stores.archive');
+      if (!canRestore) {
+        throw new ForbiddenException(
+          'Відновлення архівованого закладу вимагає права розблокування або архівації закладів.'
+        );
+      }
+    }
+
+    if (dto?.status === 'suspended' && viaPlatform) {
+      const reason = dto.suspensionReason?.trim();
+      if (!reason || reason.length < 5) {
+        throw new BadRequestException(
+          'Вкажіть причину призупинення закладу (мінімум 5 символів)'
+        );
       }
     }
 
@@ -597,20 +627,56 @@ export class StoresService {
       }
     }
 
+    const { suspensionDays, suspensionReason, ...storeFields } = dto ?? {};
+    const nowUpdate = new Date();
+
+    const suspensionPatch: {
+      suspendedUntil?: Date | null;
+      suspensionReason?: string | null;
+    } = {};
+
+    if (dto?.status === 'suspended') {
+      suspensionPatch.suspendedUntil =
+        typeof suspensionDays === 'number' && suspensionDays > 0
+          ? new Date(nowUpdate.getTime() + suspensionDays * 24 * 60 * 60 * 1000)
+          : null;
+      suspensionPatch.suspensionReason = suspensionReason?.trim() || null;
+    } else if (dto?.status) {
+      suspensionPatch.suspendedUntil = null;
+      suspensionPatch.suspensionReason = null;
+    }
+
     const [updated] = await this.databaseService.db
       .update(stores)
       .set({
-        ...dto,
-        slug: dto?.slug ? dto.slug.toLowerCase() : undefined,
+        ...storeFields,
+        ...suspensionPatch,
+        slug: storeFields.slug ? storeFields.slug.toLowerCase() : undefined,
         ...(dto?.status === 'archived'
-          ? { archivedAt: new Date() }
+          ? { archivedAt: nowUpdate }
           : dto?.status !== undefined
             ? { archivedAt: null }
             : {}),
-        updatedAt: new Date()
+        updatedAt: nowUpdate
       })
       .where(eq(stores.id, storeId))
       .returning();
+
+    if (viaPlatform && dto?.status === 'suspended' && store.status !== 'suspended') {
+      const durationLabel = suspensionPatch.suspendedUntil
+        ? `на ${suspensionDays} дн. (до ${suspensionPatch.suspendedUntil.toLocaleDateString('uk-UA')})`
+        : 'безстроково (до ручного зняття модератором)';
+      await this.inboxService
+        .sendOfficialBizxMessage({
+          userId: store.ownerId,
+          senderName: 'BizX Модерація',
+          subject: `Роботу закладу «${store.name}» призупинено`,
+          body: `Модератор BizX призупинив роботу закладу «${store.name}» ${durationLabel}.\n\nПричина:\n${suspensionPatch.suspensionReason || 'Порушення правил платформи'}\n\nЯкщо ви вважаєте це помилкою, зверніться до підтримки BizX.`,
+          relatedStoreId: store.id,
+          canReply: false
+        })
+        .catch(() => {});
+    }
 
     if (!viaPlatform && dto?.status === 'pending' && store.status !== 'pending') {
       await this.inboxService

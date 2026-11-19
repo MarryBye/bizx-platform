@@ -8,6 +8,7 @@ import {
 import { DatabaseService } from '../database/database.service.js';
 import { RbacService } from '../rbac/rbac.service.js';
 import { OrdersService, type EnrichedOrder } from './orders.service.js';
+import { InboxService } from '../inbox/inbox.service.js';
 import {
   orders,
   orderMessages,
@@ -29,6 +30,7 @@ import type {
   CreateDisputeDto,
   EscalateDisputeDto,
   ResolveDisputeDto,
+  IssueStoreStrikeDto,
   RevokeStrikeDto,
   OrderDisputeItem,
   PlatformDisputeListItem,
@@ -71,7 +73,8 @@ export class DisputesService {
   constructor(
     private readonly databaseService: DatabaseService,
     private readonly rbacService: RbacService,
-    private readonly ordersService: OrdersService
+    private readonly ordersService: OrdersService,
+    private readonly inboxService: InboxService
   ) {}
 
   private async countActiveStrikes(storeId: string): Promise<number> {
@@ -798,6 +801,116 @@ export class DisputesService {
         createdAt: updatedStrike.createdAt.toISOString()
       },
       storeSuspensionLifted
+    };
+  }
+
+  async issueManualStrike(
+    storeId: string,
+    userId: string,
+    dto: IssueStoreStrikeDto
+  ): Promise<{
+    strike: StoreStrikeItem;
+    activeStrikesCount: number;
+    storeSuspended: boolean;
+  }> {
+    await this.rbacService.assertPlatformPermission(userId, 'platform.strikes.issue');
+
+    const [store] = await this.databaseService.db
+      .select()
+      .from(stores)
+      .where(eq(stores.id, storeId));
+
+    if (!store) {
+      throw new NotFoundException('Заклад не знайдено');
+    }
+
+    const now = new Date();
+    const reason = dto.reason.trim();
+    const existingActiveCount = await this.countActiveStrikes(storeId);
+    const nextActiveCount = existingActiveCount + 1;
+    const shouldSuspend = nextActiveCount >= 3;
+
+    const suspensionDays =
+      shouldSuspend && typeof dto.suspensionDays === 'number' && dto.suspensionDays > 0
+        ? dto.suspensionDays
+        : null;
+    const suspendedUntil =
+      shouldSuspend && suspensionDays
+        ? new Date(now.getTime() + suspensionDays * 24 * 60 * 60 * 1000)
+        : null;
+
+    const inserted = await this.databaseService.db.transaction(async (tx) => {
+      const [created] = await tx
+        .insert(storeStrikes)
+        .values({
+          storeId,
+          disputeId: null,
+          issuedByUserId: userId,
+          reason,
+          suspensionDays: shouldSuspend ? suspensionDays : null,
+          expiresAt: null,
+          createdAt: now
+        })
+        .returning();
+
+      if (shouldSuspend) {
+        await tx
+          .update(stores)
+          .set({
+            status: 'suspended',
+            suspendedUntil,
+            suspensionReason: `Автоматичне блокування через ${nextActiveCount} активних страйків: ${reason}`,
+            updatedAt: now
+          })
+          .where(eq(stores.id, storeId));
+      }
+
+      return created;
+    });
+
+    const [actor] = await this.databaseService.db
+      .select({ name: users.name })
+      .from(users)
+      .where(eq(users.id, userId));
+
+    const durationNote = shouldSuspend
+      ? suspendedUntil
+        ? `Роботу закладу призупинено на ${suspensionDays} дн. (до ${suspendedUntil.toLocaleDateString('uk-UA')}).`
+        : 'Роботу закладу призупинено безстроково до рішення адміністрації BizX.'
+      : `Усього активних страйків: ${nextActiveCount}/3. При досягненні 3 страйків роботу закладу буде автоматично призупинено.`;
+
+    await this.inboxService
+      .sendOfficialBizxMessage({
+        userId: store.ownerId,
+        senderName: 'BizX Арбітраж',
+        subject: shouldSuspend
+          ? `Заклад «${store.name}» призупинено (страйк ${nextActiveCount}/3)`
+          : `Видано страйк закладу «${store.name}» (${nextActiveCount}/3)`,
+        body: `Модератор BizX видав страйк закладу «${store.name}».\n\nПричина:\n${reason}\n\n${durationNote}`,
+        relatedStoreId: store.id,
+        canReply: false
+      })
+      .catch(() => {});
+
+    return {
+      strike: {
+        id: inserted.id,
+        storeId: inserted.storeId,
+        disputeId: null,
+        issuedByUserId: inserted.issuedByUserId,
+        issuedByName: actor?.name || null,
+        reason: inserted.reason,
+        suspensionDays: inserted.suspensionDays,
+        expiresAt: inserted.expiresAt ? inserted.expiresAt.toISOString() : null,
+        revokedAt: null,
+        revokedByUserId: null,
+        revokedByName: null,
+        revokeReason: null,
+        isActive: true,
+        createdAt: inserted.createdAt.toISOString()
+      },
+      activeStrikesCount: nextActiveCount,
+      storeSuspended: shouldSuspend
     };
   }
 }

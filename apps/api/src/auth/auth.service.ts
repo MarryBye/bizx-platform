@@ -8,6 +8,7 @@ import {
   Injectable,
   ConflictException,
   UnauthorizedException,
+  ForbiddenException,
   NotFoundException
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -46,6 +47,51 @@ export class AuthService {
 
   private hashToken(token: string): string {
     return crypto.createHash('sha256').update(token).digest('hex');
+  }
+
+  private async assertUserNotBlocked<
+    T extends {
+      id: string;
+      status: string;
+      suspendedUntil?: Date | null;
+      suspensionReason?: string | null;
+    }
+  >(user: T): Promise<T> {
+    if (user.status === 'archived') {
+      throw new ForbiddenException('Обліковий запис архівовано. Зверніться до підтримки BizX.');
+    }
+
+    if (user.status === 'suspended') {
+      const now = new Date();
+      if (user.suspendedUntil && user.suspendedUntil <= now) {
+        // Термін тимчасового блокування минув — автоматично розблоковуємо
+        await this.databaseService.db
+          .update(users)
+          .set({
+            status: 'active',
+            suspendedUntil: null,
+            suspensionReason: null,
+            updatedAt: now
+          })
+          .where(eq(users.id, user.id));
+        return {
+          ...user,
+          status: 'active',
+          suspendedUntil: null,
+          suspensionReason: null
+        };
+      }
+
+      const untilText = user.suspendedUntil
+        ? `до ${user.suspendedUntil.toLocaleDateString('uk-UA')}`
+        : 'безстроково';
+      const reasonText = user.suspensionReason ? ` Причина: ${user.suspensionReason}` : '';
+      throw new ForbiddenException(
+        `Ваш обліковий запис заблоковано (${untilText}).${reasonText}`
+      );
+    }
+
+    return user;
   }
 
   private async isPlatformStaffUser(userId: string): Promise<boolean> {
@@ -238,6 +284,8 @@ export class AuthService {
       throw new UnauthorizedException('Неверный логин или пароль');
     }
 
+    user = await this.assertUserNotBlocked(user);
+
     const reconciledUser = await this.reconcileExpiredSubscription(user);
     const userProfile = await this.mapToProfile(reconciledUser);
 
@@ -278,7 +326,8 @@ export class AuthService {
       throw new UnauthorizedException('Пользователь не найден');
     }
 
-    const reconciledUser = await this.reconcileExpiredSubscription(user);
+    const activeUser = await this.assertUserNotBlocked(user);
+    const reconciledUser = await this.reconcileExpiredSubscription(activeUser);
     const userProfile = await this.mapToProfile(reconciledUser);
 
     const tokens = await this.generateTokens(reconciledUser);
