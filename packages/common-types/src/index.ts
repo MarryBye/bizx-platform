@@ -119,16 +119,185 @@ export const userRoleSchema = z.enum(['client', 'business_owner', 'admin']);
 export type SystemRole = 'user' | 'platform_admin';
 export const systemRoleSchema = z.enum(['user', 'platform_admin']);
 
-export type StoreMemberRole = 'owner' | 'manager' | 'staff';
-export const storeMemberRoleSchema = z.enum(['owner', 'manager', 'staff']);
+export type StoreMemberRole = 'owner' | 'manager' | 'staff' | 'custom';
+export const storeMemberRoleSchema = z.enum(['owner', 'manager', 'staff', 'custom']);
+
+/**
+ * ==========================================
+ * RBAC: РОЛИ, ПРИОРИТЕТЫ И ГРАНУЛЯРНЫЕ ДОСТУПЫ
+ * ==========================================
+ */
+export type PermissionScope = 'store' | 'platform';
+export const permissionScopeSchema = z.enum(['store', 'platform']);
+
+export interface PermissionDefinition {
+  id: number;
+  code: string;
+  scope: PermissionScope;
+  category: string;
+  action: 'read' | 'write' | 'edit' | 'manage' | 'export';
+  ownerOnly: boolean;
+  descriptionUk: string;
+  descriptionEn: string;
+}
+
+export const STORE_PERMISSIONS: PermissionDefinition[] = [
+  // Товари та каталог
+  { id: 101, code: 'products.read', scope: 'store', category: 'products', action: 'read', ownerOnly: false, descriptionUk: 'Перегляд товарів та категорій', descriptionEn: 'View products & categories' },
+  { id: 102, code: 'products.write', scope: 'store', category: 'products', action: 'write', ownerOnly: false, descriptionUk: 'Додавання нових товарів та категорій', descriptionEn: 'Create products & categories' },
+  { id: 103, code: 'products.edit', scope: 'store', category: 'products', action: 'edit', ownerOnly: false, descriptionUk: 'Редагування та архівація товарів', descriptionEn: 'Edit & archive products' },
+  // Замовлення
+  { id: 111, code: 'orders.read', scope: 'store', category: 'orders', action: 'read', ownerOnly: false, descriptionUk: 'Перегляд замовлень клієнтів', descriptionEn: 'View customer orders' },
+  { id: 112, code: 'orders.edit', scope: 'store', category: 'orders', action: 'edit', ownerOnly: false, descriptionUk: 'Зміна статусів замовлень та оплати', descriptionEn: 'Update order & payment statuses' },
+  // Статистика та аналітика
+  { id: 121, code: 'analytics.read', scope: 'store', category: 'analytics', action: 'read', ownerOnly: false, descriptionUk: 'Перегляд дашборду та статистики продажів', descriptionEn: 'View dashboard & sales analytics' },
+  { id: 122, code: 'analytics.export', scope: 'store', category: 'analytics', action: 'export', ownerOnly: false, descriptionUk: 'Експорт аналітики в Excel / CSV', descriptionEn: 'Export analytics to Excel / CSV' },
+  // Дані магазину
+  { id: 131, code: 'store.read', scope: 'store', category: 'store', action: 'read', ownerOnly: false, descriptionUk: 'Перегляд даних та налаштувань закладу', descriptionEn: 'View store settings & details' },
+  { id: 132, code: 'store.edit', scope: 'store', category: 'store', action: 'edit', ownerOnly: false, descriptionUk: 'Редагування даних, логотипу та банера', descriptionEn: 'Edit store info, logo & banner' },
+  { id: 133, code: 'store.status.manage', scope: 'store', category: 'store', action: 'manage', ownerOnly: true, descriptionUk: 'Керування статусом закладу (пауза / модерація)', descriptionEn: 'Manage store status (pause / submit review)' },
+  // Команда
+  { id: 141, code: 'staff.read', scope: 'store', category: 'staff', action: 'read', ownerOnly: false, descriptionUk: 'Перегляд списку працівників', descriptionEn: 'View store team members' },
+  { id: 142, code: 'staff.write', scope: 'store', category: 'staff', action: 'write', ownerOnly: false, descriptionUk: 'Додавання нових працівників', descriptionEn: 'Add new team members' },
+  { id: 143, code: 'staff.edit', scope: 'store', category: 'staff', action: 'edit', ownerOnly: false, descriptionUk: 'Редагування ролей та архівація працівників', descriptionEn: 'Edit roles & archive team members' },
+  // Ролі
+  { id: 151, code: 'roles.read', scope: 'store', category: 'roles', action: 'read', ownerOnly: false, descriptionUk: 'Перегляд ролей та їх прав', descriptionEn: 'View roles & permissions' },
+  { id: 152, code: 'roles.write', scope: 'store', category: 'roles', action: 'write', ownerOnly: false, descriptionUk: 'Створення нових ролей', descriptionEn: 'Create new roles' },
+  { id: 153, code: 'roles.edit', scope: 'store', category: 'roles', action: 'edit', ownerOnly: false, descriptionUk: 'Редагування, пріоритет та архівація ролей', descriptionEn: 'Edit, reorder & archive roles' }
+];
+
+export const PLATFORM_PERMISSIONS: PermissionDefinition[] = [
+  // Торгові точки
+  { id: 201, code: 'platform.stores.read', scope: 'platform', category: 'platform_stores', action: 'read', ownerOnly: false, descriptionUk: 'Перегляд усіх торгових точок платформи', descriptionEn: 'View all platform stores' },
+  { id: 202, code: 'platform.stores.moderate', scope: 'platform', category: 'platform_stores', action: 'manage', ownerOnly: false, descriptionUk: 'Модерація та зміна статусів закладів', descriptionEn: 'Moderate & change store statuses' },
+  { id: 203, code: 'platform.categories.manage', scope: 'platform', category: 'platform_stores', action: 'edit', ownerOnly: false, descriptionUk: 'Керування категоріями закладів', descriptionEn: 'Manage store categories' },
+  // Користувачі BizX
+  { id: 211, code: 'platform.users.read', scope: 'platform', category: 'platform_users', action: 'read', ownerOnly: false, descriptionUk: 'Перегляд реєстру користувачів BizX ID', descriptionEn: 'View BizX ID users registry' },
+  { id: 212, code: 'platform.users.edit', scope: 'platform', category: 'platform_users', action: 'edit', ownerOnly: false, descriptionUk: 'Блокування та керування користувачами', descriptionEn: 'Suspend & manage users' },
+  // Аналітика платформи
+  { id: 221, code: 'platform.analytics.read', scope: 'platform', category: 'platform_analytics', action: 'read', ownerOnly: false, descriptionUk: 'Перегляд метрик та аналітики платформи', descriptionEn: 'View platform metrics & analytics' },
+  { id: 222, code: 'platform.analytics.export', scope: 'platform', category: 'platform_analytics', action: 'export', ownerOnly: false, descriptionUk: 'Експорт платформних звітів у Excel / CSV', descriptionEn: 'Export platform reports to Excel / CSV' },
+  // Команда BizX
+  { id: 231, code: 'platform.staff.read', scope: 'platform', category: 'platform_staff', action: 'read', ownerOnly: false, descriptionUk: 'Перегляд команди платформи BizX', descriptionEn: 'View BizX platform team' },
+  { id: 232, code: 'platform.staff.write', scope: 'platform', category: 'platform_staff', action: 'write', ownerOnly: false, descriptionUk: 'Додавання співробітників BizX', descriptionEn: 'Add BizX platform staff' },
+  { id: 233, code: 'platform.staff.edit', scope: 'platform', category: 'platform_staff', action: 'edit', ownerOnly: false, descriptionUk: 'Редагування ролей та архівація команди BizX', descriptionEn: 'Edit roles & archive BizX staff' },
+  // Ролі платформи
+  { id: 241, code: 'platform.roles.read', scope: 'platform', category: 'platform_roles', action: 'read', ownerOnly: false, descriptionUk: 'Перегляд ролей платформи', descriptionEn: 'View platform roles' },
+  { id: 242, code: 'platform.roles.write', scope: 'platform', category: 'platform_roles', action: 'write', ownerOnly: false, descriptionUk: 'Створення ролей платформи', descriptionEn: 'Create platform roles' },
+  { id: 243, code: 'platform.roles.edit', scope: 'platform', category: 'platform_roles', action: 'edit', ownerOnly: false, descriptionUk: 'Редагування, пріоритет та архівація ролей', descriptionEn: 'Edit, reorder & archive platform roles' }
+];
+
+export const ALL_PERMISSIONS: PermissionDefinition[] = [
+  ...STORE_PERMISSIONS,
+  ...PLATFORM_PERMISSIONS
+];
+
+export type StorePermissionCode =
+  | 'products.read'
+  | 'products.write'
+  | 'products.edit'
+  | 'orders.read'
+  | 'orders.edit'
+  | 'analytics.read'
+  | 'analytics.export'
+  | 'store.read'
+  | 'store.edit'
+  | 'store.status.manage'
+  | 'staff.read'
+  | 'staff.write'
+  | 'staff.edit'
+  | 'roles.read'
+  | 'roles.write'
+  | 'roles.edit';
+
+export type PlatformPermissionCode =
+  | 'platform.stores.read'
+  | 'platform.stores.moderate'
+  | 'platform.categories.manage'
+  | 'platform.users.read'
+  | 'platform.users.edit'
+  | 'platform.analytics.read'
+  | 'platform.analytics.export'
+  | 'platform.staff.read'
+  | 'platform.staff.write'
+  | 'platform.staff.edit'
+  | 'platform.roles.read'
+  | 'platform.roles.write'
+  | 'platform.roles.edit';
+
+export const OWNER_ROLE_PRIORITY = 10000;
+
+export interface RoleItem {
+  id: string;
+  scope: PermissionScope;
+  storeId: string | null;
+  name: string;
+  icon: string;
+  color: string;
+  priority: number;
+  isSystem: boolean;
+  permissionIds: number[];
+  permissionCodes: string[];
+  membersCount: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface MemberAccessSummary {
+  isOwner: boolean;
+  isMember: boolean;
+  priority: number;
+  roleId: string | null;
+  roleName: string | null;
+  isCustom: boolean;
+  permissionIds: number[];
+  permissions: string[];
+}
+
+export interface PermissionsResponse {
+  catalog: PermissionDefinition[];
+  myAccess: MemberAccessSummary;
+}
+
+export const createRoleDtoSchema = z.object({
+  name: z.string().min(2, 'Назва ролі має містити мінімум 2 символи').max(100),
+  icon: z.string().min(1).max(40).default('🛡️').optional(),
+  color: z.string().min(4).max(20).default('#334155').optional(),
+  priority: z.number().int().min(1).max(OWNER_ROLE_PRIORITY - 1).optional(),
+  permissionIds: z.array(z.number().int().positive()).default([])
+});
+export type CreateRoleDto = z.infer<typeof createRoleDtoSchema>;
+
+export const updateRoleDtoSchema = z.object({
+  name: z.string().min(2, 'Назва ролі має містити мінімум 2 символи').max(100).optional(),
+  icon: z.string().min(1).max(40).optional(),
+  color: z.string().min(4).max(20).optional(),
+  priority: z.number().int().min(1).max(OWNER_ROLE_PRIORITY - 1).optional(),
+  permissionIds: z.array(z.number().int().positive()).optional()
+});
+export type UpdateRoleDto = z.infer<typeof updateRoleDtoSchema>;
+
+export const reorderRolesDtoSchema = z.object({
+  orderedRoleIds: z.array(z.string().uuid()).min(1)
+});
+export type ReorderRolesDto = z.infer<typeof reorderRolesDtoSchema>;
 
 export const storeMemberSchema = z.object({
   id: z.string().uuid(),
   storeId: z.string().uuid(),
   userId: z.string().uuid(),
   role: storeMemberRoleSchema,
+  roleId: z.string().uuid().nullable().optional(),
+  roleName: z.string().nullable().optional(),
+  roleIcon: z.string().nullable().optional(),
+  roleColor: z.string().nullable().optional(),
+  priority: z.number().int().optional(),
+  isCustom: z.boolean().optional(),
+  isOwner: z.boolean().optional(),
+  permissionIds: z.array(z.number().int()).optional(),
   userName: z.string().optional(),
   userEmail: z.string().optional(),
+  userPhone: z.string().nullable().optional(),
   userAvatarUrl: z.string().nullable().optional(),
   archivedAt: z.string().datetime().nullable().optional(),
   createdAt: z.string().datetime().optional(),
@@ -137,18 +306,73 @@ export const storeMemberSchema = z.object({
 
 export type StoreMember = z.infer<typeof storeMemberSchema>;
 
-export const addStoreMemberDtoSchema = z.object({
-  email: z.string().email({ message: 'Некоректний email' }),
-  role: storeMemberRoleSchema.default('staff')
-});
+export const addStoreMemberDtoSchema = z
+  .object({
+    email: z.string().email({ message: 'Некоректний email' }).optional(),
+    phone: z.string().min(7, { message: 'Некоректний номер телефону' }).optional(),
+    role: storeMemberRoleSchema.optional(),
+    roleId: z.string().uuid().nullable().optional(),
+    isCustom: z.boolean().optional().default(false),
+    permissionIds: z.array(z.number().int().positive()).optional().default([])
+  })
+  .refine((data) => Boolean(data.email || data.phone), {
+    message: 'Вкажіть email або номер телефону працівника',
+    path: ['email']
+  });
 
 export type AddStoreMemberDto = z.infer<typeof addStoreMemberDtoSchema>;
 
 export const updateStoreMemberDtoSchema = z.object({
-  role: storeMemberRoleSchema
+  role: storeMemberRoleSchema.optional(),
+  roleId: z.string().uuid().nullable().optional(),
+  isCustom: z.boolean().optional(),
+  permissionIds: z.array(z.number().int().positive()).optional()
 });
 
 export type UpdateStoreMemberDto = z.infer<typeof updateStoreMemberDtoSchema>;
+
+export interface PlatformMember {
+  id: string;
+  userId: string;
+  roleId: string | null;
+  roleName: string | null;
+  roleIcon: string | null;
+  roleColor: string | null;
+  priority: number;
+  isCustom: boolean;
+  isOwner: boolean;
+  department: string | null;
+  permissionIds: number[];
+  userName: string;
+  userEmail: string;
+  userPhone: string | null;
+  userAvatarUrl: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const addPlatformMemberDtoSchema = z
+  .object({
+    email: z.string().email({ message: 'Некоректний email' }).optional(),
+    phone: z.string().min(7, { message: 'Некоректний номер телефону' }).optional(),
+    department: z.string().max(100).optional(),
+    roleId: z.string().uuid().nullable().optional(),
+    isCustom: z.boolean().optional().default(false),
+    permissionIds: z.array(z.number().int().positive()).optional().default([])
+  })
+  .refine((data) => Boolean(data.email || data.phone), {
+    message: 'Вкажіть email або номер телефону співробітника',
+    path: ['email']
+  });
+export type AddPlatformMemberDto = z.infer<typeof addPlatformMemberDtoSchema>;
+
+export const updatePlatformMemberDtoSchema = z.object({
+  department: z.string().max(100).nullable().optional(),
+  roleId: z.string().uuid().nullable().optional(),
+  isCustom: z.boolean().optional(),
+  permissionIds: z.array(z.number().int().positive()).optional()
+});
+export type UpdatePlatformMemberDto = z.infer<typeof updatePlatformMemberDtoSchema>;
 
 
 
