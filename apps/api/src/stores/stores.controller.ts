@@ -27,11 +27,15 @@ import {
   createStoreDtoSchema,
   updateStoreDtoSchema,
   storeFilterQuerySchema,
+  updateStoreDomainDtoSchema,
   type CreateStoreCategoryDto,
   type UpdateStoreCategoryDto,
   type CreateStoreDto,
   type UpdateStoreDto,
   type StoreFilterQuery,
+  type UpdateStoreDomainDto,
+  type DomainVerificationResult,
+  type StoreReviewsResponse,
   type ApiResponse,
   type PaginatedResult
 } from '@bizx/common-types';
@@ -142,6 +146,32 @@ export class StoresController {
   }
 
   @Public()
+  @Get('resolve-host')
+  async resolveHost(
+    @Query('host') host: string
+  ): Promise<ApiResponse<{ slug: string; storeId: string; name: string } | null>> {
+    const result = await this.storesService.resolveHost(host || '');
+    return {
+      success: true,
+      data: result,
+      timestamp: new Date().toISOString()
+    };
+  }
+
+  @Public()
+  @Get(':idOrSlug/reviews')
+  async getStoreReviews(
+    @Param('idOrSlug') idOrSlug: string
+  ): Promise<ApiResponse<StoreReviewsResponse>> {
+    const result = await this.storesService.getStoreReviews(idOrSlug);
+    return {
+      success: true,
+      data: result,
+      timestamp: new Date().toISOString()
+    };
+  }
+
+  @Public()
   @Get(':idOrSlug')
   async getStoreByIdOrSlug(
     @Param('idOrSlug') idOrSlug: string
@@ -219,6 +249,34 @@ export class StoresController {
     return {
       success: true,
       data: updated,
+      timestamp: new Date().toISOString()
+    };
+  }
+
+  @Patch(':id/domain')
+  @UsePipes(new ZodValidationPipe(updateStoreDomainDtoSchema))
+  async updateStoreDomain(
+    @Param('id') id: string,
+    @CurrentUser('sub') userId: string,
+    @Body() dto: UpdateStoreDomainDto
+  ): Promise<ApiResponse<StoreRecord>> {
+    const updated = await this.storesService.updateStoreDomain(id, userId, dto);
+    return {
+      success: true,
+      data: updated,
+      timestamp: new Date().toISOString()
+    };
+  }
+
+  @Post(':id/domain/verify')
+  async verifyStoreDomain(
+    @Param('id') id: string,
+    @CurrentUser('sub') userId: string
+  ): Promise<ApiResponse<DomainVerificationResult>> {
+    const result = await this.storesService.verifyStoreDomain(id, userId);
+    return {
+      success: true,
+      data: result,
       timestamp: new Date().toISOString()
     };
   }

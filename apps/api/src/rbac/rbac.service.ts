@@ -17,12 +17,16 @@ import {
   platformMemberPermissions,
   stores,
   storeCategories,
+  storeStrikes,
   users,
   eq,
   and,
+  or,
+  gt,
   inArray,
   isNull,
-  desc
+  desc,
+  count
 } from '@bizx/database';
 import {
   ALL_PERMISSIONS,
@@ -2059,6 +2063,13 @@ export class RbacService implements OnModuleInit {
         phone: stores.phone,
         email: stores.email,
         status: stores.status,
+        customDomain: stores.customDomain,
+        customDomainVerified: stores.customDomainVerified,
+        suspendedUntil: stores.suspendedUntil,
+        suspensionReason: stores.suspensionReason,
+        payoutBalance: stores.payoutBalance,
+        ratingAvg: stores.ratingAvg,
+        ratingCount: stores.ratingCount,
         createdAt: stores.createdAt,
         categoryName: storeCategories.name,
         ownerName: users.name,
@@ -2069,8 +2080,24 @@ export class RbacService implements OnModuleInit {
       .leftJoin(users, eq(stores.ownerId, users.id))
       .orderBy(desc(stores.createdAt));
 
+    const now = new Date();
+    const strikeRows = await this.databaseService.db
+      .select({ storeId: storeStrikes.storeId, cnt: count() })
+      .from(storeStrikes)
+      .where(
+        and(
+          isNull(storeStrikes.revokedAt),
+          or(isNull(storeStrikes.expiresAt), gt(storeStrikes.expiresAt, now))
+        )
+      )
+      .groupBy(storeStrikes.storeId);
+    const strikesByStore = new Map(strikeRows.map((r) => [r.storeId, Number(r.cnt)]));
+
     return rows.map((s) => ({
       ...s,
+      ratingAvg: Number((Number(s.ratingAvg || 0) / 100).toFixed(2)),
+      activeStrikesCount: strikesByStore.get(s.id) ?? 0,
+      suspendedUntil: s.suspendedUntil ? s.suspendedUntil.toISOString() : null,
       createdAt: s.createdAt.toISOString()
     }));
   }
