@@ -2,6 +2,8 @@
 
 import React, { useState } from 'react';
 import { api } from '../lib/api';
+import { useTranslation } from '../hooks/useTranslation';
+import { translateApiError } from '@bizx/utils';
 import type { UserProfile } from '@bizx/common-types';
 import { AuthCard } from '@bizx/ui';
 
@@ -18,6 +20,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onSuccess,
   initialMode = 'login'
 }) => {
+  const { t, locale } = useTranslation();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -25,7 +28,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   const handleSubmit = async (data: {
     mode: 'login' | 'register';
+    loginMethod?: 'email' | 'phone';
     email: string;
+    phone?: string;
     password: string;
     name?: string;
   }) => {
@@ -34,20 +39,22 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
     try {
       if (data.mode === 'login') {
-        const res = await api.auth.login({
-          email: data.email,
-          password: data.password
-        });
+        const res = await api.auth.login(
+          data.loginMethod === 'phone'
+            ? { phone: data.phone, password: data.password }
+            : { email: data.email, password: data.password }
+        );
         if (res.success && res.data) {
           onSuccess(res.data.user);
           onClose();
           return;
         }
-        setError('Невірний логін або пароль');
+        setError(t('errors.invalidCredentials'));
       } else {
         const res = await api.auth.register({
           name: data.name || '',
           email: data.email,
+          phone: data.phone || undefined,
           password: data.password,
           role: 'client'
         });
@@ -56,12 +63,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           onClose();
           return;
         }
-        setError('Не вдалося зареєструватися. Перевірте введені дані');
+        setError(t('auth.registerError'));
       }
     } catch (err: unknown) {
       const errorObj = err as { data?: { message?: string }; message?: string };
-      const msg = errorObj.data?.message || errorObj.message || 'Помилка авторизації';
-      setError(msg);
+      const msg = errorObj.data?.message || errorObj.message;
+      setError(translateApiError(msg, 'auth.loginError'));
     } finally {
       setIsLoading(false);
     }
@@ -75,15 +82,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md">
         <AuthCard
           badgeText="BIZX ID"
-          title="Єдиний обліковий запис BizX"
-          subtitle="Вхід до маркетплейсу, закладів та налаштувань профілю"
+          locale={locale}
           initialMode={initialMode}
           allowRegister={true}
           onSubmit={handleSubmit}
           isLoading={isLoading}
           error={error}
           onClose={onClose}
-          footerNotice="Реєструючись, ви отримуєте статус клієнта екосистеми BizX"
+          footerNotice={
+            locale === 'en'
+              ? 'By registering, you receive a unified BizX ecosystem account'
+              : 'Реєструючись, ви отримуєте єдиний обліковий запис екосистеми BizX'
+          }
         />
       </div>
     </div>

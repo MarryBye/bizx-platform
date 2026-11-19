@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { api } from '../lib/api';
 import { SiteHeader } from '../components/SiteHeader';
 import { AuthModal } from '../components/AuthModal';
+import { useTranslation } from '../hooks/useTranslation';
+import { translateApiError } from '@bizx/utils';
 import type { UserProfile, SubscriptionPlan, SubscriptionTier } from '@bizx/common-types';
 import {
   Check,
@@ -15,10 +17,12 @@ import {
   ArrowRight,
   HelpCircle,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  X
 } from 'lucide-react';
 
 export default function PricingPage() {
+  const { t, locale } = useTranslation();
   const [user, setUser] = useState<UserProfile | null>(null);
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
   const [targetTab, setTargetTab] = useState<'business' | 'client'>('business');
@@ -73,16 +77,16 @@ export default function PricingPage() {
       });
 
       if (res.success) {
-        setSubscribeSuccess(`Тариф «${selectedPlanForModal.name}» успішно активовано на 30 днів!`);
+        setSubscribeSuccess(t('pricing.subscribeSuccess'));
         setSelectedPlanForModal(null);
         await loadData();
         setTimeout(() => setSubscribeSuccess(null), 5000);
         return;
       }
-      setSubscribeError('Не вдалося оновити тариф. Спробуйте пізніше.');
+      setSubscribeError(t('pricing.subscribeError'));
     } catch (err: unknown) {
       const errObj = err as { data?: { message?: string }; message?: string };
-      setSubscribeError(errObj.data?.message || errObj.message || 'Помилка активації підписки');
+      setSubscribeError(translateApiError(errObj.data?.message || errObj.message, 'pricing.subscribeError'));
     } finally {
       setIsSubscribing(false);
     }
@@ -98,14 +102,14 @@ export default function PricingPage() {
         {/* Hero Section */}
         <div className="text-center max-w-3xl mx-auto space-y-4 mb-10">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-900 text-white text-xs font-extrabold uppercase tracking-wider">
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>BizX Тарифи та Підписки</span>
+            <Sparkles className="w-3.5 h-3.5 shrink-0" />
+            <span>{t('pricing.title')}</span>
           </div>
           <h1 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">
-            Прозорі тарифи для покупок та масштабування бізнесу
+            {t('pricing.title')}
           </h1>
           <p className="text-sm text-slate-600 leading-relaxed max-w-2xl mx-auto">
-            Отримуйте бонуси покупця або підключайте торгові точки, керуйте асортиментом та аналітикою продажів у єдиній комерційній екосистемі.
+            {t('pricing.subtitle')}
           </p>
 
           {/* Switcher Tabs */}
@@ -120,7 +124,7 @@ export default function PricingPage() {
                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                 }`}
               >
-                Для бізнесу та мерчантів
+                {t('pricing.forBusiness')}
               </button>
               <button
                 type="button"
@@ -131,7 +135,7 @@ export default function PricingPage() {
                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                 }`}
               >
-                Для покупців та клієнтів
+                {t('pricing.forClients')}
               </button>
             </div>
           </div>
@@ -146,7 +150,7 @@ export default function PricingPage() {
               href="/account"
               className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-lg transition-colors text-xs"
             >
-              Перейти в кабінет
+              {t('landing.ctaPortal')}
             </Link>
           </div>
         )}
@@ -172,7 +176,6 @@ export default function PricingPage() {
                     : 'border-slate-200 hover:border-slate-300'
                 }`}
               >
-                {/* Popular / Badge Flag */}
                 {plan.badge && (
                   <div className="absolute -top-3 left-6">
                     <span
@@ -182,7 +185,7 @@ export default function PricingPage() {
                           : 'bg-slate-100 text-slate-700 border border-slate-200'
                       }`}
                     >
-                      {plan.badge}
+                      {isPopular ? t('pricing.popular') : plan.badge}
                     </span>
                   </div>
                 )}
@@ -192,26 +195,33 @@ export default function PricingPage() {
                     <h3 className="text-lg font-black text-slate-900">{plan.name}</h3>
                     <div className="mt-4 flex items-baseline gap-1">
                       <span className="text-3xl font-black text-slate-900">
-                        {plan.priceUah === 0 ? '0 ₴' : `${plan.priceUah} ₴`}
+                        {plan.priceUah === 0 ? `0 ₴` : `${plan.priceUah} ₴`}
                       </span>
-                      <span className="text-xs text-slate-500 font-medium">{plan.period}</span>
+                      <span className="text-xs text-slate-500 font-medium">
+                        / {t('pricing.perMonth')}
+                      </span>
                     </div>
                   </div>
 
-                  {/* Limit summary for business */}
                   {plan.target === 'business' && (
                     <div className="mt-4 py-2 px-3 bg-slate-50 border border-slate-200/80 rounded-lg text-xs font-semibold text-slate-700 flex items-center justify-between">
-                      <span>Ліміт закладів:</span>
+                      <span>{locale === 'en' ? 'Store limit:' : 'Ліміт закладів:'}</span>
                       <span className="font-bold text-slate-900">
-                        {plan.maxStores} {plan.maxStores === 1 ? 'бізнес' : 'бізнеси'}
+                        {plan.maxStores}{' '}
+                        {locale === 'en'
+                          ? plan.maxStores === 1
+                            ? 'store'
+                            : 'stores'
+                          : plan.maxStores === 1
+                            ? 'бізнес'
+                            : 'бізнеси'}
                       </span>
                     </div>
                   )}
 
-                  {/* Features List */}
                   <div className="mt-6 space-y-3">
                     <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                      Що входить у тариф:
+                      {locale === 'en' ? "What's included:" : 'Що входить у тариф:'}
                     </div>
                     <ul className="space-y-2.5">
                       {plan.features.map((f, i) => (
@@ -224,11 +234,10 @@ export default function PricingPage() {
                   </div>
                 </div>
 
-                {/* Card Button */}
                 <div className="mt-8 pt-4 border-t border-slate-100">
                   {isCurrent ? (
                     <div className="w-full py-2.5 px-4 bg-slate-100 border border-slate-200 text-slate-700 rounded-xl text-xs font-bold text-center">
-                      Ваш поточний тариф
+                      {t('pricing.currentPlan')}
                     </div>
                   ) : (
                     <button
@@ -241,9 +250,9 @@ export default function PricingPage() {
                       }`}
                     >
                       <span>
-                        {!user ? 'Увійти для підключення' : 'Обрати цей тариф'}
+                        {!user ? t('pricing.loginToSubscribe') : t('pricing.upgradePlan')}
                       </span>
-                      <ArrowRight className="w-4 h-4" />
+                      <ArrowRight className="w-4 h-4 shrink-0" />
                     </button>
                   )}
                 </div>
@@ -256,52 +265,41 @@ export default function PricingPage() {
         <div className="mt-20 pt-10 border-t border-slate-200">
           <div className="text-center max-w-xl mx-auto mb-10 space-y-2">
             <h2 className="text-2xl font-black text-slate-900 tracking-tight">
-              Часті запитання про тарифи
+              {t('pricing.faqTitle')}
             </h2>
-            <p className="text-xs text-slate-500">
-              Все, що потрібно знати про роботу підписок, тестовий період та ліміти закладів
-            </p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-4xl mx-auto">
             <div className="p-5 bg-white border border-slate-200 rounded-xl space-y-1.5 shadow-sm">
               <div className="flex items-center gap-2 font-bold text-xs text-slate-900">
                 <Zap className="w-4 h-4 text-amber-500 shrink-0" />
-                <span>Як працює тестова оплата?</span>
+                <span>{t('pricing.faq1Q')}</span>
               </div>
-              <p className="text-xs text-slate-600 leading-relaxed">
-                На етапі бета-тестування BizX реальні банківські кошти не списуються. Ви можете обрати будь-який тариф в один клік і відразу отримати повний функціонал на 30 днів.
-              </p>
+              <p className="text-xs text-slate-600 leading-relaxed">{t('pricing.faq1A')}</p>
             </div>
 
             <div className="p-5 bg-white border border-slate-200 rounded-xl space-y-1.5 shadow-sm">
               <div className="flex items-center gap-2 font-bold text-xs text-slate-900">
                 <Building2 className="w-4 h-4 text-blue-600 shrink-0" />
-                <span>Що буде при зниженні тарифу?</span>
+                <span>{t('pricing.faq2Q')}</span>
               </div>
-              <p className="text-xs text-slate-600 leading-relaxed">
-                Якщо ви мали 5 закладів, а перейшли на тариф з лімітом у 3 заклади, система запропонує вам призупинити зайві бізнеси у кабінеті, щоб решта 3 продовжили активну роботу.
-              </p>
+              <p className="text-xs text-slate-600 leading-relaxed">{t('pricing.faq2A')}</p>
             </div>
 
             <div className="p-5 bg-white border border-slate-200 rounded-xl space-y-1.5 shadow-sm">
               <div className="flex items-center gap-2 font-bold text-xs text-slate-900">
                 <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>Що стається після завершення підписки?</span>
+                <span>{t('pricing.faq3Q')}</span>
               </div>
-              <p className="text-xs text-slate-600 leading-relaxed">
-                Якщо підписку не продовжено, заклади тимчасово переходять у статус «Призупинено» і приховуються з каталогу для покупців, а доступ до панелі бізнесу блокується до оплати.
-              </p>
+              <p className="text-xs text-slate-600 leading-relaxed">{t('pricing.faq3A')}</p>
             </div>
 
             <div className="p-5 bg-white border border-slate-200 rounded-xl space-y-1.5 shadow-sm">
               <div className="flex items-center gap-2 font-bold text-xs text-slate-900">
                 <HelpCircle className="w-4 h-4 text-slate-500 shrink-0" />
-                <span>Чи можна змінити тариф у будь-який момент?</span>
+                <span>{locale === 'en' ? 'How does the 30-day demo work?' : 'Як працює тестова оплата?'}</span>
               </div>
-              <p className="text-xs text-slate-600 leading-relaxed">
-                Так, ви можете підвищити тариф або перейти на інший рівень підписки у будь-який момент прямо з особистого кабінету або цієї сторінки.
-              </p>
+              <p className="text-xs text-slate-600 leading-relaxed">{t('pricing.noCardNeeded')}</p>
             </div>
           </div>
         </div>
@@ -316,14 +314,17 @@ export default function PricingPage() {
                 <span className="px-2 py-0.5 rounded bg-slate-900 text-white font-black text-[10px] tracking-wider uppercase">
                   BIZX PAY
                 </span>
-                <span className="text-xs font-bold text-slate-700">Активація підписки</span>
+                <span className="text-xs font-bold text-slate-700">
+                  {t('pricing.activate30Days')}
+                </span>
               </div>
               <button
                 type="button"
                 onClick={() => setSelectedPlanForModal(null)}
-                className="text-slate-400 hover:text-slate-700 text-sm font-bold p-1"
+                className="text-slate-400 hover:text-slate-700 p-1 rounded-md hover:bg-slate-200/60 transition-colors"
+                aria-label={t('common.close')}
               >
-                ✕
+                <X className="w-4 h-4" />
               </button>
             </div>
 
@@ -337,29 +338,37 @@ export default function PricingPage() {
 
               <div className="border border-slate-200 rounded-xl p-4 bg-slate-50/50 space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-600">Обраний тариф:</span>
-                  <span className="text-sm font-black text-slate-900">{selectedPlanForModal.name}</span>
+                  <span className="text-xs font-bold text-slate-600">
+                    {t('subscriptions.currentPlan')}:
+                  </span>
+                  <span className="text-sm font-black text-slate-900">
+                    {selectedPlanForModal.name}
+                  </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-600">Вартість:</span>
+                  <span className="text-xs font-bold text-slate-600">{t('common.price')}:</span>
                   <span className="text-base font-black text-slate-900">
-                    {selectedPlanForModal.priceUah === 0 ? '0 ₴' : `${selectedPlanForModal.priceUah} ₴ / міс`}
+                    {selectedPlanForModal.priceUah === 0
+                      ? '0 ₴'
+                      : `${selectedPlanForModal.priceUah} ₴ / ${t('pricing.perMonth')}`}
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-xs text-slate-500">
-                  <span>Термін дії:</span>
-                  <span className="font-semibold text-slate-700">30 днів</span>
+                  <span>{locale === 'en' ? 'Duration:' : 'Термін дії:'}</span>
+                  <span className="font-semibold text-slate-700">30 {t('common.days')}</span>
                 </div>
                 {selectedPlanForModal.target === 'business' && (
                   <div className="flex items-center justify-between text-xs text-slate-500">
-                    <span>Ліміт закладів:</span>
-                    <span className="font-semibold text-slate-700">До {selectedPlanForModal.maxStores} закладів</span>
+                    <span>{locale === 'en' ? 'Store limit:' : 'Ліміт закладів:'}</span>
+                    <span className="font-semibold text-slate-700">
+                      {selectedPlanForModal.maxStores}
+                    </span>
                   </div>
                 )}
               </div>
 
               <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-[11px] text-blue-900 leading-relaxed">
-                ℹ️ <strong>Тестовий режим:</strong> Справжня платіжна картка не вимагається. Натискаючи кнопку, ви активуєте підписку на тестовий 30-денний період.
+                {t('pricing.noCardNeeded')}
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-2">
@@ -368,7 +377,7 @@ export default function PricingPage() {
                   onClick={() => setSelectedPlanForModal(null)}
                   className="px-3 py-2 border border-slate-200 text-xs font-semibold text-slate-700 rounded-lg hover:bg-slate-50"
                 >
-                  Скасувати
+                  {t('common.cancel')}
                 </button>
                 <button
                   type="button"
@@ -376,7 +385,7 @@ export default function PricingPage() {
                   onClick={handleConfirmSubscribe}
                   className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-lg disabled:opacity-50 transition-colors shadow-sm"
                 >
-                  {isSubscribing ? 'Активація...' : 'Підтвердити активацію'}
+                  {isSubscribing ? t('common.loading') : t('common.confirm')}
                 </button>
               </div>
             </div>
@@ -397,16 +406,18 @@ export default function PricingPage() {
       {/* Footer */}
       <footer className="border-t border-slate-200 bg-white py-6 mt-auto">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px] text-slate-400">
-          <div>© {new Date().getFullYear()} BizX Commerce Platform. Всі права захищено.</div>
+          <div>
+            © {new Date().getFullYear()} BizX Commerce Platform. {t('landing.footerRights')}
+          </div>
           <div className="flex items-center gap-4">
             <Link href="/" className="hover:text-slate-700">
-              Головна
+              {t('nav.home')}
             </Link>
             <Link href="/pricing" className="text-slate-900 font-bold">
-              Тарифи
+              {t('nav.pricing')}
             </Link>
             <Link href="/account" className="hover:text-slate-700">
-              Особистий кабінет
+              {t('nav.account')}
             </Link>
           </div>
         </div>

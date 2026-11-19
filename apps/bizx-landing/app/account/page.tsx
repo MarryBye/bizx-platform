@@ -1,13 +1,13 @@
 'use client';
 
-import { AuthCard } from '@bizx/ui';
+import { AuthCard, LanguageSelector, PhoneInput } from '@bizx/ui';
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { api } from '../lib/api';
 import { SiteHeader } from '../components/SiteHeader';
 import { useTranslation } from '../hooks/useTranslation';
-import type { SupportedLocale } from '@bizx/utils';
+import { translateApiError, type SupportedLocale } from '@bizx/utils';
 import type { UserProfile, Store, SubscriptionPlan, UserSubscriptionDetails, SubscriptionTier } from '@bizx/common-types';
 import {
   User,
@@ -22,10 +22,10 @@ import {
   Key,
   LogOut,
   AlertCircle,
-  CreditCard
+  CreditCard,
+  Store as StoreIcon,
+  X
 } from 'lucide-react';
-import StorefrontOutlinedIcon from '@mui/icons-material/StorefrontOutlined';
-import ShieldOutlinedIcon from '@mui/icons-material/ShieldOutlined';
 
 type AccountTab = 'profile' | 'businesses' | 'subscriptions' | 'security' | 'privacy' | 'integrations';
 
@@ -191,18 +191,19 @@ export default function AccountPage() {
     try {
       const res = await api.auth.updateProfile({
         name: name.trim(),
-        phone: phone.trim()
+        phone: phone.trim() || null
       });
       if (res.success && res.data) {
         setUser(res.data);
+        setPhone(res.data.phone || '');
         setIsSaved(true);
         setTimeout(() => setIsSaved(false), 3000);
       } else {
-        setProfileError('Не вдалося зберегти зміни');
+        setProfileError(t('errors.saveFailed'));
       }
     } catch (err: unknown) {
       const errObj = err as { data?: { message?: string }; message?: string };
-      setProfileError(errObj.data?.message || errObj.message || 'Помилка оновлення профілю');
+      setProfileError(translateApiError(errObj.data?.message || errObj.message, 'errors.saveFailed'));
     } finally {
       setIsSaving(false);
     }
@@ -211,10 +212,12 @@ export default function AccountPage() {
   const handlePasswordSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (newPassword !== confirmPassword) {
-      setPasswordNotice('Новий пароль та підтвердження не співпадають');
+      setPasswordNotice(
+        locale === 'en' ? 'New password and confirmation do not match' : 'Новий пароль та підтвердження не співпадають'
+      );
       return;
     }
-    setPasswordNotice('Пароль успішно оновлено');
+    setPasswordNotice(locale === 'en' ? 'Password updated successfully' : 'Пароль успішно оновлено');
     setCurrentPassword('');
     setNewPassword('');
     setConfirmPassword('');
@@ -358,34 +361,37 @@ export default function AccountPage() {
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-20 space-y-4">
             <div className="w-8 h-8 border-2 border-slate-900 border-t-transparent rounded-full animate-spin" />
-            <div className="text-xs font-semibold text-slate-500">Завантаження облікового запису...</div>
+            <div className="text-xs font-semibold text-slate-500">{t('common.loading')}</div>
           </div>
         ) : !user ? (
           /* Unauthenticated State: Unified Metro AuthCard */
           <div className="flex justify-center items-center py-10">
             <AuthCard
               badgeText="BIZX ID"
-              title="Особистий кабінет BizX"
-              subtitle="Увійдіть або зареєструйтесь для доступу до персонального кабінету"
+              locale={locale}
+              title={t('account.title')}
+              subtitle={t('account.authRequiredDesc')}
               allowRegister={true}
               onSubmit={async (data) => {
                 setAuthError(null);
                 setAuthLoading(true);
                 try {
                   if (data.mode === 'login') {
-                    const res = await api.auth.login({
-                      email: data.email,
-                      password: data.password
-                    });
+                    const res = await api.auth.login(
+                      data.loginMethod === 'phone'
+                        ? { phone: data.phone, password: data.password }
+                        : { email: data.email, password: data.password }
+                    );
                     if (res.success && res.data) {
                       await loadData();
                       return;
                     }
-                    setAuthError('Невірний логін або пароль');
+                    setAuthError(t('errors.invalidCredentials'));
                   } else {
                     const res = await api.auth.register({
                       name: data.name || '',
                       email: data.email,
+                      phone: data.phone || undefined,
                       password: data.password,
                       role: 'client'
                     });
@@ -393,18 +399,22 @@ export default function AccountPage() {
                       await loadData();
                       return;
                     }
-                    setAuthError('Не вдалося зареєструватися');
+                    setAuthError(t('auth.registerError'));
                   }
                 } catch (err: unknown) {
                   const errObj = err as { data?: { message?: string }; message?: string };
-                  setAuthError(errObj.data?.message || errObj.message || 'Помилка авторизації');
+                  setAuthError(translateApiError(errObj.data?.message || errObj.message, 'auth.loginError'));
                 } finally {
                   setAuthLoading(false);
                 }
               }}
               isLoading={authLoading}
               error={authError}
-              footerNotice="Єдиний обліковий запис для всієї екосистеми BizX"
+              footerNotice={
+                locale === 'en'
+                  ? 'Single account across the entire BizX ecosystem'
+                  : 'Єдиний обліковий запис для всієї екосистеми BizX'
+              }
             />
           </div>
         ) : (
@@ -428,21 +438,21 @@ export default function AccountPage() {
                 </div>
                 <div className="min-w-0">
                   <h3 className="text-xs font-bold text-slate-900 truncate">
-                    {user.name || 'Користувач'}
+                    {user.name || t('common.user')}
                   </h3>
                   <p className="text-[11px] text-slate-500 font-mono truncate">{user.email}</p>
                   <div className="mt-1">
                     {isPlatformStaff ? (
                       <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800">
-                        BizX Staff
+                        {t('roles.platformAdmin')}
                       </span>
                     ) : isBusinessUser ? (
                       <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                        Бізнес-партнер
+                        {t('roles.businessPartner')}
                       </span>
                     ) : (
                       <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700">
-                        Клієнт
+                        {t('roles.client')}
                       </span>
                     )}
                   </div>
@@ -489,23 +499,23 @@ export default function AccountPage() {
                     className="w-full flex items-center justify-between p-2 rounded-lg text-slate-700 hover:bg-slate-100 transition-colors text-xs font-medium"
                   >
                     <span className="flex items-center gap-2">
-                      <StorefrontOutlinedIcon className="w-4 h-4 text-slate-500" />
+                      <StoreIcon className="w-4 h-4 shrink-0 text-slate-500" />
                       <span>{t('nav.businessAdmin')}</span>
                     </span>
-                    <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
+                    <ExternalLink className="w-3.5 h-3.5 shrink-0 text-slate-400" />
                   </a>
                 )}
 
                 {isPlatformStaff && (
                   <a
                     href="http://localhost:3103"
-                    className="w-full flex items-center justify-between p-2 rounded-lg text-blue-700 hover:bg-blue-50 transition-colors text-xs font-medium"
+                    className="w-full flex items-center justify-between p-2 rounded-lg text-slate-700 hover:bg-slate-100 transition-colors text-xs font-medium"
                   >
                     <span className="flex items-center gap-2">
-                      <ShieldOutlinedIcon className="w-4 h-4 text-blue-600" />
+                      <Shield className="w-4 h-4 shrink-0 text-slate-500" />
                       <span>{t('nav.platformAdmin')}</span>
                     </span>
-                    <ExternalLink className="w-3.5 h-3.5 text-blue-400" />
+                    <ExternalLink className="w-3.5 h-3.5 shrink-0 text-slate-400" />
                   </a>
                 )}
 
@@ -514,7 +524,7 @@ export default function AccountPage() {
                   onClick={handleLogout}
                   className="w-full flex items-center gap-2 p-2 rounded-lg text-red-600 hover:bg-red-50 transition-colors text-xs font-medium"
                 >
-                  <LogOut className="w-4 h-4 text-red-500" />
+                  <LogOut className="w-4 h-4 shrink-0 text-red-500" />
                   <span>{t('common.logout')}</span>
                 </button>
               </div>
@@ -526,16 +536,14 @@ export default function AccountPage() {
               {activeTab === 'profile' && (
                 <div className="space-y-6">
                   <div className="border-b border-slate-100 pb-4">
-                    <h2 className="text-lg font-black text-slate-900">Особиста інформація</h2>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      Керуйте основними даними вашого профілю у всій екосистемі BizX
-                    </p>
+                    <h2 className="text-lg font-black text-slate-900">{t('account.personalInfo')}</h2>
+                    <p className="text-xs text-slate-500 mt-0.5">{t('account.subtitle')}</p>
                   </div>
 
                   {isSaved && (
                     <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-800 flex items-center gap-2">
                       <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                      <span>Дані профілю успішно оновлено</span>
+                      <span>{t('account.profileUpdated')}</span>
                     </div>
                   )}
 
@@ -564,7 +572,13 @@ export default function AccountPage() {
                       </div>
                       <div>
                         <label className="cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 hover:bg-slate-50 transition-colors shadow-sm">
-                          <span>{avatarUploading ? 'Завантаження...' : 'Змінити фотографію'}</span>
+                          <span>
+                            {avatarUploading
+                              ? t('common.loading')
+                              : locale === 'en'
+                                ? 'Change photo'
+                                : 'Змінити фотографію'}
+                          </span>
                           <input
                             type="file"
                             accept="image/*"
@@ -574,13 +588,15 @@ export default function AccountPage() {
                           />
                         </label>
                         <div className="text-[11px] text-slate-400 mt-1">
-                          Підтримуються формати JPG, PNG, WebP та SVG
+                          {locale === 'en'
+                            ? 'JPG, PNG, WebP and SVG formats supported'
+                            : 'Підтримуються формати JPG, PNG, WebP та SVG'}
                         </div>
                       </div>
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-700">Повне імʼя</label>
+                      <label className="text-xs font-bold text-slate-700">{t('auth.fullName')}</label>
                       <input
                         type="text"
                         value={name}
@@ -591,9 +607,7 @@ export default function AccountPage() {
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-700">
-                        Електронна пошта (логін BizX)
-                      </label>
+                      <label className="text-xs font-bold text-slate-700">{t('auth.email')}</label>
                       <input
                         type="email"
                         value={email}
@@ -601,22 +615,22 @@ export default function AccountPage() {
                         className="w-full text-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-500 cursor-not-allowed"
                       />
                       <span className="text-[10px] text-slate-400">
-                        Електронна пошта привʼязана до вашого BizX ID і не підлягає зміні
+                        {t('account.emailReadonlyHint')}
                       </span>
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-700">Номер телефону</label>
-                      <input
-                        type="tel"
+                      <label className="text-xs font-bold text-slate-700">{t('auth.phone')}</label>
+                      <PhoneInput
                         value={phone}
-                        onChange={(e) => setPhone(e.target.value)}
-                        placeholder="+380 50 123 45 67"
-                        className="w-full text-xs px-3 py-2 bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-slate-900"
+                        onChange={setPhone}
+                        locale={locale}
+                        disabled={isSaving}
                       />
+                      <span className="text-[10px] text-slate-400">{t('account.phoneHint')}</span>
                     </div>
 
-                    {/* Language Preference Section */}
+                    {/* Language Preference Dropdown */}
                     <div className="space-y-2 pt-3 border-t border-slate-100">
                       <div>
                         <label className="text-xs font-bold text-slate-700 block">
@@ -627,32 +641,13 @@ export default function AccountPage() {
                         </p>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-3 pt-1">
-                        <button
-                          type="button"
-                          onClick={() => handleLanguageChange('uk')}
-                          className={`flex items-center justify-center gap-2 p-3 rounded-xl border text-xs font-bold transition-all ${
-                            locale === 'uk'
-                              ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
-                              : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-                          }`}
-                        >
-                          <span className="text-sm font-black text-amber-500">UA</span>
-                          <span>{t('account.ukrainian')}</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => handleLanguageChange('en')}
-                          className={`flex items-center justify-center gap-2 p-3 rounded-xl border text-xs font-bold transition-all ${
-                            locale === 'en'
-                              ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
-                              : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-                          }`}
-                        >
-                          <span className="text-sm font-black text-blue-500">EN</span>
-                          <span>{t('account.english')}</span>
-                        </button>
+                      <div className="max-w-xs pt-1">
+                        <LanguageSelector
+                          value={locale}
+                          onChange={handleLanguageChange}
+                          variant="full"
+                          align="left"
+                        />
                       </div>
 
                       {languageNotice && (
@@ -668,8 +663,8 @@ export default function AccountPage() {
                         disabled={isSaving}
                         className="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-lg text-xs font-bold hover:bg-slate-800 transition-colors disabled:opacity-50"
                       >
-                        <Save className="w-4 h-4" />
-                        <span>{isSaving ? 'Збереження...' : 'Зберегти зміни'}</span>
+                        <Save className="w-4 h-4 shrink-0" />
+                        <span>{isSaving ? t('common.saving') : t('account.saveChanges')}</span>
                       </button>
                     </div>
                   </form>
@@ -681,9 +676,9 @@ export default function AccountPage() {
                 <div className="space-y-6">
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-100 pb-4">
                     <div>
-                      <h2 className="text-lg font-black text-slate-900">Мої заклади та ролі</h2>
+                      <h2 className="text-lg font-black text-slate-900">{t('account.myStoresTitle')}</h2>
                       <p className="text-xs text-slate-500 mt-0.5">
-                        Керуйте торговими точками, модерацією та переходом у панель бізнесу
+                        {t('account.businessesTabDesc')}
                       </p>
                     </div>
                     <button
@@ -694,8 +689,8 @@ export default function AccountPage() {
                       }}
                       className="self-start sm:self-auto inline-flex items-center gap-1.5 px-3 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold transition-colors shadow-sm"
                     >
-                      <StorefrontOutlinedIcon className="w-4 h-4" />
-                      <span>Створити бізнес</span>
+                      <StoreIcon className="w-4 h-4 shrink-0" />
+                      <span>{t('account.createStore')}</span>
                     </button>
                   </div>
 
@@ -710,10 +705,10 @@ export default function AccountPage() {
                     <div className="p-8 text-center border border-dashed border-slate-200 rounded-xl space-y-3">
                       <Building2 className="w-8 h-8 text-slate-400 mx-auto" />
                       <div className="text-xs font-bold text-slate-800">
-                        У вас поки немає зареєстрованих закладів
+                        {t('account.noStoresYet')}
                       </div>
                       <p className="text-[11px] text-slate-500 max-w-sm mx-auto">
-                        Ви зареєстровані як клієнт. Щоб почати продажі та відкрити кабінет партнера, зареєструйте новий заклад.
+                        {t('account.createFirstStoreHint')}
                       </p>
                       <button
                         type="button"
@@ -723,8 +718,8 @@ export default function AccountPage() {
                         }}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 text-white rounded-lg text-xs font-bold hover:bg-slate-800 transition-colors"
                       >
-                        <StorefrontOutlinedIcon className="w-4 h-4" />
-                        <span>Створити новий заклад</span>
+                        <StoreIcon className="w-4 h-4 shrink-0" />
+                        <span>{t('account.createStore')}</span>
                       </button>
                     </div>
                   ) : (
@@ -841,16 +836,16 @@ export default function AccountPage() {
                 <div className="space-y-6">
                   <div className="border-b border-slate-100 pb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                     <div>
-                      <h2 className="text-lg font-black text-slate-900">Підписка та тарифні плани</h2>
+                      <h2 className="text-lg font-black text-slate-900">{t('account.subscriptionsTab')}</h2>
                       <p className="text-xs text-slate-500 mt-0.5">
-                        Керуйте вашим тарифом BizX, контролюйте залишок днів та ліміти закладів
+                        {t('account.subscriptionsTabDesc')}
                       </p>
                     </div>
                     <Link
                       href="/pricing"
                       className="text-xs font-bold text-slate-900 hover:underline inline-flex items-center gap-1 self-start sm:self-auto"
                     >
-                      <span>Повна таблиця тарифів</span>
+                      <span>{t('landing.ctaPricing')}</span>
                       <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
                     </Link>
                   </div>
@@ -986,9 +981,9 @@ export default function AccountPage() {
               {activeTab === 'security' && (
                 <div className="space-y-6">
                   <div className="border-b border-slate-100 pb-4">
-                    <h2 className="text-lg font-black text-slate-900">Безпека облікового запису</h2>
+                    <h2 className="text-lg font-black text-slate-900">{t('account.securityTab')}</h2>
                     <p className="text-xs text-slate-500 mt-0.5">
-                      Зміна пароля доступу та контроль сесій входу
+                      {t('account.securityTabDesc')}
                     </p>
                   </div>
 
@@ -1056,10 +1051,10 @@ export default function AccountPage() {
                 <div className="space-y-6">
                   <div className="border-b border-slate-100 pb-4">
                     <h2 className="text-lg font-black text-slate-900">
-                      Сповіщення та конфіденційність
+                      {t('account.privacyTab')}
                     </h2>
                     <p className="text-xs text-slate-500 mt-0.5">
-                      Налаштуйте канали комунікації та інформування про замовлення
+                      {t('account.privacyTabDesc')}
                     </p>
                   </div>
 
@@ -1139,9 +1134,9 @@ export default function AccountPage() {
               {activeTab === 'integrations' && (
                 <div className="space-y-6">
                   <div className="border-b border-slate-100 pb-4">
-                    <h2 className="text-lg font-black text-slate-900">Інтеграції та API</h2>
+                    <h2 className="text-lg font-black text-slate-900">{t('account.integrationsTab')}</h2>
                     <p className="text-xs text-slate-500 mt-0.5">
-                      Підключення зовнішніх CRM-систем, облікових програм та REST API токенів
+                      {t('account.integrationsTabDesc')}
                     </p>
                   </div>
 
@@ -1270,13 +1265,11 @@ export default function AccountPage() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700">Контактний телефон</label>
-                  <input
-                    type="tel"
+                  <label className="text-xs font-bold text-slate-700">{t('account.storePhoneLabel')}</label>
+                  <PhoneInput
                     value={newStorePhone}
-                    onChange={(e) => setNewStorePhone(e.target.value)}
-                    placeholder="+380 50 123 4567"
-                    className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:border-slate-900"
+                    onChange={setNewStorePhone}
+                    locale={locale}
                   />
                 </div>
                 <div className="space-y-1">
@@ -1387,16 +1380,18 @@ export default function AccountPage() {
       {/* Metro Minimal Footer */}
       <footer className="border-t border-slate-200 bg-white py-4 mt-auto">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] text-slate-400">
-          <div>© {new Date().getFullYear()} BizX Commerce Platform. Всі права захищено.</div>
+          <div>
+            © {new Date().getFullYear()} BizX Commerce Platform. {t('landing.footerRights')}
+          </div>
           <div className="flex items-center gap-4">
             <Link href="/" className="hover:text-slate-700">
-              Головна
+              {t('nav.home')}
             </Link>
             <a href="http://localhost:3102" className="hover:text-slate-700">
-              Адміністративна панель
+              {t('nav.businessAdmin')}
             </a>
             <span className="text-slate-300">•</span>
-            <span>Безпека та конфіденційність</span>
+            <span>{t('account.privacyTab')}</span>
           </div>
         </div>
       </footer>
