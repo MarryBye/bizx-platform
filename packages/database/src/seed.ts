@@ -93,6 +93,7 @@ const PLATFORM_PERMISSIONS = [
   { id: 202, code: 'platform.stores.moderate', scope: 'platform', category: 'platform_stores', action: 'manage', ownerOnly: false },
   { id: 203, code: 'platform.categories.manage', scope: 'platform', category: 'platform_stores', action: 'edit', ownerOnly: false },
   { id: 204, code: 'platform.stores.archive', scope: 'platform', category: 'platform_stores', action: 'archive', ownerOnly: false },
+  { id: 205, code: 'platform.stores.approve', scope: 'platform', category: 'platform_stores', action: 'manage', ownerOnly: false },
   { id: 211, code: 'platform.users.read', scope: 'platform', category: 'platform_users', action: 'read', ownerOnly: false },
   { id: 212, code: 'platform.users.edit', scope: 'platform', category: 'platform_users', action: 'edit', ownerOnly: false },
   { id: 213, code: 'platform.users.archive', scope: 'platform', category: 'platform_users', action: 'archive', ownerOnly: false },
@@ -197,6 +198,8 @@ async function seed() {
     console.info('🧹 Очищення існуючих тестових даних...');
     await db.execute(sql`
       TRUNCATE TABLE 
+        inbox_messages,
+        inbox_threads,
         store_reviews,
         store_strikes,
         order_disputes,
@@ -431,6 +434,7 @@ async function seed() {
       ...[
         'platform.stores.read',
         'platform.stores.moderate',
+        'platform.stores.approve',
         'platform.categories.manage',
         'platform.users.read',
         'platform.users.edit',
@@ -1787,6 +1791,278 @@ async function seed() {
         })
         .where(sql`${schema.stores.id} = ${storeObj.id}`);
     }
+
+    // 11. Заявка нового закладу на модерації (status = pending) для тестування черги підтвердження та превʼю
+    console.info('🕒 Створення демо-заявки нового закладу на модерацію (Карпатська Сироварня)...');
+    const [pendingCheeseStore] = await db
+      .insert(schema.stores)
+      .values({
+        ownerId: coffeeOwner.id,
+        categoryId: catCafes.id,
+        name: 'Карпатська Сироварня',
+        slug: 'carpathian-cheese',
+        description:
+          'Крафтові витримані сири з карпатського молока, бринза, будз та фермерські сирні набори з доставкою по Україні.',
+        logoUrl: coffeeLogoUrl,
+        bannerUrl: bakeryBannerUrl,
+        address: 'м. Івано-Франківськ, вул. Незалежності, 18',
+        phone: '+380673334455',
+        email: 'cheese@carpathian.ua',
+        status: 'pending'
+      })
+      .returning();
+
+    const [cheeseOwnerRole] = await db
+      .insert(schema.roles)
+      .values({
+        scope: 'store',
+        storeId: pendingCheeseStore.id,
+        name: 'Власник',
+        icon: 'crown',
+        color: '#0f172a',
+        priority: OWNER_ROLE_PRIORITY,
+        isSystem: true
+      })
+      .returning();
+
+    await db.insert(schema.rolePermissions).values(
+      STORE_PERMISSIONS.map((p) => ({ roleId: cheeseOwnerRole.id, permissionId: p.id }))
+    );
+
+    await db.insert(schema.storeMembers).values({
+      storeId: pendingCheeseStore.id,
+      userId: coffeeOwner.id,
+      roleId: cheeseOwnerRole.id,
+      isCustom: false
+    });
+
+    const [cheeseCat] = await db
+      .insert(schema.productCategories)
+      .values({
+        storeId: pendingCheeseStore.id,
+        name: 'Крафтові сири',
+        sortOrder: 1
+      })
+      .returning();
+
+    await db.insert(schema.products).values([
+      {
+        storeId: pendingCheeseStore.id,
+        categoryId: cheeseCat.id,
+        name: 'Карпатська витримана бринза 300г',
+        sku: 'CHZ-001',
+        description: 'Традиційна овечо-коровʼяча бринза 60 днів витримки у деревʼяних діжках.',
+        price: 24500,
+        imageUrl: '/storage/defaults/product.svg',
+        inventoryCount: 25,
+        isActive: true
+      },
+      {
+        storeId: pendingCheeseStore.id,
+        categoryId: cheeseCat.id,
+        name: 'Сирний дегустаційний набір (4 сорти)',
+        sku: 'CHZ-002',
+        description: 'Будз копчений, вурда, витриманий гірський та сир з травами — 600г.',
+        price: 54000,
+        oldPrice: 61000,
+        imageUrl: '/storage/defaults/product.svg',
+        inventoryCount: 15,
+        isActive: true
+      }
+    ]);
+
+    // 12. Пошта акаунту (Повідомлення від BizX, підтримка та реклама закладів)
+    console.info('✉️ Наповнення поштової скриньки акаунтів (BizX, Підтримка, Реклама)...');
+    const nowInbox = Date.now();
+    const seedInboxThread = async (args: {
+      userId: string;
+      senderType: 'bizx' | 'support' | 'promo';
+      senderStoreId?: string | null;
+      senderName: string;
+      senderAvatarUrl?: string | null;
+      badgeType: 'bizx' | 'support' | 'promo';
+      subject: string;
+      canReply: boolean;
+      relatedStoreId?: string | null;
+      messages: Array<{
+        senderUserId?: string | null;
+        senderRole: 'system_bizx' | 'support_staff' | 'promo_business' | 'recipient';
+        senderName: string;
+        body: string;
+        offsetMinutesAgo: number;
+        readByRecipient?: boolean;
+      }>;
+    }) => {
+      const lastMsg = args.messages[args.messages.length - 1];
+      const lastTime = new Date(nowInbox - lastMsg.offsetMinutesAgo * 60_000);
+      const [thread] = await db
+        .insert(schema.inboxThreads)
+        .values({
+          userId: args.userId,
+          senderType: args.senderType,
+          senderStoreId: args.senderStoreId ?? null,
+          senderName: args.senderName,
+          senderAvatarUrl: args.senderAvatarUrl ?? null,
+          badgeType: args.badgeType,
+          subject: args.subject,
+          canReply: args.canReply,
+          relatedStoreId: args.relatedStoreId ?? null,
+          lastMessagePreview: lastMsg.body.slice(0, 180),
+          lastMessageAt: lastTime,
+          createdAt: new Date(nowInbox - args.messages[0].offsetMinutesAgo * 60_000),
+          updatedAt: lastTime
+        })
+        .returning();
+
+      for (const m of args.messages) {
+        const msgTime = new Date(nowInbox - m.offsetMinutesAgo * 60_000);
+        await db.insert(schema.inboxMessages).values({
+          threadId: thread.id,
+          senderUserId: m.senderUserId ?? null,
+          senderRole: m.senderRole,
+          senderName: m.senderName,
+          body: m.body,
+          attachments: [],
+          readByRecipientAt: m.readByRecipient ? msgTime : m.senderRole === 'recipient' ? msgTime : null,
+          readByStaffAt: m.senderRole !== 'recipient' ? msgTime : null,
+          createdAt: msgTime
+        });
+      }
+    };
+
+    await seedInboxThread({
+      userId: coffeeOwner.id,
+      senderType: 'bizx',
+      senderName: 'BizX Модерація',
+      badgeType: 'bizx',
+      subject: 'Заявку «Карпатська Сироварня» прийнято на перевірку',
+      canReply: false,
+      relatedStoreId: pendingCheeseStore.id,
+      messages: [
+        {
+          senderRole: 'system_bizx',
+          senderName: 'BizX Модерація',
+          body: 'Вітаємо! Ваш новий заклад «Карпатська Сироварня» надіслано на модерацію BizX. Після перевірки сторінки ви отримаєте повідомлення з результатом у цю скриньку.',
+          offsetMinutesAgo: 35,
+          readByRecipient: false
+        }
+      ]
+    });
+
+    await seedInboxThread({
+      userId: coffeeOwner.id,
+      senderType: 'support',
+      senderName: 'Підтримка BizX',
+      badgeType: 'support',
+      subject: 'Підключення власного домену для кавʼярні',
+      canReply: true,
+      relatedStoreId: storeCoffee.id,
+      messages: [
+        {
+          senderUserId: coffeeOwner.id,
+          senderRole: 'recipient',
+          senderName: coffeeOwner.name,
+          body: 'Доброго дня! Підкажіть, які DNS-записи потрібно додати, щоб підключити наш домен shop.lvivcoffee.ua?',
+          offsetMinutesAgo: 180,
+          readByRecipient: true
+        },
+        {
+          senderUserId: platSupportUser.id,
+          senderRole: 'support_staff',
+          senderName: 'Підтримка BizX',
+          body: 'Вітаємо! У панелі бізнесу відкрийте «Налаштування закладу» → блок «Веб-вітрина та власний домен». Введіть свій домен — система автоматично згенерує CNAME та TXT записи для підтвердження. Якщо виникнуть питання — пишіть прямо сюди!',
+          offsetMinutesAgo: 120,
+          readByRecipient: false
+        }
+      ]
+    });
+
+    const clientUser = regularUsers[0];
+
+    await seedInboxThread({
+      userId: clientUser.id,
+      senderType: 'bizx',
+      senderName: 'BizX Платформа',
+      badgeType: 'bizx',
+      subject: 'Ласкаво просимо до BizX!',
+      canReply: false,
+      messages: [
+        {
+          senderRole: 'system_bizx',
+          senderName: 'BizX Платформа',
+          body: 'Дякуємо за реєстрацію в BizX! У цьому розділі ви отримуватимете важливі системні повідомлення від платформи, відповіді загальної підтримки та спеціальні пропозиції від партнерських закладів.',
+          offsetMinutesAgo: 400,
+          readByRecipient: true
+        }
+      ]
+    });
+
+    await seedInboxThread({
+      userId: clientUser.id,
+      senderType: 'promo',
+      senderStoreId: storeCoffee.id,
+      senderName: storeCoffee.name,
+      senderAvatarUrl: storeCoffee.logoUrl,
+      badgeType: 'promo',
+      subject: 'Свіжа весняна обсмажка -15% для постійних гостей',
+      canReply: false,
+      relatedStoreId: storeCoffee.id,
+      messages: [
+        {
+          senderRole: 'promo_business',
+          senderName: storeCoffee.name,
+          body: 'Привіт! Запрошуємо спробувати новий мікролот Ефіопія Сідамо свіжого обсмаження. Знижка -15% діє на всі позиції в нашій веб-вітрині до кінця тижня.',
+          offsetMinutesAgo: 45,
+          readByRecipient: false
+        }
+      ]
+    });
+
+    await seedInboxThread({
+      userId: clientUser.id,
+      senderType: 'support',
+      senderName: 'Підтримка BizX',
+      badgeType: 'support',
+      subject: 'Питання щодо безпеки акаунту',
+      canReply: true,
+      messages: [
+        {
+          senderUserId: clientUser.id,
+          senderRole: 'recipient',
+          senderName: clientUser.name,
+          body: 'Підкажіть, чи можна увійти в акаунт за номером телефону?',
+          offsetMinutesAgo: 90,
+          readByRecipient: true
+        },
+        {
+          senderUserId: platSupportUser.id,
+          senderRole: 'support_staff',
+          senderName: 'Підтримка BizX',
+          body: 'Так! Ви можете входити як за Email, так і за номером телефону, збереженим у налаштуваннях профілю. Якщо ще чимось можемо допомогти — просто напишіть відповідь нижче.',
+          offsetMinutesAgo: 60,
+          readByRecipient: false
+        }
+      ]
+    });
+
+    await seedInboxThread({
+      userId: techOwner.id,
+      senderType: 'bizx',
+      senderName: 'BizX Арбітраж',
+      badgeType: 'bizx',
+      subject: 'Попередження: 2 активних страйки у закладу CyberTech Ukraine',
+      canReply: false,
+      relatedStoreId: storeTech.id,
+      messages: [
+        {
+          senderRole: 'system_bizx',
+          senderName: 'BizX Арбітраж',
+          body: 'Звертаємо увагу: у вашого закладу «CyberTech Ukraine» зафіксовано 2 активних страйки за результатами спорів. При отриманні 3-го страйку роботу закладу буде автоматично призупинено. Будь ласка, оперативно опрацьовуйте звернення покупців.',
+          offsetMinutesAgo: 150,
+          readByRecipient: false
+        }
+      ]
+    });
 
     const totalOrdersCount = orderSeq - 1;
 
