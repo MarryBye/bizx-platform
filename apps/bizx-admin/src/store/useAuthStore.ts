@@ -1,21 +1,47 @@
 import { create } from 'zustand';
 import { api } from '../lib/api';
-import type { UserProfile, LoginDto, RegisterDto } from '@bizx/common-types';
+import { i18n, translateApiError } from '@bizx/utils';
+import type { UserProfile, LoginDto } from '@bizx/common-types';
 
 interface AuthState {
   user: UserProfile | null;
+  hasActiveSubscription: boolean;
   isLoading: boolean;
   error: string | null;
   init: () => Promise<void>;
   login: (dto: LoginDto) => Promise<boolean>;
-  register: (dto: RegisterDto) => Promise<boolean>;
   logout: () => Promise<void>;
   updateAvatar: (file: File) => Promise<boolean>;
   updateProfile: (dto: { name?: string; phone?: string }) => Promise<boolean>;
 }
 
+export function hasActiveBusinessSubscription(user: UserProfile | null): boolean {
+  if (!user) return false;
+  if (user.role === 'admin' || user.systemRole === 'platform_admin') {
+    return true;
+  }
+  const isBizTier = ['business_starter', 'business_pro', 'business_enterprise'].includes(
+    user.subscriptionTier || ''
+  );
+  return (
+    isBizTier &&
+    (user.subscriptionDaysLeft ?? 0) > 0 &&
+    user.subscriptionStatus === 'active'
+  );
+}
+
+async function hasAnyOwnedOrMemberStore(): Promise<boolean> {
+  try {
+    const storesRes = await api.stores.getMyStores();
+    return Boolean(storesRes.success && Array.isArray(storesRes.data) && storesRes.data.length > 0);
+  } catch {
+    return false;
+  }
+}
+
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
+  hasActiveSubscription: false,
   isLoading: true,
   error: null,
 
@@ -24,18 +50,37 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       const res = await api.auth.me();
       if (res.success && res.data) {
-        if (res.data.role !== 'business_owner') {
+        const activeSub = hasActiveBusinessSubscription(res.data);
+        const hasStores = activeSub ? true : await hasAnyOwnedOrMemberStore();
+
+        if (!activeSub && !hasStores) {
           api.client.setAccessToken(null);
-          set({ user: null, isLoading: false });
+          set({
+            user: null,
+            hasActiveSubscription: false,
+            error: i18n.t('subscriptions.needBusinessSub'),
+            isLoading: false
+          });
           return;
         }
-        set({ user: res.data, isLoading: false });
+
+        if (
+          res.data.preferredLanguage &&
+          (res.data.preferredLanguage === 'uk' || res.data.preferredLanguage === 'en')
+        ) {
+          i18n.setLocale(res.data.preferredLanguage);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('bizx_locale', res.data.preferredLanguage);
+          }
+        }
+
+        set({ user: res.data, hasActiveSubscription: activeSub, isLoading: false });
         return;
       }
     } catch {
       // Not authenticated or token expired
     }
-    set({ user: null, isLoading: false });
+    set({ user: null, hasActiveSubscription: false, isLoading: false });
   },
 
   login: async (dto: LoginDto) => {
@@ -43,42 +88,35 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       const res = await api.auth.login(dto);
       if (res.success && res.data) {
-        if (res.data.user.role !== 'business_owner') {
+        const activeSub = hasActiveBusinessSubscription(res.data.user);
+        const hasStores = activeSub ? true : await hasAnyOwnedOrMemberStore();
+
+        if (!activeSub && !hasStores) {
           api.client.setAccessToken(null);
           set({
             user: null,
-            error: 'Доступ обмежено: портал призначений виключно для бізнес-партнерів [AUTH_1002].',
+            hasActiveSubscription: false,
+            error: i18n.t('subscriptions.needBusinessSub'),
             isLoading: false
           });
           return false;
         }
-        set({ user: res.data.user, isLoading: false });
+        if (
+          res.data.user.preferredLanguage &&
+          (res.data.user.preferredLanguage === 'uk' || res.data.user.preferredLanguage === 'en')
+        ) {
+          i18n.setLocale(res.data.user.preferredLanguage);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('bizx_locale', res.data.user.preferredLanguage);
+          }
+        }
+        set({ user: res.data.user, hasActiveSubscription: activeSub, isLoading: false });
         return true;
       }
-      set({ error: 'Невірний логін або пароль [AUTH_1001]', isLoading: false });
+      set({ error: i18n.t('errors.invalidCredentials'), isLoading: false });
       return false;
     } catch (err: any) {
-      const message = err.data?.message || err.message || 'Помилка авторизації [AUTH_1000]';
-      set({ error: message, isLoading: false });
-      return false;
-    }
-  },
-
-  register: async (dto: RegisterDto) => {
-    set({ isLoading: true, error: null });
-    try {
-      const res = await api.auth.register({
-        ...dto,
-        role: 'business_owner'
-      });
-      if (res.success && res.data) {
-        set({ user: res.data.user, isLoading: false });
-        return true;
-      }
-      set({ error: 'Не вдалося зареєструватися [AUTH_1003]', isLoading: false });
-      return false;
-    } catch (err: any) {
-      const message = err.data?.message || err.message || 'Помилка реєстрації [AUTH_1000]';
+      const message = translateApiError(err.data?.message || err.message, 'auth.loginError');
       set({ error: message, isLoading: false });
       return false;
     }
@@ -89,8 +127,15 @@ export const useAuthStore = create<AuthState>((set) => ({
       await api.auth.logout();
     } catch {
       // Ignore error on logout
+    } finally {
+      api.client.setAccessToken(null);
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('bizx_admin_access_token');
+        localStorage.removeItem('bizx_access_token');
+        localStorage.removeItem('bizx_platform_admin_token');
+      }
     }
-    set({ user: null, error: null });
+    set({ user: null, hasActiveSubscription: false, error: null });
   },
 
   updateAvatar: async (file: File) => {
@@ -101,8 +146,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         return true;
       }
       return false;
-    } catch (err: any) {
-      set({ error: err.message || 'Не вдалося оновити аватар' });
+    } catch {
       return false;
     }
   },
@@ -115,10 +159,11 @@ export const useAuthStore = create<AuthState>((set) => ({
         set({ user: res.data, isLoading: false });
         return true;
       }
-      set({ error: 'Не вдалося оновити профіль', isLoading: false });
+      set({ error: i18n.t('errors.saveFailed'), isLoading: false });
       return false;
     } catch (err: any) {
-      set({ error: err.message || 'Помилка оновлення профілю', isLoading: false });
+      const message = translateApiError(err.data?.message || err.message, 'errors.saveFailed');
+      set({ error: message, isLoading: false });
       return false;
     }
   }

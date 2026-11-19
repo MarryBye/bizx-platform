@@ -74,7 +74,20 @@ export class AnalyticsService {
       conditions.push(gte(orders.createdAt, startDate));
     }
     if (endDate) {
-      conditions.push(lte(orders.createdAt, endDate));
+      const endOfDay = new Date(endDate);
+      if (query.endDate && query.endDate.length <= 10) {
+        endOfDay.setHours(23, 59, 59, 999);
+      }
+      conditions.push(lte(orders.createdAt, endOfDay));
+    }
+    if (query.status) {
+      conditions.push(eq(orders.status, query.status));
+    }
+    if (query.minAmount !== undefined) {
+      conditions.push(gte(orders.totalAmount, query.minAmount));
+    }
+    if (query.maxAmount !== undefined) {
+      conditions.push(lte(orders.totalAmount, query.maxAmount));
     }
 
     const whereClause = and(...conditions);
@@ -125,7 +138,25 @@ export class AnalyticsService {
       ordersCount: Number(row.ordersCount)
     }));
 
-    // 4. Топ-5 продаваемых товаров
+    // 3b. Динамика продаж по месяцам
+    const monthlySalesRaw = await this.databaseService.db
+      .select({
+        month: sql<string>`to_char(${orders.createdAt}, 'YYYY-MM')`,
+        revenue: sql<string>`coalesce(sum(${orders.totalAmount}), 0)`,
+        ordersCount: count()
+      })
+      .from(orders)
+      .where(whereClause)
+      .groupBy(sql`to_char(${orders.createdAt}, 'YYYY-MM')`)
+      .orderBy(sql`to_char(${orders.createdAt}, 'YYYY-MM')`);
+
+    const monthlySales = monthlySalesRaw.map((row) => ({
+      month: row.month,
+      revenue: Number(row.revenue),
+      ordersCount: Number(row.ordersCount)
+    }));
+
+    // 4. Топ-10 продаваемых товаров
     const topProductsRaw = await this.databaseService.db
       .select({
         productId: sql<string>`coalesce(${orderItems.productId}::text, 'unknown')`,
@@ -138,7 +169,7 @@ export class AnalyticsService {
       .where(whereClause)
       .groupBy(orderItems.productId, orderItems.productName)
       .orderBy(desc(sql`sum(${orderItems.totalPrice})`))
-      .limit(5);
+      .limit(10);
 
     const topProducts = topProductsRaw.map((p) => ({
       productId: p.productId,
@@ -154,6 +185,7 @@ export class AnalyticsService {
       averageOrderValue,
       statusBreakdown,
       dailySales,
+      monthlySales,
       topProducts
     };
   }
@@ -166,7 +198,23 @@ export class AnalyticsService {
       conditions.push(gte(orders.createdAt, startDate));
     }
     if (endDate) {
-      conditions.push(lte(orders.createdAt, endDate));
+      const endOfDay = new Date(endDate);
+      if (query.endDate && query.endDate.length <= 10) {
+        endOfDay.setHours(23, 59, 59, 999);
+      }
+      conditions.push(lte(orders.createdAt, endOfDay));
+    }
+    if (query.status) {
+      conditions.push(eq(orders.status, query.status));
+    }
+    if (query.minAmount !== undefined) {
+      conditions.push(gte(orders.totalAmount, query.minAmount));
+    }
+    if (query.maxAmount !== undefined) {
+      conditions.push(lte(orders.totalAmount, query.maxAmount));
+    }
+    if (query.storeId) {
+      conditions.push(eq(orders.storeId, query.storeId));
     }
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
@@ -180,6 +228,57 @@ export class AnalyticsService {
       .from(orders)
       .where(whereClause);
 
+    // 1b. Распределение по статусам
+    const statusCounts = await this.databaseService.db
+      .select({
+        status: orders.status,
+        count: count()
+      })
+      .from(orders)
+      .where(whereClause)
+      .groupBy(orders.status);
+
+    const statusBreakdown: Record<string, number> = {};
+    for (const sc of statusCounts) {
+      statusBreakdown[sc.status] = Number(sc.count);
+    }
+
+    // 1c. Динамика продаж по дням
+    const dailySalesRaw = await this.databaseService.db
+      .select({
+        date: sql<string>`to_char(${orders.createdAt}, 'YYYY-MM-DD')`,
+        revenue: sql<string>`coalesce(sum(${orders.totalAmount}), 0)`,
+        ordersCount: count()
+      })
+      .from(orders)
+      .where(whereClause)
+      .groupBy(sql`to_char(${orders.createdAt}, 'YYYY-MM-DD')`)
+      .orderBy(sql`to_char(${orders.createdAt}, 'YYYY-MM-DD')`);
+
+    const dailySales = dailySalesRaw.map((row) => ({
+      date: row.date,
+      revenue: Number(row.revenue),
+      ordersCount: Number(row.ordersCount)
+    }));
+
+    // 1d. Динамика продаж по месяцам
+    const monthlySalesRaw = await this.databaseService.db
+      .select({
+        month: sql<string>`to_char(${orders.createdAt}, 'YYYY-MM')`,
+        revenue: sql<string>`coalesce(sum(${orders.totalAmount}), 0)`,
+        ordersCount: count()
+      })
+      .from(orders)
+      .where(whereClause)
+      .groupBy(sql`to_char(${orders.createdAt}, 'YYYY-MM')`)
+      .orderBy(sql`to_char(${orders.createdAt}, 'YYYY-MM')`);
+
+    const monthlySales = monthlySalesRaw.map((row) => ({
+      month: row.month,
+      revenue: Number(row.revenue),
+      ordersCount: Number(row.ordersCount)
+    }));
+
     // 2. Количество магазинов
     const [storesCount] = await this.databaseService.db
       .select({
@@ -191,7 +290,7 @@ export class AnalyticsService {
     // 3. Количество товаров
     const [productsCount] = await this.databaseService.db.select({ total: count() }).from(products);
 
-    // 4. Топ-10 магазинов по обороту
+    // 4. Топ-15 магазинов по обороту
     const topStoresRaw = await this.databaseService.db
       .select({
         storeId: stores.id,
@@ -207,8 +306,8 @@ export class AnalyticsService {
           : eq(stores.id, orders.storeId)
       )
       .groupBy(stores.id, stores.name)
-      .orderBy(desc(sql`sum(${orders.totalAmount})`))
-      .limit(10);
+      .orderBy(desc(sql`coalesce(sum(${orders.totalAmount}), 0)`))
+      .limit(15);
 
     const topStoresByRevenue = topStoresRaw.map((s) => ({
       storeId: s.storeId,
@@ -223,6 +322,9 @@ export class AnalyticsService {
       totalStores: Number(storesCount?.total || 0),
       activeStores: Number(storesCount?.active || 0),
       totalProducts: Number(productsCount?.total || 0),
+      statusBreakdown,
+      dailySales,
+      monthlySales,
       topStoresByRevenue
     };
   }

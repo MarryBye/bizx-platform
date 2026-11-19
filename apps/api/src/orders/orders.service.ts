@@ -333,7 +333,7 @@ export class OrdersService {
       throw new NotFoundException('Заказ не найден');
     }
 
-    await this.storesService.assertStoreAccess(order.storeId, userId, ['owner', 'manager', 'staff'], systemRole);
+    await this.storesService.assertStoreAccess(order.storeId, userId, ['owner', 'manager', 'staff'], systemRole, { write: true });
 
     const [updated] = await this.databaseService.db
       .update(orders)

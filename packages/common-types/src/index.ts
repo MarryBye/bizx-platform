@@ -1,6 +1,90 @@
 import { z } from 'zod';
 
 /**
+ * Підписки та тарифні плани BizX
+ */
+export const subscriptionTierSchema = z.enum([
+  'free',
+  'client_premium',
+  'business_starter',
+  'business_pro',
+  'business_enterprise'
+]);
+export type SubscriptionTier = z.infer<typeof subscriptionTierSchema>;
+
+export const subscriptionStatusSchema = z.enum([
+  'none',
+  'active',
+  'expired',
+  'cancelled'
+]);
+export type SubscriptionStatus = z.infer<typeof subscriptionStatusSchema>;
+
+export const subscribeDtoSchema = z.object({
+  tier: subscriptionTierSchema,
+  periodDays: z.number().int().positive().default(30).optional()
+});
+export type SubscribeDto = z.infer<typeof subscribeDtoSchema>;
+
+export const subscriptionPlanSchema = z.object({
+  id: subscriptionTierSchema,
+  name: z.string(),
+  target: z.enum(['client', 'business']),
+  priceUah: z.number(),
+  period: z.string(),
+  maxStores: z.number(),
+  badge: z.string().optional(),
+  popular: z.boolean().optional(),
+  features: z.array(z.string())
+});
+export type SubscriptionPlan = z.infer<typeof subscriptionPlanSchema>;
+
+export const userSubscriptionDetailsSchema = z.object({
+  tier: subscriptionTierSchema,
+  status: subscriptionStatusSchema,
+  expiresAt: z.string().datetime().nullable(),
+  daysLeft: z.number().int(),
+  maxAllowedStores: z.number().int(),
+  activeStoresCount: z.number().int(),
+  suspendedStoresCount: z.number().int().optional().default(0),
+  totalStoresCount: z.number().int().optional().default(0),
+  hasExceededStoreLimit: z.boolean(),
+  needsStoreSelection: z.boolean().optional().default(false),
+  canAccessBusinessAdmin: z.boolean()
+});
+export type UserSubscriptionDetails = z.infer<typeof userSubscriptionDetailsSchema>;
+
+export const SUBSCRIPTION_TIER_LIMITS: Record<SubscriptionTier, { maxStores: number; target: 'client' | 'business' }> = {
+  free: { maxStores: 0, target: 'client' },
+  client_premium: { maxStores: 0, target: 'client' },
+  business_starter: { maxStores: 1, target: 'business' },
+  business_pro: { maxStores: 3, target: 'business' },
+  business_enterprise: { maxStores: 10, target: 'business' }
+};
+
+export function getMaxAllowedStoresForTier(tier?: string | null): number {
+  if (!tier || !(tier in SUBSCRIPTION_TIER_LIMITS)) return 0;
+  return SUBSCRIPTION_TIER_LIMITS[tier as SubscriptionTier].maxStores;
+}
+
+export function isBusinessTier(tier?: string | null): boolean {
+  return tier === 'business_starter' || tier === 'business_pro' || tier === 'business_enterprise';
+}
+
+/**
+ * Локалізація та мови (i18n)
+ */
+export const supportedLocaleSchema = z.enum(['uk', 'en']);
+export type SupportedLocale = z.infer<typeof supportedLocaleSchema>;
+
+export function getNormalizedLocale(input?: string | null): SupportedLocale {
+  if (!input) return 'uk';
+  const clean = input.toLowerCase().trim();
+  if (clean === 'en' || clean.startsWith('en-') || clean === 'eng') return 'en';
+  return 'uk';
+}
+
+/**
  * Пользователи и авторизация
  */
 export const userSchema = z.object({
@@ -9,7 +93,13 @@ export const userSchema = z.object({
   name: z.string().min(2, { message: 'Имя должно содержать минимум 2 символа' }),
   phone: z.string().nullable().optional(),
   avatarUrl: z.string().nullable().optional(),
+  preferredLanguage: supportedLocaleSchema.default('uk').optional(),
   status: z.enum(['active', 'suspended', 'archived']).default('active').optional(),
+  subscriptionTier: subscriptionTierSchema.default('free').optional(),
+  subscriptionStatus: subscriptionStatusSchema.default('none').optional(),
+  subscriptionExpiresAt: z.string().datetime().nullable().optional(),
+  subscriptionDaysLeft: z.number().int().default(0).optional(),
+  maxAllowedStores: z.number().int().default(0).optional(),
   archivedAt: z.string().datetime().nullable().optional(),
   createdAt: z.string().datetime().optional()
 });
@@ -60,6 +150,8 @@ export const updateStoreMemberDtoSchema = z.object({
 
 export type UpdateStoreMemberDto = z.infer<typeof updateStoreMemberDtoSchema>;
 
+
+
 export const userProfileSchema = z.object({
   id: z.string().uuid(),
   email: z.string().email({ message: 'Некорректный email адрес' }),
@@ -68,7 +160,13 @@ export const userProfileSchema = z.object({
   systemRole: systemRoleSchema.default('user'),
   phone: z.string().nullable().optional(),
   avatarUrl: z.string().nullable().optional(),
+  preferredLanguage: supportedLocaleSchema.default('uk').optional(),
   status: z.enum(['active', 'suspended', 'archived']).default('active').optional(),
+  subscriptionTier: subscriptionTierSchema.default('free').optional(),
+  subscriptionStatus: subscriptionStatusSchema.default('none').optional(),
+  subscriptionExpiresAt: z.string().datetime().nullable().optional(),
+  subscriptionDaysLeft: z.number().int().default(0).optional(),
+  maxAllowedStores: z.number().int().default(0).optional(),
   archivedAt: z.string().datetime().nullable().optional(),
   createdAt: z.string().datetime().optional()
 });
@@ -78,24 +176,45 @@ export type UserProfile = z.infer<typeof userProfileSchema>;
 export const updateUserProfileDtoSchema = z.object({
   name: z.string().min(2, { message: 'Имя должно содержать минимум 2 символа' }).optional(),
   phone: z.string().nullable().optional(),
-  avatarUrl: z.string().nullable().optional()
+  avatarUrl: z.string().nullable().optional(),
+  preferredLanguage: supportedLocaleSchema.optional()
 });
 
 export type UpdateUserProfileDto = z.infer<typeof updateUserProfileDtoSchema>;
+
+/**
+ * Нормалізація номеру телефону до формату E.164 (+380XXXXXXXXX)
+ */
+export function normalizePhone(raw?: string | null): string | null {
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const digits = trimmed.replace(/\D/g, '');
+  if (digits.length < 7 || digits.length > 15) return null;
+  return `+${digits}`;
+}
 
 export const registerDtoSchema = z.object({
   email: z.string().email({ message: 'Некорректный email адрес' }),
   password: z.string().min(6, { message: 'Пароль должен содержать минимум 6 символов' }),
   name: z.string().min(2, { message: 'Имя должно содержать минимум 2 символа' }),
-  role: userRoleSchema.optional().default('client')
+  phone: z.string().nullable().optional(),
+  role: z.literal('client').optional().default('client')
 });
 
 export type RegisterDto = z.infer<typeof registerDtoSchema>;
 
-export const loginDtoSchema = z.object({
-  email: z.string().email({ message: 'Некорректный email адрес' }),
-  password: z.string().min(1, { message: 'Введите пароль' })
-});
+export const loginDtoSchema = z
+  .object({
+    email: z.string().email({ message: 'Некорректный email адрес' }).optional(),
+    phone: z.string().min(7, { message: 'Некорректный номер телефона' }).optional(),
+    identifier: z.string().min(3, { message: 'Введите email или телефон' }).optional(),
+    password: z.string().min(1, { message: 'Введите пароль' })
+  })
+  .refine((data) => Boolean(data.email || data.phone || data.identifier), {
+    message: 'Укажите email или номер телефона',
+    path: ['email']
+  });
 
 export type LoginDto = z.infer<typeof loginDtoSchema>;
 
@@ -149,7 +268,7 @@ export type UpdateStoreCategoryDto = z.infer<typeof updateStoreCategoryDtoSchema
 /**
  * Магазины (бизнесы-партнеры)
  */
-export const storeStatusSchema = z.enum(['active', 'pending', 'suspended', 'closed', 'archived']);
+export const storeStatusSchema = z.enum(['draft', 'pending', 'active', 'suspended', 'closed', 'archived']);
 export type StoreStatus = z.infer<typeof storeStatusSchema>;
 
 export const storeSchema = z.object({
@@ -164,7 +283,7 @@ export const storeSchema = z.object({
   address: z.string().nullable().optional(),
   phone: z.string().nullable().optional(),
   email: z.string().email().nullable().optional(),
-  status: storeStatusSchema.default('active'),
+  status: storeStatusSchema.default('draft'),
   memberRole: storeMemberRoleSchema.optional(),
   archivedAt: z.string().datetime().nullable().optional(),
   createdAt: z.string().datetime().optional(),
@@ -346,13 +465,23 @@ export type AnalyticsPeriod = z.infer<typeof analyticsPeriodSchema>;
 
 export const analyticsQuerySchema = z.object({
   period: analyticsPeriodSchema.default('month'),
-  startDate: z.string().datetime().optional(),
-  endDate: z.string().datetime().optional()
+  startDate: z.string().optional(),
+  endDate: z.string().optional(),
+  status: orderStatusSchema.optional(),
+  minAmount: z.coerce.number().int().nonnegative().optional(),
+  maxAmount: z.coerce.number().int().nonnegative().optional(),
+  storeId: z.string().uuid().optional()
 });
 export type AnalyticsQuery = z.infer<typeof analyticsQuerySchema>;
 
 export interface DailySalesMetric {
   date: string;
+  revenue: number;
+  ordersCount: number;
+}
+
+export interface MonthlySalesMetric {
+  month: string;
   revenue: number;
   ordersCount: number;
 }
@@ -371,6 +500,7 @@ export interface StoreAnalytics {
   averageOrderValue: number;
   statusBreakdown: Record<string, number>;
   dailySales: DailySalesMetric[];
+  monthlySales?: MonthlySalesMetric[];
   topProducts: TopProductMetric[];
 }
 
@@ -380,6 +510,9 @@ export interface PlatformAnalytics {
   totalStores: number;
   activeStores: number;
   totalProducts: number;
+  statusBreakdown?: Record<string, number>;
+  dailySales?: DailySalesMetric[];
+  monthlySales?: MonthlySalesMetric[];
   topStoresByRevenue: {
     storeId: string;
     storeName: string;
