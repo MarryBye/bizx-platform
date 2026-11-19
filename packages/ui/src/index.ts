@@ -12,3 +12,6 @@ export * from './components/auth-card';
 export * from './components/country-flag';
 export * from './components/language-selector';
 export * from './components/phone-input';
+export * from './components/permission-matrix';
+export * from './components/roles-manager';
+export * from './components/team-manager';
