@@ -165,6 +165,7 @@ export const STORE_PERMISSIONS: PermissionDefinition[] = [
   // Замовлення
   { id: 111, code: 'orders.read', scope: 'store', category: 'orders', action: 'read', ownerOnly: false },
   { id: 112, code: 'orders.edit', scope: 'store', category: 'orders', action: 'edit', ownerOnly: false },
+  { id: 113, code: 'orders.refund', scope: 'store', category: 'orders', action: 'manage', ownerOnly: false },
   // Статистика та аналітика
   { id: 121, code: 'analytics.read', scope: 'store', category: 'analytics', action: 'read', ownerOnly: false },
   { id: 122, code: 'analytics.export', scope: 'store', category: 'analytics', action: 'export', ownerOnly: false },
@@ -208,7 +209,11 @@ export const PLATFORM_PERMISSIONS: PermissionDefinition[] = [
   { id: 241, code: 'platform.roles.read', scope: 'platform', category: 'platform_roles', action: 'read', ownerOnly: false },
   { id: 242, code: 'platform.roles.write', scope: 'platform', category: 'platform_roles', action: 'write', ownerOnly: false },
   { id: 243, code: 'platform.roles.edit', scope: 'platform', category: 'platform_roles', action: 'edit', ownerOnly: false },
-  { id: 244, code: 'platform.roles.archive', scope: 'platform', category: 'platform_roles', action: 'archive', ownerOnly: false }
+  { id: 244, code: 'platform.roles.archive', scope: 'platform', category: 'platform_roles', action: 'archive', ownerOnly: false },
+  // Скарги та арбітраж
+  { id: 251, code: 'platform.disputes.read', scope: 'platform', category: 'platform_disputes', action: 'read', ownerOnly: false },
+  { id: 252, code: 'platform.disputes.resolve', scope: 'platform', category: 'platform_disputes', action: 'manage', ownerOnly: false },
+  { id: 253, code: 'platform.strikes.revoke', scope: 'platform', category: 'platform_disputes', action: 'manage', ownerOnly: false }
 ];
 
 export const ALL_PERMISSIONS: PermissionDefinition[] = [
@@ -225,6 +230,7 @@ export type StorePermissionCode =
   | 'products.archive'
   | 'orders.read'
   | 'orders.edit'
+  | 'orders.refund'
   | 'analytics.read'
   | 'analytics.export'
   | 'store.read'
@@ -257,7 +263,10 @@ export type PlatformPermissionCode =
   | 'platform.roles.read'
   | 'platform.roles.write'
   | 'platform.roles.edit'
-  | 'platform.roles.archive';
+  | 'platform.roles.archive'
+  | 'platform.disputes.read'
+  | 'platform.disputes.resolve'
+  | 'platform.strikes.revoke';
 
 export const OWNER_ROLE_PRIORITY = 10000;
 
@@ -540,6 +549,15 @@ export const storeSchema = z.object({
   phone: z.string().nullable().optional(),
   email: z.string().email().nullable().optional(),
   status: storeStatusSchema.default('draft'),
+  customDomain: z.string().nullable().optional(),
+  customDomainVerified: z.boolean().optional(),
+  domainVerificationToken: z.string().nullable().optional(),
+  suspendedUntil: z.string().datetime().nullable().optional(),
+  suspensionReason: z.string().nullable().optional(),
+  payoutBalance: z.number().int().optional(),
+  ratingAvg: z.number().optional(),
+  ratingCount: z.number().int().optional(),
+  activeStrikesCount: z.number().int().optional(),
   myRoleName: z.string().nullable().optional(),
   myRoleIcon: z.string().nullable().optional(),
   archivedAt: z.string().datetime().nullable().optional(),
@@ -657,7 +675,7 @@ export const orderStatusSchema = z.enum([
 ]);
 export type OrderStatus = z.infer<typeof orderStatusSchema>;
 
-export const paymentStatusSchema = z.enum(['pending', 'paid', 'failed']);
+export const paymentStatusSchema = z.enum(['pending', 'paid', 'failed', 'refunded']);
 export type PaymentStatus = z.infer<typeof paymentStatusSchema>;
 
 export const createOrderItemDtoSchema = z.object({
@@ -707,6 +725,11 @@ export const orderResponseSchema = z.object({
   contactName: z.string(),
   paymentStatus: paymentStatusSchema,
   paymentMethod: z.string(),
+  payoutStatus: z.enum(['held', 'released', 'refunded', 'clawback']).optional(),
+  refundOfferStatus: z.enum(['pending_customer', 'accepted', 'declined']).nullable().optional(),
+  refundOfferAmount: z.number().int().nullable().optional(),
+  refundOfferReason: z.string().nullable().optional(),
+  refundOfferedAt: z.string().nullable().optional(),
   notes: z.string().nullable().optional(),
   items: z.array(orderItemResponseSchema).optional(),
   createdAt: z.string(),
@@ -821,3 +844,250 @@ export interface PaginatedResult<T> {
   page: number;
   pageSize: number;
 }
+
+/**
+ * ============================================================================
+ * Чат по замовленням, спори, швидкі повернення, страйки, відгуки та домени
+ * ============================================================================
+ */
+
+export function formatCompactCount(count: number): string {
+  if (!count || count <= 0) return '';
+  if (count < 1000) return String(count);
+  if (count < 10000) return `${(count / 1000).toFixed(1).replace(/\.0$/, '')}k`;
+  if (count < 1_000_000) return `${Math.floor(count / 1000)}k`;
+  return `${(count / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
+}
+
+export const orderMessageAttachmentSchema = z.object({
+  url: z.string().min(1),
+  fileName: z.string().min(1).max(255),
+  mimeType: z.string().min(1).max(120),
+  size: z.number().int().nonnegative().optional()
+});
+export type OrderMessageAttachmentDto = z.infer<typeof orderMessageAttachmentSchema>;
+
+export const sendOrderMessageDtoSchema = z
+  .object({
+    body: z.string().max(4000).optional(),
+    attachments: z.array(orderMessageAttachmentSchema).max(6).default([]).optional()
+  })
+  .refine(
+    (v) => Boolean((v.body && v.body.trim().length > 0) || (v.attachments && v.attachments.length > 0)),
+    { message: 'Повідомлення не може бути порожнім' }
+  );
+export type SendOrderMessageDto = z.infer<typeof sendOrderMessageDtoSchema>;
+
+export type OrderMessageSenderType = 'customer' | 'store' | 'platform' | 'system';
+
+export interface OrderMessageItem {
+  id: string;
+  orderId: string;
+  senderId: string | null;
+  senderName: string | null;
+  senderType: OrderMessageSenderType;
+  body: string | null;
+  attachments: OrderMessageAttachmentDto[];
+  readByCustomerAt: string | null;
+  readByStoreAt: string | null;
+  createdAt: string;
+}
+
+export const createRefundOfferDtoSchema = z.object({
+  amount: z.number().int().positive().optional(),
+  reason: z.string().min(2, 'Вкажіть причину повернення').max(1000)
+});
+export type CreateRefundOfferDto = z.infer<typeof createRefundOfferDtoSchema>;
+
+export const respondRefundOfferDtoSchema = z.object({
+  accept: z.boolean()
+});
+export type RespondRefundOfferDto = z.infer<typeof respondRefundOfferDtoSchema>;
+
+export const disputeCategorySchema = z.enum([
+  'not_received',
+  'damaged',
+  'wrong_item',
+  'missing_items',
+  'poor_quality',
+  'other'
+]);
+export type DisputeCategory = z.infer<typeof disputeCategorySchema>;
+
+export const DISPUTE_CATEGORIES: DisputeCategory[] = [
+  'not_received',
+  'damaged',
+  'wrong_item',
+  'missing_items',
+  'poor_quality',
+  'other'
+];
+
+export const disputeStatusSchema = z.enum([
+  'open_store',
+  'escalated_platform',
+  'withdrawn',
+  'resolved_refund',
+  'resolved_business',
+  'resolved_customer'
+]);
+export type DisputeStatus = z.infer<typeof disputeStatusSchema>;
+
+export const createDisputeDtoSchema = z.object({
+  category: disputeCategorySchema,
+  description: z.string().min(5, 'Опишіть проблему детальніше (мін. 5 символів)').max(2000)
+});
+export type CreateDisputeDto = z.infer<typeof createDisputeDtoSchema>;
+
+export const escalateDisputeDtoSchema = z.object({
+  reason: z.string().max(1000).optional()
+});
+export type EscalateDisputeDto = z.infer<typeof escalateDisputeDtoSchema>;
+
+export const resolveDisputeDtoSchema = z.object({
+  decision: z.enum(['business', 'customer']),
+  resolutionNote: z.string().min(3, 'Вкажіть обґрунтування рішення').max(2000),
+  issueStrike: z.boolean().optional(),
+  strikeReason: z.string().max(1000).optional(),
+  /** Кількість днів блокування при 3-му страйку (null або 0 = до ручного зняття) */
+  suspensionDays: z.number().int().min(1).max(365).nullable().optional()
+});
+export type ResolveDisputeDto = z.infer<typeof resolveDisputeDtoSchema>;
+
+export const revokeStrikeDtoSchema = z.object({
+  revokeReason: z.string().min(3, 'Вкажіть причину зняття страйку').max(1000),
+  liftSuspension: z.boolean().default(true).optional()
+});
+export type RevokeStrikeDto = z.infer<typeof revokeStrikeDtoSchema>;
+
+export interface OrderDisputeItem {
+  id: string;
+  orderId: string;
+  storeId: string;
+  customerId: string | null;
+  category: DisputeCategory;
+  description: string;
+  status: DisputeStatus;
+  escalatedAt: string | null;
+  escalationReason: string | null;
+  resolvedAt: string | null;
+  resolvedByUserId: string | null;
+  resolutionNote: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StoreStrikeItem {
+  id: string;
+  storeId: string;
+  disputeId: string | null;
+  issuedByUserId: string | null;
+  issuedByName?: string | null;
+  reason: string;
+  suspensionDays: number | null;
+  expiresAt: string | null;
+  revokedAt: string | null;
+  revokedByUserId: string | null;
+  revokedByName?: string | null;
+  revokeReason: string | null;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface PlatformDisputeListItem extends OrderDisputeItem {
+  orderNumber: string;
+  orderTotalAmount: number;
+  orderStatus: string;
+  orderPayoutStatus: string;
+  storeName: string;
+  storeSlug: string;
+  storeStatus: string;
+  storeSuspendedUntil: string | null;
+  storeActiveStrikes: number;
+  customerName: string;
+  customerEmail: string | null;
+  customerPhone: string | null;
+  messagesCount: number;
+}
+
+export const createStoreReviewDtoSchema = z.object({
+  rating: z.number().int().min(1).max(5),
+  comment: z.string().max(1000).optional()
+});
+export type CreateStoreReviewDto = z.infer<typeof createStoreReviewDtoSchema>;
+
+export interface StoreReviewItem {
+  id: string;
+  storeId: string;
+  orderId: string;
+  customerId: string | null;
+  customerName: string;
+  rating: number;
+  comment: string | null;
+  createdAt: string;
+}
+
+export interface StoreReviewsResponse {
+  ratingAvg: number;
+  ratingCount: number;
+  distribution: Record<number, number>;
+  reviews: StoreReviewItem[];
+}
+
+export const updateStoreDomainDtoSchema = z.object({
+  customDomain: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .max(255)
+    .nullable()
+    .refine(
+      (val) => {
+        if (!val) return true;
+        return /^(?!-)[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(val) && !val.endsWith('.bizx.ua') && val !== 'bizx.ua';
+      },
+      { message: 'Введіть коректне доменне ім’я (наприклад, shop.example.ua)' }
+    )
+});
+export type UpdateStoreDomainDto = z.infer<typeof updateStoreDomainDtoSchema>;
+
+export interface DomainVerificationResult {
+  customDomain: string | null;
+  verified: boolean;
+  txtRecordName: string | null;
+  txtRecordValue: string | null;
+  cnameTarget: string;
+  txtMatched: boolean;
+  cnameMatched: boolean;
+  message: string;
+}
+
+export const CUSTOMER_QUICK_REPLIES = {
+  uk: [
+    'Вітаю! Є питання щодо мого замовлення',
+    'Підкажіть, коли очікувати відправку?',
+    'Чи можна змінити адресу доставки?',
+    'Дякую, все зрозуміло!'
+  ],
+  en: [
+    'Hello! I have a question about my order',
+    'Could you tell me when it will ship?',
+    'Can I update my delivery address?',
+    'Thank you, got it!'
+  ]
+} as const;
+
+export const STORE_QUICK_REPLIES = {
+  uk: [
+    'Вітаємо! Дякуємо за замовлення, чим можемо допомогти?',
+    'Уточнюємо інформацію, відповімо за хвилину',
+    'Замовлення зібрано та передано у доставку',
+    'Перепрошуємо за незручності, вирішуємо питання!'
+  ],
+  en: [
+    'Hello! Thanks for your order — how can we help?',
+    'Checking the details, we will get back to you shortly',
+    'Your order is packed and handed over for delivery',
+    'Sorry for the inconvenience, we are resolving this right away!'
+  ]
+} as const;

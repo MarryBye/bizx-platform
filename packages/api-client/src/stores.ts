@@ -8,7 +8,10 @@ import type {
   AddStoreMemberDto,
   CreateStoreDto,
   UpdateStoreDto,
-  StoreFilterQuery
+  StoreFilterQuery,
+  StoreReviewsResponse,
+  UpdateStoreDomainDto,
+  DomainVerificationResult
 } from '@bizx/common-types';
 
 export class StoresModule {
@@ -141,6 +144,37 @@ export class StoresModule {
   ): Promise<ApiResponse<{ message: string }>> {
     return this.client.delete<ApiResponse<{ message: string }>>(
       `/stores/${storeId}/members/${memberId}`
+    );
+  }
+
+  /**
+   * Відгуки та рейтинг закладу (GET /stores/:storeId/reviews)
+   */
+  async getReviews(storeId: string): Promise<ApiResponse<StoreReviewsResponse>> {
+    return this.client.get<ApiResponse<StoreReviewsResponse>>(`/stores/${storeId}/reviews`);
+  }
+
+  /**
+   * Прив'язка власного домену закладу (PATCH /stores/:id/domain)
+   */
+  async updateDomain(id: string, dto: UpdateStoreDomainDto): Promise<ApiResponse<Store>> {
+    return this.client.patch<ApiResponse<Store>>(`/stores/${id}/domain`, dto);
+  }
+
+  /**
+   * Перевірка DNS записів власного домену (POST /stores/:id/domain/verify)
+   */
+  async verifyDomain(id: string): Promise<ApiResponse<DomainVerificationResult>> {
+    return this.client.post<ApiResponse<DomainVerificationResult>>(`/stores/${id}/domain/verify`, {});
+  }
+
+  /**
+   * Визначення закладу за Host (піддомен або власний домен)
+   */
+  async resolveHost(host: string): Promise<ApiResponse<{ slug: string; storeId: string; name: string } | null>> {
+    return this.client.get<ApiResponse<{ slug: string; storeId: string; name: string } | null>>(
+      '/stores/resolve-host',
+      { params: { host } }
     );
   }
 }
