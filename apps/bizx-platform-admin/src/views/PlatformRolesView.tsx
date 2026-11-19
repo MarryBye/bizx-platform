@@ -52,6 +52,7 @@ export const PlatformRolesView: React.FC = () => {
       canEdit={myAccess.permissions.includes('platform.roles.edit')}
       isLoading={isLoading}
       locale={locale}
+      t={t}
       onCreateRole={async (dto) => {
         const res = await platformApi.rbac.createPlatformRole(dto);
         if (!res.success) throw new Error('Failed to create role');

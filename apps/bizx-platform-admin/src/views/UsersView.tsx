@@ -27,7 +27,11 @@ export const UsersView: React.FC<UsersViewProps> = ({ users, onSelectUser, isLoa
       u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (u.phone && u.phone.includes(searchQuery));
 
-    const matchesRole = roleFilter === 'all' || u.role === roleFilter;
+    const matchesRole =
+      roleFilter === 'all' ||
+      (roleFilter === 'platform_staff' && u.isPlatformStaff) ||
+      (roleFilter === 'business_owner' && u.isBusinessOwner) ||
+      (roleFilter === 'client' && !u.isPlatformStaff && !u.isBusinessOwner);
     const matchesStatus = statusFilter === 'all' || u.status === statusFilter;
 
     return matchesSearch && matchesRole && matchesStatus;
@@ -42,27 +46,26 @@ export const UsersView: React.FC<UsersViewProps> = ({ users, onSelectUser, isLoa
       .join('');
   };
 
-  const getRoleBadge = (role: string) => {
-    switch (role) {
-      case 'business_owner':
-        return (
-          <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-            {t('auth.businessRole')}
-          </span>
-        );
-      case 'admin':
-        return (
-          <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-200">
-            {t('roles.platformAdmin')}
-          </span>
-        );
-      default:
-        return (
-          <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
-            {t('auth.clientRole')}
-          </span>
-        );
+  const getAccountTypeBadge = (u: PlatformUserRecord) => {
+    if (u.isPlatformStaff) {
+      return (
+        <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-200">
+          {t('roles.platformAdmin')}
+        </span>
+      );
     }
+    if (u.isBusinessOwner) {
+      return (
+        <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+          {t('auth.businessRole')} ({u.storesCount})
+        </span>
+      );
+    }
+    return (
+      <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+        {t('auth.clientRole')}
+      </span>
+    );
   };
 
   const getStatusBadge = (status: string) => {
@@ -135,10 +138,10 @@ export const UsersView: React.FC<UsersViewProps> = ({ users, onSelectUser, isLoa
             onChange={(e) => setRoleFilter(e.target.value)}
             className="text-xs font-semibold px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-slate-900 text-slate-700"
           >
-            <option value="all">Всі ролі</option>
+            <option value="all">Усі типи</option>
             <option value="business_owner">Власники бізнесу</option>
             <option value="client">Клієнти</option>
-            <option value="admin">Адміністратори</option>
+            <option value="platform_staff">Команда BizX</option>
           </select>
 
           {/* Status Filter */}
@@ -193,14 +196,14 @@ export const UsersView: React.FC<UsersViewProps> = ({ users, onSelectUser, isLoa
                       </div>
                     </td>
 
-                    {/* Role */}
-                    <td className="py-3.5 px-4">{getRoleBadge(u.role)}</td>
+                    {/* Account Type */}
+                    <td className="py-3.5 px-4">{getAccountTypeBadge(u)}</td>
 
-                    {/* System Access */}
+                    {/* Platform RBAC Access */}
                     <td className="py-3.5 px-4">
-                      {u.systemRole === 'platform_admin' ? (
+                      {u.isPlatformStaff ? (
                         <span className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded">
-                          <ShieldCheck className="w-3.5 h-3.5" /> BizX Staff
+                          <ShieldCheck className="w-3.5 h-3.5" /> {u.platformRoleName || 'BizX Staff'}
                         </span>
                       ) : (
                         <span className="text-[11px] text-slate-400">Звичайний</span>

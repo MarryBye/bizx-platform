@@ -119,8 +119,8 @@ export const SiteHeader: React.FC = () => {
     window.location.reload();
   };
 
-  const isBusinessUser = user?.role === 'business_owner' || stores.length > 0;
-  const isPlatformStaff = user?.systemRole === 'platform_admin';
+  const isBusinessUser = Boolean(user?.hasStoreAccess || user?.isBusinessOwner || stores.length > 0);
+  const isPlatformStaff = Boolean(user?.isPlatformStaff);
 
   const getInitials = (name?: string) => {
     if (!name) return 'U';

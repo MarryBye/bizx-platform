@@ -55,8 +55,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           name: data.name || '',
           email: data.email,
           phone: data.phone || undefined,
-          password: data.password,
-          role: 'client'
+          password: data.password
         });
         if (res.success && res.data) {
           onSuccess(res.data.user);

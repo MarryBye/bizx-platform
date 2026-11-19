@@ -12,8 +12,10 @@ export interface PlatformUserRecord {
   name: string;
   email: string;
   phone?: string | null;
-  role: 'business_owner' | 'client' | 'admin';
-  systemRole: 'user' | 'platform_admin';
+  isPlatformStaff: boolean;
+  platformRoleName?: string | null;
+  isBusinessOwner: boolean;
+  storesCount: number;
   status: 'active' | 'suspended' | 'archived';
   createdAt: string;
 }
@@ -23,15 +25,13 @@ interface UserDetailsModalProps {
   isOpen: boolean;
   onClose: () => void;
   onUpdateStatus: (userId: string, newStatus: 'active' | 'suspended' | 'archived') => void;
-  onTogglePlatformRole: (userId: string, newSystemRole: 'user' | 'platform_admin') => void;
 }
 
 export const UserDetailsModal: React.FC<UserDetailsModalProps> = ({
   user,
   isOpen,
   onClose,
-  onUpdateStatus,
-  onTogglePlatformRole
+  onUpdateStatus
 }) => {
   if (!isOpen || !user) return null;
 
@@ -44,27 +44,26 @@ export const UserDetailsModal: React.FC<UserDetailsModalProps> = ({
       .join('');
   };
 
-  const getRoleBadge = (role: string) => {
-    switch (role) {
-      case 'business_owner':
-        return (
-          <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
-            Власник бізнесу
-          </span>
-        );
-      case 'admin':
-        return (
-          <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800">
-            Адміністратор
-          </span>
-        );
-      default:
-        return (
-          <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700">
-            Клієнт
-          </span>
-        );
+  const renderAccountBadge = (u: PlatformUserRecord) => {
+    if (u.isPlatformStaff) {
+      return (
+        <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800">
+          {u.platformRoleName || 'BizX Staff'}
+        </span>
+      );
     }
+    if (u.isBusinessOwner) {
+      return (
+        <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
+          Власник бізнесу ({u.storesCount})
+        </span>
+      );
+    }
+    return (
+      <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700">
+        Клієнт
+      </span>
+    );
   };
 
   return (
@@ -80,9 +79,9 @@ export const UserDetailsModal: React.FC<UserDetailsModalProps> = ({
               {getInitials(user.name || 'U')}
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-base font-black text-slate-900">{user.name}</h2>
-                {getRoleBadge(user.role)}
+                {renderAccountBadge(user)}
               </div>
               <p className="text-xs text-slate-500 font-mono">{user.email}</p>
             </div>
@@ -117,12 +116,12 @@ export const UserDetailsModal: React.FC<UserDetailsModalProps> = ({
 
             <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-xl space-y-1">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                Системний статус
+                Доступ до консолі
               </span>
               <div className="text-xs font-bold text-slate-800">
-                {user.systemRole === 'platform_admin' ? (
+                {user.isPlatformStaff ? (
                   <span className="text-blue-700 font-bold flex items-center gap-1">
-                    <ShieldCheck className="w-3.5 h-3.5" /> BizX Staff
+                    <ShieldCheck className="w-3.5 h-3.5" /> {user.platformRoleName || 'BizX Staff'}
                   </span>
                 ) : (
                   <span className="text-slate-600">Звичайний користувач</span>
@@ -191,33 +190,9 @@ export const UserDetailsModal: React.FC<UserDetailsModalProps> = ({
             </div>
           </div>
 
-          {/* System Role Privilege Grant */}
-          <div className="p-4 border border-slate-200 rounded-xl bg-slate-50/70 flex items-center justify-between">
-            <div>
-              <div className="text-xs font-bold text-slate-900">
-                Привілеї співробітника BizX Staff
-              </div>
-              <div className="text-[11px] text-slate-500 mt-0.5">
-                Надає повний доступ до внутрішньої консолі керування BizX
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() =>
-                onTogglePlatformRole(
-                  user.id,
-                  user.systemRole === 'platform_admin' ? 'user' : 'platform_admin'
-                )
-              }
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${
-                user.systemRole === 'platform_admin'
-                  ? 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100'
-                  : 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100'
-              }`}
-            >
-              {user.systemRole === 'platform_admin' ? 'Відкликати доступ' : 'Надати права Staff'}
-            </button>
+          <div className="p-3.5 border border-slate-200 rounded-xl bg-slate-50/70 text-[11px] text-slate-600 leading-relaxed">
+            Надання або зміна платформних ролей та індивідуальних прав доступу виконується через розділ{' '}
+            <strong className="text-slate-900">«Команда BizX»</strong> з урахуванням ієрархії RBAC.
           </div>
         </div>
 

@@ -7,12 +7,12 @@ import { Plus, Search, Archive, Image as ImageIcon, Upload, AlertCircle, Pencil 
 import { resolveMediaUrl } from '../lib/media';
 import type { Product } from '@bizx/common-types';
 
-export const ProductsView: React.FC = () => {
+export const ProductsView: React.FC<{ isReadOnly?: boolean }> = ({ isReadOnly: isReadOnlyProp }) => {
   const { products, categories, activeStore, createProduct, updateProduct, deleteProduct, isLoading } =
     useBusinessStore();
   const { hasActiveSubscription } = useAuthStore();
   const { t, locale } = useTranslation();
-  const isReadOnly = !hasActiveSubscription;
+  const isReadOnly = isReadOnlyProp !== undefined ? isReadOnlyProp : !hasActiveSubscription;
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);

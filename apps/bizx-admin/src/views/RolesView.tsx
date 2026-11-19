@@ -19,6 +19,7 @@ export const RolesView: React.FC = () => {
     permissionIds: [],
     permissions: []
   });
+  const [ownerHasActiveSub, setOwnerHasActiveSub] = useState<boolean>(hasActiveSubscription);
   const [isLoading, setIsLoading] = useState(false);
 
   const loadData = useCallback(async () => {
@@ -32,6 +33,9 @@ export const RolesView: React.FC = () => {
       if (permRes.success && permRes.data) {
         setCatalog(permRes.data.catalog);
         setMyAccess(permRes.data.myAccess);
+        if (permRes.data.ownerHasActiveSubscription !== undefined) {
+          setOwnerHasActiveSub(permRes.data.ownerHasActiveSubscription);
+        }
       }
       if (rolesRes.success && rolesRes.data) {
         setRoles(rolesRes.data);
@@ -65,9 +69,10 @@ export const RolesView: React.FC = () => {
       myAccess={myAccess}
       canCreate={myAccess.permissions.includes('roles.write')}
       canEdit={myAccess.permissions.includes('roles.edit')}
-      readOnly={!hasActiveSubscription}
+      readOnly={!ownerHasActiveSub}
       isLoading={isLoading}
       locale={locale}
+      t={t}
       onCreateRole={async (dto) => {
         const res = await api.rbac.createStoreRole(activeStoreId, dto);
         if (!res.success) throw new Error('Failed to create role');

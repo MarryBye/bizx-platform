@@ -27,6 +27,7 @@ export const StaffView: React.FC = () => {
     permissionIds: [],
     permissions: []
   });
+  const [ownerHasActiveSub, setOwnerHasActiveSub] = useState<boolean>(hasActiveSubscription);
   const [isLoading, setIsLoading] = useState(false);
 
   const loadData = useCallback(async () => {
@@ -41,6 +42,9 @@ export const StaffView: React.FC = () => {
       if (permRes.success && permRes.data) {
         setCatalog(permRes.data.catalog);
         setMyAccess(permRes.data.myAccess);
+        if (permRes.data.ownerHasActiveSubscription !== undefined) {
+          setOwnerHasActiveSub(permRes.data.ownerHasActiveSubscription);
+        }
       }
       if (rolesRes.success && rolesRes.data) {
         setRoles(rolesRes.data);
@@ -97,9 +101,10 @@ export const StaffView: React.FC = () => {
       currentUserId={currentUser?.id}
       canAdd={myAccess.permissions.includes('staff.write')}
       canEdit={myAccess.permissions.includes('staff.edit')}
-      readOnly={!hasActiveSubscription}
+      readOnly={!ownerHasActiveSub}
       isLoading={isLoading}
       locale={locale}
+      t={t}
       resolveAvatarUrl={(url) => resolveMediaUrl(url)}
       onAddMember={async (dto) => {
         const res = await api.rbac.addStoreMember(activeStoreId, dto);

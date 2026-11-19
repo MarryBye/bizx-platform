@@ -212,8 +212,10 @@ export const App: React.FC = () => {
               name: u.name,
               email: u.email,
               phone: u.phone || undefined,
-              role: (u.role as PlatformUserRecord['role']) || 'client',
-              systemRole: (u.systemRole as PlatformUserRecord['systemRole']) || 'user',
+              isPlatformStaff: Boolean(u.isPlatformStaff),
+              platformRoleName: u.platformRoleName || null,
+              isBusinessOwner: Boolean(u.isBusinessOwner),
+              storesCount: u.storesCount ?? 0,
               status: u.status,
               createdAt: new Date(u.createdAt).toLocaleDateString('uk-UA')
             }))
@@ -302,19 +304,6 @@ export const App: React.FC = () => {
     }
   };
 
-  // Handler: Toggle Platform Role
-  const handleTogglePlatformRole = (
-    userId: string,
-    newSystemRole: 'user' | 'platform_admin'
-  ) => {
-    setUsersList((prev) =>
-      prev.map((u) => (u.id === userId ? { ...u, systemRole: newSystemRole } : u))
-    );
-    if (selectedUser && selectedUser.id === userId) {
-      setSelectedUser((prev) => (prev ? { ...prev, systemRole: newSystemRole } : null));
-    }
-  };
-
   // Handler: Logout
   const handleLogout = async () => {
     try {
@@ -349,7 +338,7 @@ export const App: React.FC = () => {
     );
   }
 
-  const isStaff = currentUser.systemRole === 'platform_admin' || currentUser.role === 'admin';
+  const isStaff = Boolean(currentUser.isPlatformStaff);
 
   if (!isStaff) {
     return (
@@ -472,7 +461,6 @@ export const App: React.FC = () => {
           setSelectedUser(null);
         }}
         onUpdateStatus={handleUpdateUserStatus}
-        onTogglePlatformRole={handleTogglePlatformRole}
       />
     </PlatformLayout>
   );

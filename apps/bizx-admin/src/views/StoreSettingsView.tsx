@@ -6,11 +6,11 @@ import { Card, CardHeader, CardTitle, CardContent, Button, Input, Textarea, Phon
 import { Upload, Check, AlertCircle, Building, Image as ImageIcon } from 'lucide-react';
 import { StoreMediaImage } from '../components/StoreMediaImage';
 
-export const StoreSettingsView: React.FC = () => {
+export const StoreSettingsView: React.FC<{ isReadOnly?: boolean }> = ({ isReadOnly: isReadOnlyProp }) => {
   const { activeStore, uploadStoreMedia, updateStore, isLoading } = useBusinessStore();
   const { hasActiveSubscription } = useAuthStore();
   const { t, locale } = useTranslation();
-  const isReadOnly = !hasActiveSubscription;
+  const isReadOnly = isReadOnlyProp !== undefined ? isReadOnlyProp : !hasActiveSubscription;
 
   const [name, setName] = useState(activeStore?.name || '');
   const [description, setDescription] = useState(activeStore?.description || '');

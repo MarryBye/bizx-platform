@@ -89,6 +89,7 @@ export const StaffView: React.FC<StaffViewProps> = ({ currentUserId }) => {
       showDepartment={true}
       isLoading={isLoading}
       locale={locale}
+      t={t}
       resolveAvatarUrl={(url) => (url ? platformApi.storage.resolveMediaUrl(url) : null)}
       onAddMember={async (dto) => {
         const res = await platformApi.rbac.addPlatformMember(dto);

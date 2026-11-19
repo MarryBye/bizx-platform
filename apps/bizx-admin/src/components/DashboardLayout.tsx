@@ -40,28 +40,36 @@ export const DashboardLayout: React.FC = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
   const [myPermissions, setMyPermissions] = useState<string[] | null>(null);
+  const [ownerHasActiveSub, setOwnerHasActiveSub] = useState<boolean>(true);
 
   useEffect(() => {
     if (!activeStoreId) {
       setMyPermissions(null);
+      setOwnerHasActiveSub(hasActiveSubscription);
       return;
     }
     api.rbac
       .getStorePermissions(activeStoreId)
       .then((res) => {
         if (res.success && res.data?.myAccess) {
-          setMyPermissions(res.data.myAccess.permissions);
+          const perms = res.data.myAccess.permissions;
+          setMyPermissions(perms);
+          setOwnerHasActiveSub(
+            res.data.ownerHasActiveSubscription !== undefined
+              ? res.data.ownerHasActiveSubscription
+              : hasActiveSubscription
+          );
         }
       })
       .catch(() => {
         setMyPermissions(null);
       });
-  }, [activeStoreId]);
+  }, [activeStoreId, hasActiveSubscription]);
 
   const hasPerm = (code: string) => !myPermissions || myPermissions.includes(code);
 
   const isStoreInactive = activeStore && activeStore.status !== 'active';
-  const isReadOnly = !hasActiveSubscription;
+  const isReadOnly = activeStore ? !ownerHasActiveSub : !hasActiveSubscription;
 
   const merchantNavItems = [
     { id: 'overview' as const, label: t('admin.overview'), icon: LayoutDashboard, visible: hasPerm('analytics.read') },
@@ -73,6 +81,15 @@ export const DashboardLayout: React.FC = () => {
     { id: 'roles' as const, label: t('admin.roles'), icon: ShieldCheck, visible: hasPerm('roles.read') },
     { id: 'payouts' as const, label: t('admin.payouts'), icon: CreditCard, isStub: true, visible: true }
   ].filter((item) => item.visible);
+
+  useEffect(() => {
+    if (myPermissions && merchantNavItems.length > 0) {
+      const currentStillVisible = merchantNavItems.some((item) => item.id === currentTab);
+      if (!currentStillVisible) {
+        setCurrentTab(merchantNavItems[0].id);
+      }
+    }
+  }, [myPermissions, currentTab]);
 
   const handleLanguageChange = (next: 'uk' | 'en') => {
     setLocale(next);
@@ -349,9 +366,9 @@ export const DashboardLayout: React.FC = () => {
             <AnalyticsView onOpenDetailed={() => setCurrentTab('analytics')} />
           )}
           {currentTab === 'analytics' && <DetailedAnalyticsView />}
-          {currentTab === 'products' && <ProductsView />}
+          {currentTab === 'products' && <ProductsView isReadOnly={isReadOnly} />}
           {currentTab === 'orders' && <OrdersView />}
-          {currentTab === 'settings' && <StoreSettingsView />}
+          {currentTab === 'settings' && <StoreSettingsView isReadOnly={isReadOnly} />}
           {currentTab === 'staff' && <StaffView />}
           {currentTab === 'roles' && <RolesView />}
           {currentTab === 'payouts' && (
