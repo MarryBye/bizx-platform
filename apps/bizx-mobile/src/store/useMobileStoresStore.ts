@@ -20,6 +20,8 @@ interface MobileStoresState {
   selectedProductCategoryId: string | null;
 
   myOrders: CustomerOrderSummary[];
+  unreadMessagesCount: number;
+  pendingRefundOffersCount: number;
   isLoading: boolean;
   error: string | null;
 
@@ -29,9 +31,10 @@ interface MobileStoresState {
   setSearchQuery: (query: string) => void;
   setSelectedProductCategoryId: (id: string | null) => void;
   fetchMyOrders: () => Promise<void>;
+  fetchUnreadSummary: () => Promise<void>;
 }
 
-export const useMobileStoresStore = create<MobileStoresState>((set, get) => ({
+export const useMobileStoresStore = create<MobileStoresState>((set) => ({
   stores: [],
   categories: [],
   selectedCategoryId: null,
@@ -43,6 +46,8 @@ export const useMobileStoresStore = create<MobileStoresState>((set, get) => ({
   selectedProductCategoryId: null,
 
   myOrders: [],
+  unreadMessagesCount: 0,
+  pendingRefundOffersCount: 0,
   isLoading: false,
   error: null,
 
@@ -102,6 +107,20 @@ export const useMobileStoresStore = create<MobileStoresState>((set, get) => ({
       const res = await mobileApi.orders.getMyOrders();
       if (res.success && res.data) {
         set({ myOrders: res.data });
+      }
+    } catch {
+      // Ignore
+    }
+  },
+
+  fetchUnreadSummary: async () => {
+    try {
+      const res = await mobileApi.orders.getMyUnreadSummary();
+      if (res.success && res.data) {
+        set({
+          unreadMessagesCount: res.data.totalUnreadMessages || 0,
+          pendingRefundOffersCount: res.data.pendingRefundOffersCount || 0
+        });
       }
     } catch {
       // Ignore

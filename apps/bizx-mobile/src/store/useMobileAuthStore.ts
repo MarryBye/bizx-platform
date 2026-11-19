@@ -55,10 +55,7 @@ export const useMobileAuthStore = create<MobileAuthState>((set) => ({
   register: async (dto: RegisterDto) => {
     set({ isLoading: true, error: null });
     try {
-      const res = await mobileApi.auth.register({
-        ...dto,
-        role: 'client'
-      });
+      const res = await mobileApi.auth.register(dto);
       if (res.success && res.data) {
         setMobileToken(res.data.accessToken);
         set({ user: res.data.user, isLoading: false, isInitialized: true });

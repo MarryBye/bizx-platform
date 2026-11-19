@@ -6,9 +6,17 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { api } from '../lib/api';
 import { SiteHeader } from '../components/SiteHeader';
+import { AccountInbox } from './components/AccountInbox';
 import { useTranslation } from '../hooks/useTranslation';
 import { translateApiError, type SupportedLocale } from '@bizx/utils';
-import type { UserProfile, Store, SubscriptionPlan, UserSubscriptionDetails, SubscriptionTier } from '@bizx/common-types';
+import {
+  formatCompactCount,
+  type UserProfile,
+  type Store,
+  type SubscriptionPlan,
+  type UserSubscriptionDetails,
+  type SubscriptionTier
+} from '@bizx/common-types';
 import {
   User,
   Shield,
@@ -24,16 +32,19 @@ import {
   AlertCircle,
   CreditCard,
   Store as StoreIcon,
+  Mail,
+  Eye,
   X
 } from 'lucide-react';
 
-type AccountTab = 'profile' | 'businesses' | 'subscriptions' | 'security' | 'privacy' | 'integrations';
+type AccountTab = 'profile' | 'inbox' | 'businesses' | 'subscriptions' | 'security' | 'privacy' | 'integrations';
 
 export default function AccountPage() {
   const { t, locale, setLocale } = useTranslation();
   const [user, setUser] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<AccountTab>('profile');
+  const [inboxUnreadCount, setInboxUnreadCount] = useState(0);
   const [languageNotice, setLanguageNotice] = useState<string | null>(null);
 
   const handleLanguageChange = async (newLocale: SupportedLocale) => {
@@ -153,11 +164,24 @@ export default function AccountPage() {
   };
 
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const tabParam = new URLSearchParams(window.location.search).get('tab');
+      if (
+        tabParam &&
+        ['profile', 'inbox', 'businesses', 'subscriptions', 'security', 'privacy', 'integrations'].includes(
+          tabParam
+        )
+      ) {
+        setActiveTab(tabParam as AccountTab);
+      }
+    }
+
     loadData();
 
     const handleUnauthorized = () => {
       setUser(null);
       setMyStores([]);
+      setInboxUnreadCount(0);
     };
 
     window.addEventListener('bizx:unauthorized', handleUnauthorized);
@@ -165,6 +189,26 @@ export default function AccountPage() {
       window.removeEventListener('bizx:unauthorized', handleUnauthorized);
     };
   }, []);
+
+  useEffect(() => {
+    if (!user) {
+      setInboxUnreadCount(0);
+      return;
+    }
+    const fetchInboxCount = () => {
+      api.inbox
+        .getUnreadSummary()
+        .then((res) => {
+          if (res.success && res.data) {
+            setInboxUnreadCount(res.data.totalUnreadMessages || 0);
+          }
+        })
+        .catch(() => {});
+    };
+    fetchInboxCount();
+    const timer = window.setInterval(fetchInboxCount, 15000);
+    return () => window.clearInterval(timer);
+  }, [user]);
 
   const handleAvatarFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -365,6 +409,12 @@ export default function AccountPage() {
 
   const menuItems = [
     { id: 'profile' as const, label: t('account.profileTab'), desc: t('account.profileTabDesc'), icon: User },
+    {
+      id: 'inbox' as const,
+      label: locale === 'en' ? 'Inbox' : 'Пошта',
+      desc: locale === 'en' ? 'BizX notices, support & ads' : 'Листи BizX, підтримка та реклама',
+      icon: Mail
+    },
     { id: 'businesses' as const, label: t('account.businessesTab'), desc: t('account.businessesTabDesc'), icon: Building2 },
     { id: 'subscriptions' as const, label: t('account.subscriptionsTab'), desc: t('account.subscriptionsTabDesc'), icon: CreditCard },
     { id: 'security' as const, label: t('account.securityTab'), desc: t('account.securityTabDesc'), icon: Shield },
@@ -511,6 +561,15 @@ export default function AccountPage() {
                           </div>
                         </div>
                       </div>
+                      {item.id === 'inbox' && inboxUnreadCount > 0 && (
+                        <span
+                          className={`shrink-0 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-black ${
+                            isActive ? 'bg-white text-slate-900' : 'bg-blue-600 text-white'
+                          }`}
+                        >
+                          {formatCompactCount(inboxUnreadCount)}
+                        </span>
+                      )}
                       {showBusinessAlert && (
                         <span className="shrink-0 px-1.5 py-0.5 rounded-full text-[10px] font-black bg-amber-500 text-white">
                           !
@@ -562,6 +621,11 @@ export default function AccountPage() {
 
             {/* Right Main Content Panel */}
             <section className="md:col-span-8 bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
+              {/* Tab: Inbox */}
+              {activeTab === 'inbox' && (
+                <AccountInbox locale={locale} onUnreadChanged={setInboxUnreadCount} />
+              )}
+
               {/* Tab: Profile */}
               {activeTab === 'profile' && (
                 <div className="space-y-6">
@@ -861,6 +925,24 @@ export default function AccountPage() {
                                   >
                                     {locale === 'en' ? 'Submit for BizX review' : 'На перевірку в BizX'}
                                   </button>
+                                )}
+                                {(st.status === 'active' || st.status === 'draft' || st.status === 'pending') && (
+                                  <Link
+                                    href={`/store/${st.slug}`}
+                                    className="text-xs font-bold text-emerald-700 hover:underline inline-flex items-center gap-1"
+                                  >
+                                    {st.status === 'active' ? (
+                                      <>
+                                        <span>{locale === 'en' ? 'Storefront' : 'Сайт закладу'}</span>
+                                        <ExternalLink className="w-3 h-3" />
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Eye className="w-3 h-3" />
+                                        <span>{locale === 'en' ? 'Preview' : 'Превʼю'}</span>
+                                      </>
+                                    )}
+                                  </Link>
                                 )}
                                 <a
                                   href="http://localhost:3102"

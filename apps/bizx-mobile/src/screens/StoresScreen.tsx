@@ -142,11 +142,27 @@ export const StoresScreen: React.FC<StoresScreenProps> = ({ onSelectStore }) => 
                 />
                 <View className="w-full h-full bg-black/30 absolute inset-0" />
 
-                {/* Status Badge */}
-                <View className="absolute top-3 right-3 bg-white/95 px-2 py-0.5 rounded border border-slate-200 shadow-sm">
-                  <Text className="text-[10px] font-bold text-slate-900 uppercase">
-                    Працює
-                  </Text>
+                {/* Status & Rating Badges */}
+                <View className="absolute top-3 left-3 right-3 flex-row items-center justify-between">
+                  {(store.ratingCount ?? 0) > 0 ? (
+                    <View className="bg-white/95 px-2 py-0.5 rounded border border-amber-200 shadow-sm flex-row items-center gap-1">
+                      <MaterialIcon name="star" size={12} color="#f59e0b" />
+                      <Text className="text-[10px] font-black text-slate-900">
+                        {((store.ratingAvg || 0) / 100).toFixed(1)}
+                      </Text>
+                      <Text className="text-[10px] font-semibold text-slate-500">
+                        ({store.ratingCount})
+                      </Text>
+                    </View>
+                  ) : (
+                    <View />
+                  )}
+
+                  <View className="bg-white/95 px-2 py-0.5 rounded border border-slate-200 shadow-sm">
+                    <Text className="text-[10px] font-bold text-slate-900 uppercase">
+                      Працює
+                    </Text>
+                  </View>
                 </View>
               </View>
 

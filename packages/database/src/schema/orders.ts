@@ -18,6 +18,16 @@ export const orders = pgTable('orders', {
   contactName: varchar('contact_name', { length: 255 }).notNull(),
   paymentStatus: varchar('payment_status', { length: 50 }).default('pending').notNull(),
   paymentMethod: varchar('payment_method', { length: 50 }).default('card').notNull(),
+  // Escrow / Payout lifecycle: 'held' | 'released' | 'refunded' | 'clawback'
+  payoutStatus: varchar('payout_status', { length: 30 }).default('held').notNull(),
+  // Business Quick Refund Offer awaiting customer confirmation
+  refundOfferStatus: varchar('refund_offer_status', { length: 30 }),
+  refundOfferAmount: integer('refund_offer_amount'),
+  refundOfferReason: text('refund_offer_reason'),
+  refundOfferedByUserId: uuid('refund_offered_by_user_id').references(() => users.id, {
+    onDelete: 'set null'
+  }),
+  refundOfferedAt: timestamp('refund_offered_at', { withTimezone: true }),
   notes: text('notes'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull()

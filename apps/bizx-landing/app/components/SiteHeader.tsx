@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { api } from '../lib/api';
 import { useTranslation } from '../hooks/useTranslation';
-import type { UserProfile, Store } from '@bizx/common-types';
+import { formatCompactCount, type UserProfile, type Store } from '@bizx/common-types';
 import { LanguageSelector } from '@bizx/ui';
 import { AuthModal } from './AuthModal';
 import {
@@ -14,13 +14,15 @@ import {
   CreditCard,
   Settings,
   LogOut,
-  LogIn
+  LogIn,
+  Mail
 } from 'lucide-react';
 
 export const SiteHeader: React.FC = () => {
   const { t, locale, setLocale } = useTranslation();
   const [user, setUser] = useState<UserProfile | null>(null);
   const [stores, setStores] = useState<Store[]>([]);
+  const [inboxUnread, setInboxUnread] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
@@ -47,6 +49,14 @@ export const SiteHeader: React.FC = () => {
           }
         } catch {
           // Ignore stores failure if not a business user
+        }
+        try {
+          const inboxRes = await api.inbox.getUnreadSummary();
+          if (inboxRes.success && inboxRes.data) {
+            setInboxUnread(inboxRes.data.totalUnreadMessages || 0);
+          }
+        } catch {
+          // ignore
         }
       } else {
         setUser(null);
@@ -167,7 +177,20 @@ export const SiteHeader: React.FC = () => {
             {isLoading ? (
               <div className="w-28 h-8 bg-slate-100 animate-pulse rounded-md" />
             ) : user ? (
-              <div className="relative" ref={dropdownRef}>
+              <>
+                <Link
+                  href="/account?tab=inbox"
+                  title={locale === 'en' ? 'Inbox' : 'Пошта'}
+                  className="relative p-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 transition-colors shadow-sm"
+                >
+                  <Mail className="w-4 h-4" />
+                  {inboxUnread > 0 && (
+                    <span className="absolute -top-1.5 -right-1.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-blue-600 text-white text-[10px] font-black">
+                      {formatCompactCount(inboxUnread)}
+                    </span>
+                  )}
+                </Link>
+                <div className="relative" ref={dropdownRef}>
                 <button
                   type="button"
                   onClick={() => setIsDropdownOpen((prev) => !prev)}
@@ -301,6 +324,7 @@ export const SiteHeader: React.FC = () => {
                   </div>
                 )}
               </div>
+              </>
             ) : (
               <div className="flex items-center gap-2">
                 <button

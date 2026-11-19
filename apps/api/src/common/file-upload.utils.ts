@@ -38,3 +38,31 @@ export function validateImageFile(file?: UploadedFileDto): UploadedFileDto {
 
   return file;
 }
+
+export const ALLOWED_CHAT_MIMES = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+  'application/pdf'
+] as const;
+
+export function validateChatAttachmentFile(file?: UploadedFileDto): UploadedFileDto {
+  if (!file || !file.buffer || file.size === 0) {
+    throw new BadRequestException('Файл не надано або він порожній');
+  }
+
+  if (!ALLOWED_CHAT_MIMES.includes(file.mimetype as (typeof ALLOWED_CHAT_MIMES)[number])) {
+    throw new BadRequestException(
+      `Непідтримуваний формат файлу "${file.mimetype}". Дозволені формати: JPEG, PNG, WebP, GIF, PDF`
+    );
+  }
+
+  if (file.size > MAX_IMAGE_FILE_SIZE) {
+    throw new BadRequestException(
+      `Розмір файлу (${Math.round(file.size / 1024 / 1024)} МБ) перевищує ліміт у 10 МБ`
+    );
+  }
+
+  return file;
+}

@@ -518,8 +518,11 @@ export const uk = {
     quickLinks: 'Швидкі переходи',
     tabMetrics: 'Огляд та метрики',
     tabAnalytics: 'Детальна аналітика',
-    tabBusinesses: 'Торгові точки',
+    tabBusinesses: 'Бізнеси',
+    tabBusinessesAll: 'Усі бізнеси',
+    tabBusinessesPending: 'Очікують підтвердження',
     tabUsers: 'Користувачі',
+    tabDisputes: 'Скарги',
     tabStaff: 'Команда BizX',
     tabRoles: 'Ролі та доступи',
     rolesTitle: 'Ролі платформи BizX Core',
@@ -602,7 +605,8 @@ export const uk = {
     },
     orders: {
       read: 'Перегляд замовлень клієнтів',
-      edit: 'Зміна статусів замовлень та оплати'
+      edit: 'Зміна статусів замовлень, оплати та чат із клієнтами',
+      refund: 'Швидке повернення коштів клієнту'
     },
     analytics: {
       read: 'Перегляд дашборду та статистики продажів',
@@ -633,6 +637,7 @@ export const uk = {
       stores: {
         read: 'Перегляд усіх торгових точок платформи',
         moderate: 'Модерація та зміна статусів закладів',
+        approve: 'Підтвердження та відхилення нових заявок бізнесів',
         archive: 'Архівація (видалення) торгових точок'
       },
       categories: {
@@ -658,6 +663,13 @@ export const uk = {
         write: 'Створення ролей платформи',
         edit: 'Редагування та пріоритет ролей платформи',
         archive: 'Архівація (видалення) ролей платформи'
+      },
+      disputes: {
+        read: 'Перегляд скарг та листування по спорах',
+        resolve: 'Розгляд скарг, повернення коштів та видача страйків'
+      },
+      strikes: {
+        revoke: 'Зняття страйків та дострокове розблокування закладів'
       }
     }
   },
@@ -674,7 +686,26 @@ export const uk = {
     platform_users: 'Користувачі BizX ID',
     platform_analytics: 'Аналітика платформи',
     platform_staff: 'Команда BizX',
-    platform_roles: 'Ролі платформи'
+    platform_roles: 'Ролі платформи',
+    platform_disputes: 'Скарги та страйки'
+  },
+  disputes: {
+    categories: {
+      not_received: 'Товар не прийшов',
+      damaged: 'Товар пошкоджено або брак',
+      wrong_item: 'Привезли не той товар',
+      missing_items: 'Неповна комплектація',
+      poor_quality: 'Низька якість товару / послуги',
+      other: 'Інше (описати власноруч)'
+    },
+    statuses: {
+      open_store: 'Відкрито спір',
+      escalated_platform: 'На розгляді BizX',
+      withdrawn: 'Відкликано клієнтом',
+      resolved_refund: 'Повернення узгоджено',
+      resolved_business: 'Закрито на користь бізнесу',
+      resolved_customer: 'Закрито на користь клієнта'
+    }
   },
   permissionActions: {
     read: 'Читання',
@@ -1157,8 +1188,11 @@ export const en: typeof uk = {
     quickLinks: 'Quick Links',
     tabMetrics: 'Overview & Metrics',
     tabAnalytics: 'Detailed Analytics',
-    tabBusinesses: 'Stores',
+    tabBusinesses: 'Businesses',
+    tabBusinessesAll: 'All Businesses',
+    tabBusinessesPending: 'Pending Approval',
     tabUsers: 'Users',
+    tabDisputes: 'Disputes',
     tabStaff: 'BizX Team',
     tabRoles: 'Roles & Permissions',
     rolesTitle: 'BizX Core Platform Roles',
@@ -1241,7 +1275,8 @@ export const en: typeof uk = {
     },
     orders: {
       read: 'View customer orders',
-      edit: 'Update order & payment statuses'
+      edit: 'Update order statuses & chat with customers',
+      refund: 'Offer instant refunds to customers'
     },
     analytics: {
       read: 'View dashboard & sales analytics',
@@ -1272,6 +1307,7 @@ export const en: typeof uk = {
       stores: {
         read: 'View all platform stores',
         moderate: 'Moderate & change store statuses',
+        approve: 'Approve & reject new business applications',
         archive: 'Archive (remove) platform stores'
       },
       categories: {
@@ -1297,6 +1333,13 @@ export const en: typeof uk = {
         write: 'Create platform roles',
         edit: 'Edit & reorder platform roles',
         archive: 'Archive (remove) platform roles'
+      },
+      disputes: {
+        read: 'View escalated disputes & order chats',
+        resolve: 'Resolve disputes, issue refunds & store strikes'
+      },
+      strikes: {
+        revoke: 'Revoke store strikes & lift suspension early'
       }
     }
   },
@@ -1313,7 +1356,26 @@ export const en: typeof uk = {
     platform_users: 'BizX ID Users',
     platform_analytics: 'Platform Analytics',
     platform_staff: 'BizX Staff',
-    platform_roles: 'Platform Roles'
+    platform_roles: 'Platform Roles',
+    platform_disputes: 'Disputes & Strikes'
+  },
+  disputes: {
+    categories: {
+      not_received: 'Order not received',
+      damaged: 'Damaged or defective item',
+      wrong_item: 'Wrong item delivered',
+      missing_items: 'Missing items',
+      poor_quality: 'Poor quality',
+      other: 'Other (specify below)'
+    },
+    statuses: {
+      open_store: 'Dispute open',
+      escalated_platform: 'Escalated to BizX',
+      withdrawn: 'Withdrawn by customer',
+      resolved_refund: 'Refund accepted',
+      resolved_business: 'Resolved for business',
+      resolved_customer: 'Resolved for customer'
+    }
   },
   permissionActions: {
     read: 'Read',

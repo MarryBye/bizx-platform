@@ -1,21 +1,33 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { platformApi } from '../lib/api';
 import { useTranslation } from '../hooks/useTranslation';
-import type { UserProfile } from '@bizx/common-types';
+import { formatCompactCount, type UserProfile } from '@bizx/common-types';
 import { LanguageSelector, SidebarAccountMenu } from '@bizx/ui';
 import {
   LayoutDashboard,
   BarChart3,
   Building2,
+  Clock,
   Users,
+  Scale,
   ShieldCheck,
   KeyRound,
   Menu,
   X,
-  ExternalLink
+  ExternalLink,
+  ChevronDown,
+  Store as StoreIcon
 } from 'lucide-react';
 
-export type PlatformTab = 'metrics' | 'analytics' | 'businesses' | 'users' | 'staff' | 'roles';
+export type PlatformTab =
+  | 'metrics'
+  | 'analytics'
+  | 'businesses'
+  | 'businesses_pending'
+  | 'disputes'
+  | 'users'
+  | 'staff'
+  | 'roles';
 
 interface PlatformLayoutProps {
   currentTab: PlatformTab;
@@ -24,9 +36,13 @@ interface PlatformLayoutProps {
   myPermissions?: string[] | null;
   myRoleName?: string | null;
   permsLoaded?: boolean;
+  pendingStoresCount?: number;
+  pendingDisputesCount?: number;
   onLogout: () => void;
   children: React.ReactNode;
 }
+
+const BUSINESS_CHILD_TABS: PlatformTab[] = ['businesses', 'businesses_pending', 'disputes'];
 
 export const PlatformLayout: React.FC<PlatformLayoutProps> = ({
   currentTab,
@@ -35,11 +51,22 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({
   myPermissions,
   myRoleName,
   permsLoaded = true,
+  pendingStoresCount = 0,
+  pendingDisputesCount = 0,
   onLogout,
   children
 }) => {
   const { t, locale, setLocale } = useTranslation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isBusinessesOpen, setIsBusinessesOpen] = useState(
+    BUSINESS_CHILD_TABS.includes(currentTab) || pendingStoresCount > 0 || pendingDisputesCount > 0
+  );
+
+  useEffect(() => {
+    if (BUSINESS_CHILD_TABS.includes(currentTab)) {
+      setIsBusinessesOpen(true);
+    }
+  }, [currentTab]);
 
   const resolvedAvatar = currentUser?.avatarUrl
     ? platformApi.storage.resolveMediaUrl(currentUser.avatarUrl)
@@ -47,14 +74,13 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({
 
   const hasPerm = (code: string) => Boolean(myPermissions && myPermissions.includes(code));
 
-  const navItems = [
-    { id: 'metrics' as const, label: t('platform.tabMetrics'), icon: LayoutDashboard, visible: hasPerm('platform.analytics.read') },
-    { id: 'analytics' as const, label: t('platform.tabAnalytics'), icon: BarChart3, visible: hasPerm('platform.analytics.read') },
-    { id: 'businesses' as const, label: t('platform.tabBusinesses'), icon: Building2, visible: hasPerm('platform.stores.read') },
-    { id: 'users' as const, label: t('platform.tabUsers'), icon: Users, visible: hasPerm('platform.users.read') },
-    { id: 'staff' as const, label: t('platform.tabStaff'), icon: ShieldCheck, visible: hasPerm('platform.staff.read') },
-    { id: 'roles' as const, label: t('platform.tabRoles'), icon: KeyRound, visible: hasPerm('platform.roles.read') }
-  ].filter((item) => item.visible);
+  const canReadStores = hasPerm('platform.stores.read');
+  const canReadDisputes = hasPerm('platform.disputes.read');
+  const showBusinessesGroup = canReadStores || canReadDisputes;
+  const businessAttentionTotal =
+    (canReadStores ? pendingStoresCount : 0) + (canReadDisputes ? pendingDisputesCount : 0);
+
+  const isBusinessChildActive = BUSINESS_CHILD_TABS.includes(currentTab);
 
   const handleLanguageChange = (next: 'uk' | 'en') => {
     setLocale(next);
@@ -63,7 +89,54 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({
     }
   };
 
-  const currentTabLabel = navItems.find((item) => item.id === currentTab)?.label;
+  const getBreadcrumb = (): { parent?: string; label: string } => {
+    switch (currentTab) {
+      case 'metrics':
+        return { label: t('platform.tabMetrics') };
+      case 'analytics':
+        return { label: t('platform.tabAnalytics') };
+      case 'businesses':
+        return { parent: t('platform.tabBusinesses'), label: t('platform.tabBusinessesAll') };
+      case 'businesses_pending':
+        return { parent: t('platform.tabBusinesses'), label: t('platform.tabBusinessesPending') };
+      case 'disputes':
+        return { parent: t('platform.tabBusinesses'), label: t('platform.tabDisputes') };
+      case 'users':
+        return { label: t('platform.tabUsers') };
+      case 'staff':
+        return { label: t('platform.tabStaff') };
+      case 'roles':
+        return { label: t('platform.tabRoles') };
+      default:
+        return { label: t('platform.consoleTitle') };
+    }
+  };
+
+  const breadcrumb = getBreadcrumb();
+
+  const renderTopButton = (id: PlatformTab, label: string, Icon: React.ComponentType<{ className?: string }>) => {
+    const isActive = currentTab === id;
+    return (
+      <button
+        key={id}
+        type="button"
+        onClick={() => {
+          onTabChange(id);
+          setIsMobileMenuOpen(false);
+        }}
+        className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all text-left ${
+          isActive
+            ? 'bg-slate-900 text-white shadow-sm'
+            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+        }`}
+      >
+        <span className="flex items-center gap-3 min-w-0">
+          <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+          <span className="truncate">{label}</span>
+        </span>
+      </button>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row text-slate-900 font-sans">
@@ -86,6 +159,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({
             align="right"
           />
           <button
+            type="button"
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
             className="p-2 rounded-lg border border-slate-200 text-slate-600"
           >
@@ -126,6 +200,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({
             <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-3 mb-2">
               {t('platform.consoleTitle')}
             </div>
+
             {!permsLoaded ? (
               <div className="px-2 py-2 space-y-2">
                 <div className="h-8 rounded-lg bg-slate-100 animate-pulse" />
@@ -133,27 +208,162 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({
                 <div className="h-8 rounded-lg bg-slate-100 animate-pulse" />
               </div>
             ) : (
-              navItems.map((item) => {
-                const Icon = item.icon;
-                const isActive = currentTab === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => {
-                      onTabChange(item.id);
-                      setIsMobileMenuOpen(false);
-                    }}
-                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-bold transition-all text-left ${
-                      isActive
-                        ? 'bg-slate-900 text-white shadow-sm'
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                    }`}
-                  >
-                    <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-slate-400'}`} />
-                    <span className="truncate">{item.label}</span>
-                  </button>
-                );
-              })
+              <>
+                {hasPerm('platform.analytics.read') &&
+                  renderTopButton('metrics', t('platform.tabMetrics'), LayoutDashboard)}
+                {hasPerm('platform.analytics.read') &&
+                  renderTopButton('analytics', t('platform.tabAnalytics'), BarChart3)}
+
+                {/* Expandable Businesses Group Dropdown */}
+                {showBusinessesGroup && (
+                  <div className="pt-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setIsBusinessesOpen((prev) => !prev)}
+                      className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all text-left ${
+                        isBusinessChildActive && !isBusinessesOpen
+                          ? 'bg-slate-900 text-white shadow-sm'
+                          : isBusinessChildActive
+                          ? 'bg-slate-100 text-slate-900'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                      }`}
+                    >
+                      <span className="flex items-center gap-3 min-w-0">
+                        <Building2
+                          className={`w-4 h-4 shrink-0 ${
+                            isBusinessChildActive && !isBusinessesOpen
+                              ? 'text-white'
+                              : isBusinessChildActive
+                              ? 'text-slate-900'
+                              : 'text-slate-400'
+                          }`}
+                        />
+                        <span className="truncate">{t('platform.tabBusinesses')}</span>
+                      </span>
+
+                      <span className="flex items-center gap-1.5 shrink-0">
+                        {businessAttentionTotal > 0 && !isBusinessesOpen && (
+                          <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full text-[10px] font-bold bg-amber-500 text-white">
+                            {formatCompactCount(businessAttentionTotal)}
+                          </span>
+                        )}
+                        <ChevronDown
+                          className={`w-3.5 h-3.5 transition-transform ${
+                            isBusinessesOpen ? 'rotate-180 text-slate-500' : 'text-slate-400'
+                          }`}
+                        />
+                      </span>
+                    </button>
+
+                    {isBusinessesOpen && (
+                      <div className="mt-1 ml-3.5 pl-2.5 border-l border-slate-200 space-y-0.5">
+                        {canReadStores && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onTabChange('businesses');
+                              setIsMobileMenuOpen(false);
+                            }}
+                            className={`w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all text-left ${
+                              currentTab === 'businesses'
+                                ? 'bg-slate-900 text-white shadow-sm'
+                                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                            }`}
+                          >
+                            <span className="flex items-center gap-2 min-w-0">
+                              <StoreIcon
+                                className={`w-3.5 h-3.5 shrink-0 ${
+                                  currentTab === 'businesses' ? 'text-white' : 'text-slate-400'
+                                }`}
+                              />
+                              <span className="truncate">{t('platform.tabBusinessesAll')}</span>
+                            </span>
+                          </button>
+                        )}
+
+                        {canReadStores && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onTabChange('businesses_pending');
+                              setIsMobileMenuOpen(false);
+                            }}
+                            className={`w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all text-left ${
+                              currentTab === 'businesses_pending'
+                                ? 'bg-slate-900 text-white shadow-sm'
+                                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                            }`}
+                          >
+                            <span className="flex items-center gap-2 min-w-0">
+                              <Clock
+                                className={`w-3.5 h-3.5 shrink-0 ${
+                                  currentTab === 'businesses_pending'
+                                    ? 'text-amber-300'
+                                    : 'text-amber-500'
+                                }`}
+                              />
+                              <span className="truncate">{t('platform.tabBusinessesPending')}</span>
+                            </span>
+                            {pendingStoresCount > 0 && (
+                              <span
+                                className={`inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full text-[10px] font-bold shrink-0 ${
+                                  currentTab === 'businesses_pending'
+                                    ? 'bg-white text-slate-900'
+                                    : 'bg-amber-500 text-white'
+                                }`}
+                              >
+                                {formatCompactCount(pendingStoresCount)}
+                              </span>
+                            )}
+                          </button>
+                        )}
+
+                        {canReadDisputes && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onTabChange('disputes');
+                              setIsMobileMenuOpen(false);
+                            }}
+                            className={`w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all text-left ${
+                              currentTab === 'disputes'
+                                ? 'bg-slate-900 text-white shadow-sm'
+                                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                            }`}
+                          >
+                            <span className="flex items-center gap-2 min-w-0">
+                              <Scale
+                                className={`w-3.5 h-3.5 shrink-0 ${
+                                  currentTab === 'disputes' ? 'text-rose-300' : 'text-rose-500'
+                                }`}
+                              />
+                              <span className="truncate">{t('platform.tabDisputes')}</span>
+                            </span>
+                            {pendingDisputesCount > 0 && (
+                              <span
+                                className={`inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full text-[10px] font-bold shrink-0 ${
+                                  currentTab === 'disputes'
+                                    ? 'bg-white text-slate-900'
+                                    : 'bg-red-600 text-white'
+                                }`}
+                              >
+                                {formatCompactCount(pendingDisputesCount)}
+                              </span>
+                            )}
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {hasPerm('platform.users.read') &&
+                  renderTopButton('users', t('platform.tabUsers'), Users)}
+                {hasPerm('platform.staff.read') &&
+                  renderTopButton('staff', t('platform.tabStaff'), ShieldCheck)}
+                {hasPerm('platform.roles.read') &&
+                  renderTopButton('roles', t('platform.tabRoles'), KeyRound)}
+              </>
             )}
           </nav>
 
@@ -205,10 +415,14 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({
         <header className="hidden md:flex sticky top-0 z-20 h-14 px-6 lg:px-8 bg-white/85 backdrop-blur-sm border-b border-slate-200/80 items-center justify-between gap-4 shrink-0">
           <div className="flex items-center gap-2 min-w-0 text-xs">
             <span className="font-semibold text-slate-500">BizX Control</span>
+            {breadcrumb.parent && (
+              <>
+                <span className="text-slate-300">/</span>
+                <span className="font-semibold text-slate-500">{breadcrumb.parent}</span>
+              </>
+            )}
             <span className="text-slate-300">/</span>
-            <span className="font-bold text-slate-900 truncate">
-              {currentTabLabel || t('platform.consoleTitle')}
-            </span>
+            <span className="font-bold text-slate-900 truncate">{breadcrumb.label}</span>
           </div>
 
           <LanguageSelector

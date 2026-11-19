@@ -7,6 +7,7 @@ import {
   Body,
   Param,
   Query,
+  Headers,
   UseGuards,
   UsePipes,
   UseInterceptors,
@@ -27,11 +28,20 @@ import {
   createStoreDtoSchema,
   updateStoreDtoSchema,
   storeFilterQuerySchema,
+  updateStoreDomainDtoSchema,
+  rejectStoreDtoSchema,
   type CreateStoreCategoryDto,
   type UpdateStoreCategoryDto,
   type CreateStoreDto,
   type UpdateStoreDto,
   type StoreFilterQuery,
+  type UpdateStoreDomainDto,
+  type DomainVerificationResult,
+  type StoreReviewsResponse,
+  type RejectStoreDto,
+  type PlatformStoresSummary,
+  type StorePreviewTokenResponse,
+  type StorePreviewResponse,
   type ApiResponse,
   type PaginatedResult
 } from '@bizx/common-types';
@@ -142,6 +152,102 @@ export class StoresController {
   }
 
   @Public()
+  @Get('resolve-host')
+  async resolveHost(
+    @Query('host') host: string
+  ): Promise<ApiResponse<{ slug: string; storeId: string; name: string } | null>> {
+    const result = await this.storesService.resolveHost(host || '');
+    return {
+      success: true,
+      data: result,
+      timestamp: new Date().toISOString()
+    };
+  }
+
+  @Get('platform/summary')
+  async getPlatformStoresSummary(
+    @CurrentUser('sub') userId: string
+  ): Promise<ApiResponse<PlatformStoresSummary>> {
+    const result = await this.storesService.getPlatformStoresSummary(userId);
+    return {
+      success: true,
+      data: result,
+      timestamp: new Date().toISOString()
+    };
+  }
+
+  @Post('platform/:id/approve')
+  async approveStore(
+    @Param('id') id: string,
+    @CurrentUser('sub') userId: string
+  ): Promise<ApiResponse<StoreRecord>> {
+    const result = await this.storesService.approveStore(id, userId);
+    return {
+      success: true,
+      data: result,
+      timestamp: new Date().toISOString()
+    };
+  }
+
+  @Post('platform/:id/reject')
+  async rejectStore(
+    @Param('id') id: string,
+    @CurrentUser('sub') userId: string,
+    @Body(new ZodValidationPipe(rejectStoreDtoSchema)) dto: RejectStoreDto
+  ): Promise<ApiResponse<StoreRecord>> {
+    const result = await this.storesService.rejectStore(id, userId, dto);
+    return {
+      success: true,
+      data: result,
+      timestamp: new Date().toISOString()
+    };
+  }
+
+  @Post(':id/preview-token')
+  async createPreviewToken(
+    @Param('id') id: string,
+    @CurrentUser('sub') userId: string
+  ): Promise<ApiResponse<StorePreviewTokenResponse>> {
+    const result = await this.storesService.createPreviewToken(id, userId);
+    return {
+      success: true,
+      data: result,
+      timestamp: new Date().toISOString()
+    };
+  }
+
+  @Public()
+  @Get(':idOrSlug/preview')
+  async getStorePreview(
+    @Param('idOrSlug') idOrSlug: string,
+    @Query('token') previewToken?: string,
+    @Headers('authorization') authHeader?: string
+  ): Promise<ApiResponse<StorePreviewResponse>> {
+    const result = await this.storesService.getStorePreview(idOrSlug, {
+      previewToken,
+      authHeader
+    });
+    return {
+      success: true,
+      data: result,
+      timestamp: new Date().toISOString()
+    };
+  }
+
+  @Public()
+  @Get(':idOrSlug/reviews')
+  async getStoreReviews(
+    @Param('idOrSlug') idOrSlug: string
+  ): Promise<ApiResponse<StoreReviewsResponse>> {
+    const result = await this.storesService.getStoreReviews(idOrSlug);
+    return {
+      success: true,
+      data: result,
+      timestamp: new Date().toISOString()
+    };
+  }
+
+  @Public()
   @Get(':idOrSlug')
   async getStoreByIdOrSlug(
     @Param('idOrSlug') idOrSlug: string
@@ -219,6 +325,34 @@ export class StoresController {
     return {
       success: true,
       data: updated,
+      timestamp: new Date().toISOString()
+    };
+  }
+
+  @Patch(':id/domain')
+  @UsePipes(new ZodValidationPipe(updateStoreDomainDtoSchema))
+  async updateStoreDomain(
+    @Param('id') id: string,
+    @CurrentUser('sub') userId: string,
+    @Body() dto: UpdateStoreDomainDto
+  ): Promise<ApiResponse<StoreRecord>> {
+    const updated = await this.storesService.updateStoreDomain(id, userId, dto);
+    return {
+      success: true,
+      data: updated,
+      timestamp: new Date().toISOString()
+    };
+  }
+
+  @Post(':id/domain/verify')
+  async verifyStoreDomain(
+    @Param('id') id: string,
+    @CurrentUser('sub') userId: string
+  ): Promise<ApiResponse<DomainVerificationResult>> {
+    const result = await this.storesService.verifyStoreDomain(id, userId);
+    return {
+      success: true,
+      data: result,
       timestamp: new Date().toISOString()
     };
   }

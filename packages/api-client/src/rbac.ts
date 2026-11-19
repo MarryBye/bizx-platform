@@ -41,10 +41,20 @@ export interface PlatformStoreListItem {
   phone: string | null;
   email: string | null;
   status: 'draft' | 'pending' | 'active' | 'suspended' | 'closed' | 'archived';
+  customDomain?: string | null;
+  customDomainVerified?: boolean;
+  suspendedUntil?: string | null;
+  suspensionReason?: string | null;
+  payoutBalance?: number;
+  ratingAvg?: number;
+  ratingCount?: number;
+  activeStrikesCount?: number;
+  productsCount?: number;
   createdAt: string;
   categoryName: string | null;
   ownerName: string | null;
   ownerEmail: string | null;
+  ownerPhone?: string | null;
 }
 
 export class RbacModule {

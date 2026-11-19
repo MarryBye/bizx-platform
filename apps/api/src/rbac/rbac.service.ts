@@ -17,12 +17,17 @@ import {
   platformMemberPermissions,
   stores,
   storeCategories,
+  storeStrikes,
+  products,
   users,
   eq,
   and,
+  or,
+  gt,
   inArray,
   isNull,
-  desc
+  desc,
+  count
 } from '@bizx/database';
 import {
   ALL_PERMISSIONS,
@@ -104,6 +109,7 @@ function expandEffectivePermissionIds(scope: PermissionScope, rawIds: number[]):
 const DEFAULT_OPS_PLATFORM_CODES: PlatformPermissionCode[] = [
   'platform.stores.read',
   'platform.stores.moderate',
+  'platform.stores.approve',
   'platform.categories.manage',
   'platform.users.read',
   'platform.users.edit',
@@ -2059,18 +2065,51 @@ export class RbacService implements OnModuleInit {
         phone: stores.phone,
         email: stores.email,
         status: stores.status,
+        customDomain: stores.customDomain,
+        customDomainVerified: stores.customDomainVerified,
+        suspendedUntil: stores.suspendedUntil,
+        suspensionReason: stores.suspensionReason,
+        payoutBalance: stores.payoutBalance,
+        ratingAvg: stores.ratingAvg,
+        ratingCount: stores.ratingCount,
         createdAt: stores.createdAt,
         categoryName: storeCategories.name,
         ownerName: users.name,
-        ownerEmail: users.email
+        ownerEmail: users.email,
+        ownerPhone: users.phone
       })
       .from(stores)
       .leftJoin(storeCategories, eq(stores.categoryId, storeCategories.id))
       .leftJoin(users, eq(stores.ownerId, users.id))
       .orderBy(desc(stores.createdAt));
 
+    const now = new Date();
+    const [strikeRows, productRows] = await Promise.all([
+      this.databaseService.db
+        .select({ storeId: storeStrikes.storeId, cnt: count() })
+        .from(storeStrikes)
+        .where(
+          and(
+            isNull(storeStrikes.revokedAt),
+            or(isNull(storeStrikes.expiresAt), gt(storeStrikes.expiresAt, now))
+          )
+        )
+        .groupBy(storeStrikes.storeId),
+      this.databaseService.db
+        .select({ storeId: products.storeId, cnt: count() })
+        .from(products)
+        .where(isNull(products.archivedAt))
+        .groupBy(products.storeId)
+    ]);
+    const strikesByStore = new Map(strikeRows.map((r) => [r.storeId, Number(r.cnt)]));
+    const productsByStore = new Map(productRows.map((r) => [r.storeId, Number(r.cnt)]));
+
     return rows.map((s) => ({
       ...s,
+      ratingAvg: Number((Number(s.ratingAvg || 0) / 100).toFixed(2)),
+      activeStrikesCount: strikesByStore.get(s.id) ?? 0,
+      productsCount: productsByStore.get(s.id) ?? 0,
+      suspendedUntil: s.suspendedUntil ? s.suspendedUntil.toISOString() : null,
       createdAt: s.createdAt.toISOString()
     }));
   }

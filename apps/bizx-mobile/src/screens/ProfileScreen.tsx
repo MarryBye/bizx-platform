@@ -12,6 +12,9 @@ import { SafeImage } from '../components/SafeImage';
 import { MobilePhoneInput } from '../components/MobilePhoneInput';
 import { useMobileAuthStore } from '../store/useMobileAuthStore';
 import { useMobileTranslation } from '../hooks/useMobileTranslation';
+import { InboxModal } from './InboxModal';
+import { mobileApi } from '../lib/api';
+import { formatCompactCount } from '@bizx/common-types';
 
 export const ProfileScreen: React.FC = () => {
   const { user, login, register, updateProfile, logout, isLoading, error } = useMobileAuthStore();
@@ -27,6 +30,23 @@ export const ProfileScreen: React.FC = () => {
   const [editPhone, setEditPhone] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [inboxOpen, setInboxOpen] = useState(false);
+  const [inboxUnread, setInboxUnread] = useState(0);
+
+  useEffect(() => {
+    if (!user) {
+      setInboxUnread(0);
+      return;
+    }
+    mobileApi.inbox
+      .getUnreadSummary()
+      .then((res) => {
+        if (res.success && res.data) {
+          setInboxUnread(res.data.totalUnreadMessages || 0);
+        }
+      })
+      .catch(() => {});
+  }, [user]);
 
   useEffect(() => {
     if (user) {
@@ -40,7 +60,7 @@ export const ProfileScreen: React.FC = () => {
 
     if (isRegisterMode) {
       if (!name.trim()) return;
-      await register({ name, email, password, role: 'client' });
+      await register({ name, email, password });
     } else {
       await login({ email, password });
     }
@@ -238,6 +258,47 @@ export const ProfileScreen: React.FC = () => {
             </View>
           </View>
         </View>
+
+        {/* Account Inbox Button */}
+        <View className="px-5 mt-4">
+          <TouchableOpacity
+            onPress={() => setInboxOpen(true)}
+            activeOpacity={0.75}
+            className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm flex-row items-center justify-between"
+          >
+            <View className="flex-row items-center gap-3 flex-1 pr-2">
+              <View className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-200 items-center justify-center">
+                <MaterialIcon name="mail" size={20} color="#4338ca" />
+              </View>
+              <View className="flex-1">
+                <Text className="text-xs font-black text-slate-900">
+                  {locale === 'en' ? 'Account Inbox' : 'Пошта та сповіщення BizX'}
+                </Text>
+                <Text className="text-[11px] text-slate-500 mt-0.5">
+                  {locale === 'en'
+                    ? 'BizX notices, support chats & partner offers'
+                    : 'Листи BizX, загальна підтримка та пропозиції'}
+                </Text>
+              </View>
+            </View>
+            <View className="flex-row items-center gap-2">
+              {inboxUnread > 0 && (
+                <View className="bg-blue-600 px-2 py-0.5 rounded-full">
+                  <Text className="text-[10px] font-black text-white">
+                    {formatCompactCount(inboxUnread)}
+                  </Text>
+                </View>
+              )}
+              <MaterialIcon name="chevron-right" size={18} color="#94a3b8" />
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        <InboxModal
+          visible={inboxOpen}
+          onClose={() => setInboxOpen(false)}
+          onUnreadChanged={setInboxUnread}
+        />
 
         {/* Portal Referral Note */}
         <View className="px-5 mt-4">

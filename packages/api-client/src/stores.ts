@@ -8,7 +8,14 @@ import type {
   AddStoreMemberDto,
   CreateStoreDto,
   UpdateStoreDto,
-  StoreFilterQuery
+  StoreFilterQuery,
+  StoreReviewsResponse,
+  UpdateStoreDomainDto,
+  DomainVerificationResult,
+  RejectStoreDto,
+  PlatformStoresSummary,
+  StorePreviewTokenResponse,
+  StorePreviewResponse
 } from '@bizx/common-types';
 
 export class StoresModule {
@@ -142,5 +149,79 @@ export class StoresModule {
     return this.client.delete<ApiResponse<{ message: string }>>(
       `/stores/${storeId}/members/${memberId}`
     );
+  }
+
+  /**
+   * Відгуки та рейтинг закладу (GET /stores/:storeId/reviews)
+   */
+  async getReviews(storeId: string): Promise<ApiResponse<StoreReviewsResponse>> {
+    return this.client.get<ApiResponse<StoreReviewsResponse>>(`/stores/${storeId}/reviews`);
+  }
+
+  /**
+   * Прив'язка власного домену закладу (PATCH /stores/:id/domain)
+   */
+  async updateDomain(id: string, dto: UpdateStoreDomainDto): Promise<ApiResponse<Store>> {
+    return this.client.patch<ApiResponse<Store>>(`/stores/${id}/domain`, dto);
+  }
+
+  /**
+   * Перевірка DNS записів власного домену (POST /stores/:id/domain/verify)
+   */
+  async verifyDomain(id: string): Promise<ApiResponse<DomainVerificationResult>> {
+    return this.client.post<ApiResponse<DomainVerificationResult>>(`/stores/${id}/domain/verify`, {});
+  }
+
+  /**
+   * Визначення закладу за Host (піддомен або власний домен)
+   */
+  async resolveHost(host: string): Promise<ApiResponse<{ slug: string; storeId: string; name: string } | null>> {
+    return this.client.get<ApiResponse<{ slug: string; storeId: string; name: string } | null>>(
+      '/stores/resolve-host',
+      { params: { host } }
+    );
+  }
+
+  /**
+   * Отримання короткоживучого токена предпросмотру вітрини (для модератора BizX або власника)
+   */
+  async createPreviewToken(id: string): Promise<ApiResponse<StorePreviewTokenResponse>> {
+    return this.client.post<ApiResponse<StorePreviewTokenResponse>>(
+      `/stores/${id}/preview-token`,
+      {}
+    );
+  }
+
+  /**
+   * Попередній перегляд вітрини закладу (включно зі статусами draft/pending)
+   */
+  async getStorePreview(
+    idOrSlug: string,
+    previewToken?: string | null
+  ): Promise<ApiResponse<StorePreviewResponse>> {
+    return this.client.get<ApiResponse<StorePreviewResponse>>(`/stores/${idOrSlug}/preview`, {
+      params: previewToken ? { token: previewToken } : undefined
+    });
+  }
+
+  /**
+   * Підсумок статусів закладів платформи (для бейджа «Очікують підтвердження»)
+   */
+  async getPlatformStoresSummary(): Promise<ApiResponse<PlatformStoresSummary>> {
+    return this.client.get<ApiResponse<PlatformStoresSummary>>('/stores/platform/summary');
+  }
+
+  /**
+   * Підтвердження нового закладу (pending -> active, вимагає platform.stores.approve)
+   */
+  async approveStore(id: string): Promise<ApiResponse<Store>> {
+    return this.client.post<ApiResponse<Store>>(`/stores/platform/${id}/approve`, {});
+  }
+
+  /**
+   * Відхилення заявки закладу з причиною (pending -> draft + лист у Пошту власника)
+   */
+  async rejectStore(id: string, dto: RejectStoreDto): Promise<ApiResponse<Store>> {
+    return this.client.post<ApiResponse<Store>>(`/stores/platform/${id}/reject`, dto);
   }
 }
