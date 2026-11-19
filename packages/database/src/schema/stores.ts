@@ -29,6 +29,8 @@ export const stores = pgTable('stores', {
   // Cached star rating aggregate (ratingAvg stored x100, e.g. 485 = 4.85★)
   ratingAvg: integer('rating_avg').default(0).notNull(),
   ratingCount: integer('rating_count').default(0).notNull(),
+  // Automatic promo broadcast when a product discount (oldPrice > price) is created or deepened
+  autoDiscountBroadcastEnabled: boolean('auto_discount_broadcast_enabled').default(false).notNull(),
   archivedAt: timestamp('archived_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull()

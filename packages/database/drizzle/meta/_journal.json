@@ -78,6 +78,13 @@
       "when": 1795120000000,
       "tag": "0010_user_suspension_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1795130000000,
+      "tag": "0011_broadcasts_and_marketing_subscriptions",
+      "breakpoints": true
     }
   ]
 }
