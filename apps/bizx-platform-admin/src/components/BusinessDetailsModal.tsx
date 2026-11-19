@@ -10,7 +10,10 @@ import {
   ExternalLink,
   Star,
   Zap,
-  RotateCcw
+  RotateCcw,
+  Eye,
+  XCircle,
+  Send
 } from 'lucide-react';
 
 interface BusinessDetailsModalProps {
@@ -18,8 +21,12 @@ interface BusinessDetailsModalProps {
   isOpen: boolean;
   onClose: () => void;
   onUpdateStatus: (id: string, newStatus: 'active' | 'pending' | 'suspended' | 'archived') => Promise<void>;
+  onApproveStore?: (id: string) => Promise<void>;
+  onRejectStore?: (id: string, reason: string) => Promise<void>;
+  onPreviewStore?: (business: Store & { categoryName?: string; ownerName?: string; ownerEmail?: string }) => Promise<void>;
   isUpdating: boolean;
   canModerate?: boolean;
+  canApprove?: boolean;
   canArchive?: boolean;
   canRevokeStrikes?: boolean;
   onRefresh?: () => Promise<void>;
@@ -30,8 +37,12 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
   isOpen,
   onClose,
   onUpdateStatus,
+  onApproveStore,
+  onRejectStore,
+  onPreviewStore,
   isUpdating,
   canModerate = false,
+  canApprove = false,
   canArchive = false,
   canRevokeStrikes = false,
   onRefresh
@@ -40,6 +51,8 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
   const [revokingId, setRevokingId] = useState<string | null>(null);
   const [revokeReason, setRevokeReason] = useState('');
   const [isRevoking, setIsRevoking] = useState(false);
+  const [showRejectBox, setShowRejectBox] = useState(false);
+  const [rejectReason, setRejectReason] = useState('');
 
   useEffect(() => {
     if (!isOpen || !business?.id) {
@@ -277,8 +290,82 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
             </div>
           )}
 
+          {/* Pending Application Approval / Rejection Section */}
+          {business.status === 'pending' && (
+            <div className="p-4 border border-amber-200 rounded-xl bg-amber-50/50 space-y-3">
+              <div>
+                <h3 className="text-xs font-black text-amber-950 uppercase tracking-wider">
+                  Рішення по заявці нового закладу
+                </h3>
+                <p className="text-[11px] text-amber-800 mt-0.5">
+                  Перегляньте вітрину перед схваленням. При відхиленні обовʼязково вкажіть причину — вона надійде власнику у Пошту BizX.
+                </p>
+              </div>
+
+              {canApprove ? (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={isUpdating}
+                      onClick={() => onApproveStore?.(business.id)}
+                      className="flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-colors disabled:opacity-50"
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>Підтвердити та опублікувати</span>
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isUpdating}
+                      onClick={() => setShowRejectBox((v) => !v)}
+                      className="flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-white border border-rose-300 hover:bg-rose-600 text-rose-700 hover:text-white text-xs font-bold transition-colors disabled:opacity-50"
+                    >
+                      <XCircle className="w-4 h-4" />
+                      <span>Відхилити з причиною</span>
+                    </button>
+                  </div>
+
+                  {showRejectBox && (
+                    <form
+                      onSubmit={async (e) => {
+                        e.preventDefault();
+                        if (rejectReason.trim().length < 5) return;
+                        await onRejectStore?.(business.id, rejectReason.trim());
+                        setRejectReason('');
+                        setShowRejectBox(false);
+                      }}
+                      className="space-y-2 pt-1"
+                    >
+                      <textarea
+                        required
+                        minLength={5}
+                        rows={3}
+                        value={rejectReason}
+                        onChange={(e) => setRejectReason(e.target.value)}
+                        placeholder="Опишіть, що саме потрібно доопрацювати власнику (мін. 5 символів)..."
+                        className="w-full px-3 py-2 text-xs bg-white border border-rose-200 rounded-lg focus:outline-none focus:border-rose-500 resize-none"
+                      />
+                      <button
+                        type="submit"
+                        disabled={isUpdating || rejectReason.trim().length < 5}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold disabled:opacity-50"
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                        <span>Відхилити та надіслати у Пошту</span>
+                      </button>
+                    </form>
+                  )}
+                </div>
+              ) : (
+                <div className="text-[11px] text-amber-900 bg-white/70 border border-amber-200 rounded-lg p-2.5">
+                  У вашій ролі немає права підтвердження або відхилення нових бізнесів.
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Status Actions Group */}
-          {canModerate || canArchive ? (
+          {business.status !== 'pending' && (canModerate || canArchive) ? (
             <div className="p-4 border border-slate-200 rounded-xl bg-white space-y-3">
               <div>
                 <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
@@ -342,24 +429,36 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
                 )}
               </div>
             </div>
-          ) : (
+          ) : business.status !== 'pending' ? (
             <div className="p-3.5 border border-slate-200 rounded-xl bg-slate-50 text-[11px] text-slate-500">
               Режим перегляду: у вас немає прав модерації або архівації торгових точок.
             </div>
-          )}
+          ) : null}
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between">
-          <a
-            href={`http://localhost:3102`}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-700 hover:text-slate-900"
-          >
-            <span>Відкрити в панелі бізнесу</span>
-            <ExternalLink className="w-3.5 h-3.5" />
-          </a>
+        <div className="p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-3">
+            {onPreviewStore && (
+              <button
+                type="button"
+                onClick={() => onPreviewStore(business)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 border border-blue-200 text-xs font-bold text-blue-700 hover:bg-blue-600 hover:text-white transition-colors"
+              >
+                <Eye className="w-3.5 h-3.5" />
+                <span>Переглянути вітрину</span>
+              </button>
+            )}
+            <a
+              href={`http://localhost:3102`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-slate-900"
+            >
+              <span>Панель бізнесу</span>
+              <ExternalLink className="w-3.5 h-3.5" />
+            </a>
+          </div>
 
           <button
             type="button"

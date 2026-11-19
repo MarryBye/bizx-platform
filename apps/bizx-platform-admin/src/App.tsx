@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { platformApi } from './lib/api';
 import { useTranslation, initPlatformLocale } from './hooks/useTranslation';
 import type {
@@ -7,12 +7,13 @@ import type {
   StoreCategory,
   MemberAccessSummary
 } from '@bizx/common-types';
-import { ShieldAlert, AlertCircle, X, Lock } from 'lucide-react';
+import { ShieldAlert, AlertCircle, X, Lock, Bell, ArrowRight } from 'lucide-react';
 import { PlatformLayout, type PlatformTab } from './components/PlatformLayout';
 import { MetricsView } from './views/MetricsView';
 import { PlatformAnalyticsView } from './views/PlatformAnalyticsView';
 import { PlatformRolesView } from './views/PlatformRolesView';
 import { BusinessesView, type ExtendedBusiness } from './views/BusinessesView';
+import { PendingBusinessesView } from './views/PendingBusinessesView';
 import { UsersView } from './views/UsersView';
 import { DisputesView } from './views/DisputesView';
 import { StaffView } from './views/StaffView';
@@ -46,6 +47,9 @@ export const App: React.FC = () => {
   // Users State (loaded from real DB /platform/users)
   const [usersList, setUsersList] = useState<PlatformUserRecord[]>([]);
   const [pendingDisputesCount, setPendingDisputesCount] = useState<number>(0);
+  const [pendingStoresCount, setPendingStoresCount] = useState<number>(0);
+  const [newPendingAlert, setNewPendingAlert] = useState<number | null>(null);
+  const prevPendingStoresRef = useRef<number | null>(null);
 
   const myPermissions = myAccess?.permissions ?? [];
   const hasPerm = (code: string) => Boolean(myAccess && myPermissions.includes(code));
@@ -85,14 +89,18 @@ export const App: React.FC = () => {
         try {
           const storesRes = await platformApi.rbac.getPlatformStores();
           if (storesRes.success && storesRes.data) {
-            setBusinesses(
-              storesRes.data.map((st) => ({
-                ...st,
-                categoryName: st.categoryName || undefined,
-                ownerName: st.ownerName || undefined,
-                ownerEmail: st.ownerEmail || undefined
-              }))
-            );
+            const mapped = storesRes.data.map((st) => ({
+              ...st,
+              categoryName: st.categoryName || undefined,
+              ownerName: st.ownerName || undefined,
+              ownerEmail: st.ownerEmail || undefined
+            }));
+            setBusinesses(mapped);
+            const pCount = mapped.filter((b) => b.status === 'pending').length;
+            setPendingStoresCount(pCount);
+            if (prevPendingStoresRef.current === null) {
+              prevPendingStoresRef.current = pCount;
+            }
           }
         } catch {
           setBusinesses([]);
@@ -153,7 +161,9 @@ export const App: React.FC = () => {
     if (myAccess.permissions.includes('platform.analytics.read')) {
       allowedTabs.push('metrics', 'analytics');
     }
-    if (myAccess.permissions.includes('platform.stores.read')) allowedTabs.push('businesses');
+    if (myAccess.permissions.includes('platform.stores.read')) {
+      allowedTabs.push('businesses', 'businesses_pending');
+    }
     if (myAccess.permissions.includes('platform.users.read')) allowedTabs.push('users');
     if (myAccess.permissions.includes('platform.disputes.read')) allowedTabs.push('disputes');
     if (myAccess.permissions.includes('platform.staff.read')) allowedTabs.push('staff');
@@ -180,12 +190,56 @@ export const App: React.FC = () => {
       .catch(() => {});
   }, [myAccess]);
 
+  // Poll pending businesses summary every 15s and notify staff when a new store awaits moderation
+  const refreshPendingStoresSummary = useCallback(() => {
+    if (!myAccess?.permissions.includes('platform.stores.read')) {
+      setPendingStoresCount(0);
+      return;
+    }
+    platformApi.stores
+      .getPlatformStoresSummary()
+      .then((res) => {
+        if (res.success && res.data) {
+          const nextCount = res.data.pendingCount;
+          if (prevPendingStoresRef.current !== null && nextCount > prevPendingStoresRef.current) {
+            const diff = nextCount - prevPendingStoresRef.current;
+            setNewPendingAlert(diff);
+            // Refresh full businesses list in background so the queue has the new store immediately
+            platformApi.rbac
+              .getPlatformStores()
+              .then((stRes) => {
+                if (stRes.success && stRes.data) {
+                  setBusinesses(
+                    stRes.data.map((st) => ({
+                      ...st,
+                      categoryName: st.categoryName || undefined,
+                      ownerName: st.ownerName || undefined,
+                      ownerEmail: st.ownerEmail || undefined
+                    }))
+                  );
+                }
+              })
+              .catch(() => {});
+          }
+          prevPendingStoresRef.current = nextCount;
+          setPendingStoresCount(nextCount);
+        }
+      })
+      .catch(() => {});
+  }, [myAccess]);
+
   useEffect(() => {
     refreshDisputesSummary();
-    if (!myAccess?.permissions.includes('platform.disputes.read')) return;
-    const timer = window.setInterval(refreshDisputesSummary, 15000);
+    refreshPendingStoresSummary();
+    const canDisputes = Boolean(myAccess?.permissions.includes('platform.disputes.read'));
+    const canStores = Boolean(myAccess?.permissions.includes('platform.stores.read'));
+    if (!canDisputes && !canStores) return;
+    const timer = window.setInterval(() => {
+      if (canDisputes) refreshDisputesSummary();
+      if (canStores) refreshPendingStoresSummary();
+    }, 15000);
     return () => window.clearInterval(timer);
-  }, [myAccess, refreshDisputesSummary]);
+  }, [myAccess, refreshDisputesSummary, refreshPendingStoresSummary]);
 
   // Check auth on mount
   useEffect(() => {
@@ -226,9 +280,13 @@ export const App: React.FC = () => {
         await platformApi.stores.updateStore(id, { status: newStatus });
       }
 
-      setBusinesses((prev) =>
-        prev.map((b) => (b.id === id ? { ...b, status: newStatus } : b))
-      );
+      setBusinesses((prev) => {
+        const next = prev.map((b) => (b.id === id ? { ...b, status: newStatus } : b));
+        const pCount = next.filter((b) => b.status === 'pending').length;
+        prevPendingStoresRef.current = pCount;
+        setPendingStoresCount(pCount);
+        return next;
+      });
 
       if (selectedBusiness && selectedBusiness.id === id) {
         setSelectedBusiness((prev) => (prev ? { ...prev, status: newStatus } : null));
@@ -241,6 +299,81 @@ export const App: React.FC = () => {
       );
     } finally {
       setIsUpdatingBusinessStatus(false);
+    }
+  };
+
+  // Handler: Approve Pending Store (platform.stores.approve)
+  const handleApproveStore = async (id: string) => {
+    setIsUpdatingBusinessStatus(true);
+    setActionError(null);
+    try {
+      const res = await platformApi.stores.approveStore(id);
+      if (res.success) {
+        setBusinesses((prev) => {
+          const next = prev.map((b) => (b.id === id ? { ...b, status: 'active' as const } : b));
+          const pCount = next.filter((b) => b.status === 'pending').length;
+          prevPendingStoresRef.current = pCount;
+          setPendingStoresCount(pCount);
+          return next;
+        });
+        if (selectedBusiness && selectedBusiness.id === id) {
+          setSelectedBusiness((prev) => (prev ? { ...prev, status: 'active' } : null));
+        }
+      }
+    } catch (err: any) {
+      setActionError(
+        err?.data?.message ||
+          err?.message ||
+          'Недостатньо прав для підтвердження нового закладу'
+      );
+    } finally {
+      setIsUpdatingBusinessStatus(false);
+    }
+  };
+
+  // Handler: Reject Pending Store with Reason -> sends official BizX Inbox letter to owner
+  const handleRejectStore = async (id: string, reason: string) => {
+    setIsUpdatingBusinessStatus(true);
+    setActionError(null);
+    try {
+      const res = await platformApi.stores.rejectStore(id, { reason });
+      if (res.success) {
+        setBusinesses((prev) => {
+          const next = prev.map((b) => (b.id === id ? { ...b, status: 'draft' as const } : b));
+          const pCount = next.filter((b) => b.status === 'pending').length;
+          prevPendingStoresRef.current = pCount;
+          setPendingStoresCount(pCount);
+          return next;
+        });
+        if (selectedBusiness && selectedBusiness.id === id) {
+          setSelectedBusiness((prev) => (prev ? { ...prev, status: 'draft' } : null));
+        }
+      }
+    } catch (err: any) {
+      setActionError(
+        err?.data?.message ||
+          err?.message ||
+          'Недостатньо прав для відхилення заявки закладу'
+      );
+      throw err;
+    } finally {
+      setIsUpdatingBusinessStatus(false);
+    }
+  };
+
+  // Handler: Open Private Storefront Preview in new tab (works for pending & draft stores!)
+  const handlePreviewStore = async (store: { id: string; slug: string }) => {
+    setActionError(null);
+    try {
+      const res = await platformApi.stores.createPreviewToken(store.id);
+      if (res.success && res.data?.previewToken) {
+        const previewUrl = `http://localhost:3100/store/${encodeURIComponent(store.slug)}?preview=${encodeURIComponent(res.data.previewToken)}`;
+        window.open(previewUrl, '_blank', 'noopener,noreferrer');
+      }
+    } catch (err: any) {
+      setActionError(
+        err?.data?.message || err?.message || 'Не вдалося відкрити попередній перегляд вітрини'
+      );
     }
   };
 
@@ -348,14 +481,51 @@ export const App: React.FC = () => {
   return (
     <PlatformLayout
       currentTab={activeTab}
-      onTabChange={setActiveTab}
+      onTabChange={(nextTab) => {
+        setActiveTab(nextTab);
+        if (nextTab === 'businesses_pending') setNewPendingAlert(null);
+      }}
       currentUser={currentUser}
       myPermissions={myPermissions}
       myRoleName={myAccess?.roleName}
       permsLoaded={permsLoaded}
+      pendingStoresCount={pendingStoresCount}
       pendingDisputesCount={pendingDisputesCount}
       onLogout={handleLogout}
     >
+      {newPendingAlert !== null && newPendingAlert > 0 && (
+        <div className="mb-4 p-3.5 bg-amber-50 border border-amber-300 rounded-xl text-xs text-amber-950 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-sm">
+          <div className="flex items-center gap-2.5 font-semibold">
+            <Bell className="w-4 h-4 text-amber-600 shrink-0" />
+            <span>
+              {newPendingAlert === 1
+                ? 'Надійшла нова заявка на підтвердження бізнесу!'
+                : `Надійшло ${newPendingAlert} нових заявок на підтвердження бізнесів!`}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setNewPendingAlert(null);
+                setActiveTab('businesses_pending');
+              }}
+              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs transition-colors"
+            >
+              <span>Перейти до перевірки</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setNewPendingAlert(null)}
+              className="p-1 text-amber-600 hover:text-amber-900"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {actionError && (
         <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-800 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
@@ -412,8 +582,26 @@ export const App: React.FC = () => {
                 setSelectedBusiness(b);
                 setIsBusinessModalOpen(true);
               }}
+              onPreviewStore={handlePreviewStore}
+              onOpenPendingQueue={() => setActiveTab('businesses_pending')}
               onRefresh={loadPlatformData}
               isLoading={isDataLoading}
+            />
+          )}
+
+          {activeTab === 'businesses_pending' && hasPerm('platform.stores.read') && (
+            <PendingBusinessesView
+              businesses={businesses}
+              canApprove={hasPerm('platform.stores.approve')}
+              isLoading={isDataLoading}
+              onRefresh={loadPlatformData}
+              onSelectBusiness={(b) => {
+                setSelectedBusiness(b);
+                setIsBusinessModalOpen(true);
+              }}
+              onPreviewStore={handlePreviewStore}
+              onApproveStore={handleApproveStore}
+              onRejectStore={handleRejectStore}
             />
           )}
 
@@ -456,8 +644,12 @@ export const App: React.FC = () => {
           setSelectedBusiness(null);
         }}
         onUpdateStatus={handleUpdateBusinessStatus}
+        onApproveStore={handleApproveStore}
+        onRejectStore={handleRejectStore}
+        onPreviewStore={handlePreviewStore}
         isUpdating={isUpdatingBusinessStatus}
         canModerate={hasPerm('platform.stores.moderate')}
+        canApprove={hasPerm('platform.stores.approve')}
         canArchive={hasPerm('platform.stores.archive')}
         canRevokeStrikes={hasPerm('platform.strikes.revoke')}
         onRefresh={loadPlatformData}
