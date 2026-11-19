@@ -1,3 +1,58 @@
+/**
+ * ============================================================================
+ * BizX Platform — Database Seed Script
+ * ============================================================================
+ * Пароль для ВСІХ тестових акаунтів: password123
+ *
+ * 1. КОМАНДА ПЛАТФОРМИ BIZX (вхід у BizX Core Admin):
+ * ────────────────────────────────────────────────────────────────────────────
+ * • admin@bizx.ua           | +380501234567 | Власник платформи (priority 10000, isOwner)
+ * • ops.bizx@bizx.ua        | +380502223344 | Операційний менеджер (priority 500, керує ролями/командою < 500)
+ * • support.bizx@bizx.ua    | +380503334455 | Підтримка та модерація (priority 100)
+ * • analyst.bizx@bizx.ua    | +380504445566 | Custom (лише аналітика, експорт та перегляд закладів)
+ *
+ * 2. ВЛАСНИКИ БІЗНЕСІВ (вхід у BizX Business Admin та Landing):
+ * ────────────────────────────────────────────────────────────────────────────
+ * • owner.coffee@bizx.ua    | +380671112233 | Власник «Львівська Кавова Мануфактура» (business_pro, до 3 закладів)
+ * • owner.tech@bizx.ua      | +380934445566 | Власниця «CyberTech Ukraine» (business_starter, до 1 закладу)
+ * • owner.bakery@bizx.ua    | +380667778899 | Власник «Хлібна Майстерня» (business_starter, до 1 закладу)
+ *
+ * 3. ПРАЦІВНИКИ БІЗНЕСІВ (без власної підписки, доступ лише до свого бізнесу):
+ * ────────────────────────────────────────────────────────────────────────────
+ * [Львівська Кавова Мануфактура]
+ * • manager.coffee@bizx.ua  | +380672223301 | Керуючий (priority 500, ролі/персонал < 500, без store.status.manage)
+ * • barista.coffee@bizx.ua  | +380672223302 | Старший бариста (priority 300, товари + замовлення)
+ * • cashier.coffee@bizx.ua  | +380672223303 | Персонал (priority 100, перегляд товарів + замовлення)
+ * • analyst.coffee@bizx.ua  | +380672223304 | Custom (analytics.read, analytics.export, orders.read, store.read)
+ *
+ * [CyberTech Ukraine]
+ * • manager.tech@bizx.ua    | +380935556601 | Керуючий (priority 500)
+ * • content.tech@bizx.ua    | +380935556602 | Контент-менеджер (priority 250, товари read/write/edit)
+ * • sales.tech@bizx.ua      | +380935556603 | Персонал (priority 100, замовлення + перегляд товарів)
+ *
+ * [Хлібна Майстерня]
+ * • manager.bakery@bizx.ua  | +380668889901 | Керуючий (priority 500)
+ * • baker.bakery@bizx.ua    | +380668889902 | Пекар-технолог (priority 250, товари + перегляд замовлень)
+ * • courier.bakery@bizx.ua  | +380668889903 | Custom (orders.read, orders.edit, store.read)
+ *
+ * 4. ЗВИЧАЙНІ КОРИСТУВАЧІ (без підписок, без бізнесів, без адмін-доступів):
+ *    Зручно використовувати для тестування додавання працівників по Email/Телефону
+ *    та як реальних покупців в історії замовлень.
+ * ────────────────────────────────────────────────────────────────────────────
+ * • client@bizx.ua          | +380991239876 | Марія Бондаренко (free, client)
+ * • user1@bizx.ua           | +380991110001 | Іван Ковальчук (free, client)
+ * • user2@bizx.ua           | +380991110002 | Ольга Савчук (free, client)
+ * • user3@bizx.ua           | +380991110003 | Денис Марченко (free, client)
+ * • user4@bizx.ua           | +380991110004 | Анастасія Павленко (free, client)
+ * • user5@bizx.ua           | +380991110005 | Павло Тимошенко (free, client)
+ * • user6@bizx.ua           | +380991110006 | Дарина Климчук (free, client)
+ * • user7@bizx.ua           | +380991110007 | Сергій Гриценко (free, client)
+ * • user8@bizx.ua           | +380991110008 | Тетяна Олійник (free, client)
+ * • user9@bizx.ua           | +380991110009 | Євгеній Білоус (free, client)
+ * • user10@bizx.ua          | +380991110010 | Христина Василенко (free, client)
+ * ============================================================================
+ */
+
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 import postgres from 'postgres';
@@ -57,7 +112,16 @@ const db = drizzle(queryClient, { schema });
 // bcrypt хэш для тестового пароля: "password123"
 const PASSWORD_HASH = '$2b$10$HPDJ8QBCeeaHqSugqyYmee0NR1Ab3dWqnsUY7mBdVyWJUe4cimoei';
 
-// Функция загрузки файла в Cloudflare R2
+// Детермінований генератор псевдовипадкових чисел для відтворюваної історії замовлень
+function createRng(seedValue: number) {
+  let state = seedValue >>> 0;
+  return () => {
+    state = (1664525 * state + 1013904223) >>> 0;
+    return state / 0xffffffff;
+  };
+}
+
+// Функція завантаження файлу у Cloudflare R2
 async function uploadToR2(
   s3Client: unknown,
   PutCmd: unknown,
@@ -82,7 +146,7 @@ async function uploadToR2(
 }
 
 async function seed() {
-  console.info('🌱 Початок наповнення бази даних тестовими даними (seeds)...');
+  console.info('🌱 Початок наповнення бази даних розширеними тестовими даними (seeds)...');
 
   try {
     // 0. Ініціалізація Cloudflare R2
@@ -138,11 +202,12 @@ async function seed() {
     `);
 
     // 1b. Довідник прав доступу (RBAC Permissions)
-    console.info('🔐 Наповнення довідника прав доступу (permissions)...');
+    console.info('🔐 Наповнення довідника прав доступу (29 permissions)...');
     await db.insert(schema.permissions).values(ALL_PERMISSIONS).onConflictDoNothing();
+    const permByCode = new Map(ALL_PERMISSIONS.map((p) => [p.code, p.id]));
 
-    // Завантажуємо медіафайли в R2 якщо клієнт доступний
-    console.info('📤 Завантаження стартових медіафайлів у Cloudflare R2...');
+    // 2. Медіафайли в R2 (паралельне завантаження)
+    console.info('📤 Завантаження медіафайлів у Cloudflare R2...');
 
     const avatarSvg = (name: string, bg: string) => `
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="100%" height="100%">
@@ -183,235 +248,172 @@ async function seed() {
       </svg>
     `;
 
-    let adminAvatarUrl = '/storage/defaults/avatar.svg';
-    let coffeeOwnerAvatarUrl = '/storage/defaults/avatar.svg';
-    let techOwnerAvatarUrl = '/storage/defaults/avatar.svg';
-    let bakeryOwnerAvatarUrl = '/storage/defaults/avatar.svg';
+    const maybeUpload = async (key: string, svg: string, fallback: string) => {
+      if (s3Client && PutCmd) {
+        return uploadToR2(s3Client, PutCmd, bucketName, key, svg, 'image/svg+xml');
+      }
+      return fallback;
+    };
 
-    let coffeeLogoUrl = '/storage/defaults/store.svg';
-    let coffeeBannerUrl = '/storage/defaults/banner.svg';
-    let techLogoUrl = '/storage/defaults/store.svg';
-    let techBannerUrl = '/storage/defaults/banner.svg';
-    let bakeryLogoUrl = '/storage/defaults/store.svg';
-    let bakeryBannerUrl = '/storage/defaults/banner.svg';
+    const [
+      adminAvatarUrl,
+      coffeeOwnerAvatarUrl,
+      techOwnerAvatarUrl,
+      bakeryOwnerAvatarUrl,
+      coffeeLogoUrl,
+      coffeeBannerUrl,
+      techLogoUrl,
+      techBannerUrl,
+      bakeryLogoUrl,
+      bakeryBannerUrl,
+      prodCoffee1Url,
+      prodCoffee2Url,
+      prodCoffee3Url,
+      prodCoffee4Url,
+      prodCoffee5Url,
+      prodCoffee6Url,
+      prodTech1Url,
+      prodTech2Url,
+      prodTech3Url,
+      prodTech4Url,
+      prodTech5Url,
+      prodTech6Url,
+      prodBread1Url,
+      prodBread2Url,
+      prodBread3Url,
+      prodBread4Url,
+      prodBread5Url,
+      prodBread6Url
+    ] = await Promise.all([
+      maybeUpload('avatars/admin.svg', avatarSvg('Адмін', '#0f172a'), '/storage/defaults/avatar.svg'),
+      maybeUpload('avatars/taras-shevchuk.svg', avatarSvg('Тарас', '#78350f'), '/storage/defaults/avatar.svg'),
+      maybeUpload('avatars/iryna-melnyk.svg', avatarSvg('Ірина', '#0284c7'), '/storage/defaults/avatar.svg'),
+      maybeUpload('avatars/bohdan-kravchenko.svg', avatarSvg('Богдан', '#d97706'), '/storage/defaults/avatar.svg'),
 
-    let prodCoffee1Url = '/storage/defaults/product.svg';
-    let prodCoffee2Url = '/storage/defaults/product.svg';
-    let prodCoffeeDessertUrl = '/storage/defaults/product.svg';
-    let prodTech1Url = '/storage/defaults/product.svg';
-    let prodTech2Url = '/storage/defaults/product.svg';
-    let prodBread1Url = '/storage/defaults/product.svg';
-    let prodBread2Url = '/storage/defaults/product.svg';
+      maybeUpload('stores/logos/lviv-coffee.svg', storeSvg('Кава', '#451a03'), '/storage/defaults/store.svg'),
+      maybeUpload('stores/banners/lviv-coffee.svg', bannerSvg('Львівська Кавова Мануфактура', '#451a03', '#78350f'), '/storage/defaults/banner.svg'),
+      maybeUpload('stores/logos/cybertech.svg', storeSvg('Tech', '#0f172a'), '/storage/defaults/store.svg'),
+      maybeUpload('stores/banners/cybertech.svg', bannerSvg('CyberTech Ukraine', '#0f172a', '#1e293b'), '/storage/defaults/banner.svg'),
+      maybeUpload('stores/logos/khlibna.svg', storeSvg('Хліб', '#b45309'), '/storage/defaults/store.svg'),
+      maybeUpload('stores/banners/khlibna.svg', bannerSvg('Хлібна Майстерня', '#b45309', '#d97706'), '/storage/defaults/banner.svg'),
 
-    if (s3Client && PutCmd) {
-      adminAvatarUrl = await uploadToR2(
-        s3Client,
-        PutCmd,
-        bucketName,
-        'avatars/admin.svg',
-        avatarSvg('Адмін', '#0f172a'),
-        'image/svg+xml'
-      );
-      coffeeOwnerAvatarUrl = await uploadToR2(
-        s3Client,
-        PutCmd,
-        bucketName,
-        'avatars/taras-shevchuk.svg',
-        avatarSvg('Тарас', '#78350f'),
-        'image/svg+xml'
-      );
-      techOwnerAvatarUrl = await uploadToR2(
-        s3Client,
-        PutCmd,
-        bucketName,
-        'avatars/iryna-melnyk.svg',
-        avatarSvg('Ірина', '#0284c7'),
-        'image/svg+xml'
-      );
-      bakeryOwnerAvatarUrl = await uploadToR2(
-        s3Client,
-        PutCmd,
-        bucketName,
-        'avatars/bohdan-kravchenko.svg',
-        avatarSvg('Богдан', '#d97706'),
-        'image/svg+xml'
-      );
+      maybeUpload('products/coffee-ethiopia.svg', productSvg('Ефіопія', '#78350f'), '/storage/defaults/product.svg'),
+      maybeUpload('products/coffee-lviv-blend.svg', productSvg('Бленд', '#92400e'), '/storage/defaults/product.svg'),
+      maybeUpload('products/coffee-colombia.svg', productSvg('Колумбія', '#713f12'), '/storage/defaults/product.svg'),
+      maybeUpload('products/coffee-drip-mix.svg', productSvg('Дріп-сет', '#a16207'), '/storage/defaults/product.svg'),
+      maybeUpload('products/coffee-syrnyk.svg', productSvg('Сирник', '#b45309'), '/storage/defaults/product.svg'),
+      maybeUpload('products/coffee-strudel.svg', productSvg('Штрудель', '#d97706'), '/storage/defaults/product.svg'),
 
-      coffeeLogoUrl = await uploadToR2(
-        s3Client,
-        PutCmd,
-        bucketName,
-        'stores/logos/lviv-coffee.svg',
-        storeSvg('Кава', '#451a03'),
-        'image/svg+xml'
-      );
-      coffeeBannerUrl = await uploadToR2(
-        s3Client,
-        PutCmd,
-        bucketName,
-        'stores/banners/lviv-coffee.svg',
-        bannerSvg('Львівська Кавова Мануфактура', '#451a03', '#78350f'),
-        'image/svg+xml'
-      );
+      maybeUpload('products/tech-cyberpods.svg', productSvg('Навушники', '#1e293b'), '/storage/defaults/product.svg'),
+      maybeUpload('products/tech-cyberkey.svg', productSvg('Клавіатура', '#334155'), '/storage/defaults/product.svg'),
+      maybeUpload('products/tech-cybermouse.svg', productSvg('Миша Pro', '#0f172a'), '/storage/defaults/product.svg'),
+      maybeUpload('products/tech-usbc-hub.svg', productSvg('USB-C Хаб', '#1d4ed8'), '/storage/defaults/product.svg'),
+      maybeUpload('products/tech-powerbank.svg', productSvg('Павербанк', '#0369a1'), '/storage/defaults/product.svg'),
+      maybeUpload('products/tech-gan100w.svg', productSvg('GaN 100W', '#4338ca'), '/storage/defaults/product.svg'),
 
-      techLogoUrl = await uploadToR2(
-        s3Client,
-        PutCmd,
-        bucketName,
-        'stores/logos/cybertech.svg',
-        storeSvg('Tech', '#0f172a'),
-        'image/svg+xml'
-      );
-      techBannerUrl = await uploadToR2(
-        s3Client,
-        PutCmd,
-        bucketName,
-        'stores/banners/cybertech.svg',
-        bannerSvg('CyberTech Ukraine', '#0f172a', '#1e293b'),
-        'image/svg+xml'
-      );
+      maybeUpload('products/bread-tartin.svg', productSvg('Тартин', '#d97706'), '/storage/defaults/product.svg'),
+      maybeUpload('products/bread-rye.svg', productSvg('Житній', '#92400e'), '/storage/defaults/product.svg'),
+      maybeUpload('products/bread-baguette.svg', productSvg('Багет', '#b45309'), '/storage/defaults/product.svg'),
+      maybeUpload('products/bread-croissant.svg', productSvg('Круасан', '#f59e0b'), '/storage/defaults/product.svg'),
+      maybeUpload('products/bread-cinnamon.svg', productSvg('Кориця', '#ca8a04'), '/storage/defaults/product.svg'),
+      maybeUpload('products/bread-quiche.svg', productSvg('Кіш', '#ea580c'), '/storage/defaults/product.svg')
+    ]);
 
-      bakeryLogoUrl = await uploadToR2(
-        s3Client,
-        PutCmd,
-        bucketName,
-        'stores/logos/khlibna.svg',
-        storeSvg('Хліб', '#b45309'),
-        'image/svg+xml'
-      );
-      bakeryBannerUrl = await uploadToR2(
-        s3Client,
-        PutCmd,
-        bucketName,
-        'stores/banners/khlibna.svg',
-        bannerSvg('Хлібна Майстерня', '#b45309', '#d97706'),
-        'image/svg+xml'
-      );
-
-      prodCoffee1Url = await uploadToR2(
-        s3Client,
-        PutCmd,
-        bucketName,
-        'products/coffee-ethiopia.svg',
-        productSvg('Ефіопія', '#78350f'),
-        'image/svg+xml'
-      );
-      prodCoffee2Url = await uploadToR2(
-        s3Client,
-        PutCmd,
-        bucketName,
-        'products/coffee-lviv-blend.svg',
-        productSvg('Бленд', '#92400e'),
-        'image/svg+xml'
-      );
-      prodCoffeeDessertUrl = await uploadToR2(
-        s3Client,
-        PutCmd,
-        bucketName,
-        'products/coffee-syrnyk.svg',
-        productSvg('Сирник', '#b45309'),
-        'image/svg+xml'
-      );
-
-      prodTech1Url = await uploadToR2(
-        s3Client,
-        PutCmd,
-        bucketName,
-        'products/tech-cyberpods.svg',
-        productSvg('Навушники', '#1e293b'),
-        'image/svg+xml'
-      );
-      prodTech2Url = await uploadToR2(
-        s3Client,
-        PutCmd,
-        bucketName,
-        'products/tech-cyberkey.svg',
-        productSvg('Клавіатура', '#334155'),
-        'image/svg+xml'
-      );
-
-      prodBread1Url = await uploadToR2(
-        s3Client,
-        PutCmd,
-        bucketName,
-        'products/bread-tartin.svg',
-        productSvg('Тартин', '#d97706'),
-        'image/svg+xml'
-      );
-      prodBread2Url = await uploadToR2(
-        s3Client,
-        PutCmd,
-        bucketName,
-        'products/bread-croissant.svg',
-        productSvg('Круасан', '#f59e0b'),
-        'image/svg+xml'
-      );
-    }
-
-    // 2. Користувачі (Users)
-    console.info('👤 Створення користувачів...');
+    // 3. Користувачі (Users)
+    console.info('👤 Створення користувачів (платформа, власники, працівники та звичайні клієнти)...');
     const nowSub = Date.now();
     const in30Days = new Date(nowSub + 30 * 24 * 60 * 60 * 1000);
     const in365Days = new Date(nowSub + 365 * 24 * 60 * 60 * 1000);
 
-    const [adminUser] = await db
+    // 3a. Команда платформи BizX
+    const [adminUser, platOpsUser, platSupportUser, platAnalystUser] = await db
       .insert(schema.users)
-      .values({
-        email: 'admin@bizx.ua',
-        name: 'Олександр Коваленко',
-        passwordHash: PASSWORD_HASH,
-        role: 'admin',
-        systemRole: 'platform_admin',
-        phone: '+380501234567',
-        preferredLanguage: 'uk',
-        subscriptionTier: 'business_enterprise',
-        subscriptionStatus: 'active',
-        subscriptionExpiresAt: in365Days,
-        avatarUrl: adminAvatarUrl
-      })
+      .values([
+        {
+          email: 'admin@bizx.ua',
+          name: 'Олександр Коваленко',
+          passwordHash: PASSWORD_HASH,
+          role: 'admin',
+          systemRole: 'platform_admin',
+          phone: '+380501234567',
+          preferredLanguage: 'uk',
+          subscriptionTier: 'business_enterprise',
+          subscriptionStatus: 'active',
+          subscriptionExpiresAt: in365Days,
+          avatarUrl: adminAvatarUrl
+        },
+        {
+          email: 'ops.bizx@bizx.ua',
+          name: 'Олена Сидоренко',
+          passwordHash: PASSWORD_HASH,
+          role: 'admin',
+          systemRole: 'platform_admin',
+          phone: '+380502223344',
+          preferredLanguage: 'uk',
+          subscriptionTier: 'free',
+          subscriptionStatus: 'none',
+          avatarUrl: '/storage/defaults/avatar.svg'
+        },
+        {
+          email: 'support.bizx@bizx.ua',
+          name: 'Дмитро Поліщук',
+          passwordHash: PASSWORD_HASH,
+          role: 'admin',
+          systemRole: 'platform_admin',
+          phone: '+380503334455',
+          preferredLanguage: 'uk',
+          subscriptionTier: 'free',
+          subscriptionStatus: 'none',
+          avatarUrl: '/storage/defaults/avatar.svg'
+        },
+        {
+          email: 'analyst.bizx@bizx.ua',
+          name: 'Наталія Лисенко',
+          passwordHash: PASSWORD_HASH,
+          role: 'admin',
+          systemRole: 'platform_admin',
+          phone: '+380504445566',
+          preferredLanguage: 'uk',
+          subscriptionTier: 'free',
+          subscriptionStatus: 'none',
+          avatarUrl: '/storage/defaults/avatar.svg'
+        }
+      ])
       .returning();
 
-    // 2b. Ролі платформи BizX та команда платформи (platform_members)
-    console.info('🛡️ Створення ролей платформи BizX...');
-    const permByCode = new Map(ALL_PERMISSIONS.map((p) => [p.code, p.id]));
-
-    const [platOwnerRole] = await db
+    // 3b. Ролі платформи BizX та команда платформи (platform_members)
+    console.info('🛡️ Створення ролей та команди платформи BizX...');
+    const [platOwnerRole, platOpsRole, platSupportRole] = await db
       .insert(schema.roles)
-      .values({
-        scope: 'platform',
-        storeId: null,
-        name: 'Власник платформи',
-        icon: '👑',
-        color: '#0f172a',
-        priority: OWNER_ROLE_PRIORITY,
-        isSystem: true
-      })
-      .returning();
-
-    const [platOpsRole] = await db
-      .insert(schema.roles)
-      .values({
-        scope: 'platform',
-        storeId: null,
-        name: 'Операційний менеджер',
-        icon: '⚡',
-        color: '#2563eb',
-        priority: 500,
-        isSystem: false
-      })
-      .returning();
-
-    const [platSupportRole] = await db
-      .insert(schema.roles)
-      .values({
-        scope: 'platform',
-        storeId: null,
-        name: 'Підтримка та модерація',
-        icon: '🎧',
-        color: '#059669',
-        priority: 100,
-        isSystem: false
-      })
+      .values([
+        {
+          scope: 'platform',
+          storeId: null,
+          name: 'Власник платформи',
+          icon: '👑',
+          color: '#0f172a',
+          priority: OWNER_ROLE_PRIORITY,
+          isSystem: true
+        },
+        {
+          scope: 'platform',
+          storeId: null,
+          name: 'Операційний менеджер',
+          icon: '⚡',
+          color: '#2563eb',
+          priority: 500,
+          isSystem: false
+        },
+        {
+          scope: 'platform',
+          storeId: null,
+          name: 'Підтримка та модерація',
+          icon: '🎧',
+          color: '#059669',
+          priority: 100,
+          isSystem: false
+        }
+      ])
       .returning();
 
     await db.insert(schema.rolePermissions).values([
@@ -425,7 +427,11 @@ async function seed() {
         'platform.analytics.read',
         'platform.analytics.export',
         'platform.staff.read',
-        'platform.roles.read'
+        'platform.staff.write',
+        'platform.staff.edit',
+        'platform.roles.read',
+        'platform.roles.write',
+        'platform.roles.edit'
       ].map((c) => ({ roleId: platOpsRole.id, permissionId: permByCode.get(c)! })),
       ...['platform.stores.read', 'platform.users.read', 'platform.analytics.read'].map((c) => ({
         roleId: platSupportRole.id,
@@ -433,231 +439,500 @@ async function seed() {
       }))
     ]);
 
-    await db.insert(schema.platformMembers).values({
-      userId: adminUser.id,
-      roleId: platOwnerRole.id,
-      isCustom: false,
-      isOwner: true,
-      department: 'Керівництво'
-    });
-
-    const [coffeeOwner] = await db
-      .insert(schema.users)
-      .values({
-        email: 'owner.coffee@bizx.ua',
-        name: 'Тарас Шевчук',
-        passwordHash: PASSWORD_HASH,
-        role: 'business_owner',
-        phone: '+380671112233',
-        preferredLanguage: 'uk',
-        subscriptionTier: 'business_pro',
-        subscriptionStatus: 'active',
-        subscriptionExpiresAt: in30Days,
-        avatarUrl: coffeeOwnerAvatarUrl
-      })
+    const [, , , platAnalystMember] = await db
+      .insert(schema.platformMembers)
+      .values([
+        {
+          userId: adminUser.id,
+          roleId: platOwnerRole.id,
+          isCustom: false,
+          isOwner: true,
+          department: 'Керівництво'
+        },
+        {
+          userId: platOpsUser.id,
+          roleId: platOpsRole.id,
+          isCustom: false,
+          isOwner: false,
+          department: 'Операційний відділ'
+        },
+        {
+          userId: platSupportUser.id,
+          roleId: platSupportRole.id,
+          isCustom: false,
+          isOwner: false,
+          department: 'Служба підтримки'
+        },
+        {
+          userId: platAnalystUser.id,
+          roleId: null,
+          isCustom: true,
+          customPriority: 50,
+          isOwner: false,
+          department: 'Фінанси та аналітика'
+        }
+      ])
       .returning();
 
-    const [techOwner] = await db
+    await db.insert(schema.platformMemberPermissions).values(
+      ['platform.analytics.read', 'platform.analytics.export', 'platform.stores.read'].map((c) => ({
+        platformMemberId: platAnalystMember.id,
+        permissionId: permByCode.get(c)!
+      }))
+    );
+
+    // 3c. Власники бізнесів (з активними бізнес-підписками)
+    const [coffeeOwner, techOwner, bakeryOwner] = await db
       .insert(schema.users)
-      .values({
-        email: 'owner.tech@bizx.ua',
-        name: 'Ірина Мельник',
-        passwordHash: PASSWORD_HASH,
-        role: 'business_owner',
-        phone: '+380934445566',
-        preferredLanguage: 'uk',
-        subscriptionTier: 'business_starter',
-        subscriptionStatus: 'active',
-        subscriptionExpiresAt: in30Days,
-        avatarUrl: techOwnerAvatarUrl
-      })
+      .values([
+        {
+          email: 'owner.coffee@bizx.ua',
+          name: 'Тарас Шевчук',
+          passwordHash: PASSWORD_HASH,
+          role: 'business_owner',
+          phone: '+380671112233',
+          preferredLanguage: 'uk',
+          subscriptionTier: 'business_pro',
+          subscriptionStatus: 'active',
+          subscriptionExpiresAt: in30Days,
+          avatarUrl: coffeeOwnerAvatarUrl
+        },
+        {
+          email: 'owner.tech@bizx.ua',
+          name: 'Ірина Мельник',
+          passwordHash: PASSWORD_HASH,
+          role: 'business_owner',
+          phone: '+380934445566',
+          preferredLanguage: 'uk',
+          subscriptionTier: 'business_starter',
+          subscriptionStatus: 'active',
+          subscriptionExpiresAt: in30Days,
+          avatarUrl: techOwnerAvatarUrl
+        },
+        {
+          email: 'owner.bakery@bizx.ua',
+          name: 'Богдан Кравченко',
+          passwordHash: PASSWORD_HASH,
+          role: 'business_owner',
+          phone: '+380667778899',
+          preferredLanguage: 'uk',
+          subscriptionTier: 'business_starter',
+          subscriptionStatus: 'active',
+          subscriptionExpiresAt: in30Days,
+          avatarUrl: bakeryOwnerAvatarUrl
+        }
+      ])
       .returning();
 
-    const [bakeryOwner] = await db
+    // 3d. Працівники бізнесів (звичайні акаунти без власних підписок, запрошені у команди магазинів)
+    const [
+      coffeeManagerUser,
+      coffeeBaristaUser,
+      coffeeCashierUser,
+      coffeeAnalystUser,
+      techManagerUser,
+      techContentUser,
+      techSalesUser,
+      bakeryManagerUser,
+      bakeryBakerUser,
+      bakeryCourierUser
+    ] = await db
       .insert(schema.users)
-      .values({
-        email: 'owner.bakery@bizx.ua',
-        name: 'Богдан Кравченко',
-        passwordHash: PASSWORD_HASH,
-        role: 'business_owner',
-        phone: '+380667778899',
-        preferredLanguage: 'uk',
-        subscriptionTier: 'business_starter',
-        subscriptionStatus: 'active',
-        subscriptionExpiresAt: in30Days,
-        avatarUrl: bakeryOwnerAvatarUrl
-      })
+      .values([
+        // Львівська Кавова Мануфактура
+        {
+          email: 'manager.coffee@bizx.ua',
+          name: 'Андрій Гнатюк',
+          passwordHash: PASSWORD_HASH,
+          role: 'client',
+          phone: '+380672223301',
+          preferredLanguage: 'uk',
+          subscriptionTier: 'free',
+          subscriptionStatus: 'none',
+          avatarUrl: '/storage/defaults/avatar.svg'
+        },
+        {
+          email: 'barista.coffee@bizx.ua',
+          name: 'Софія Романюк',
+          passwordHash: PASSWORD_HASH,
+          role: 'client',
+          phone: '+380672223302',
+          preferredLanguage: 'uk',
+          subscriptionTier: 'free',
+          subscriptionStatus: 'none',
+          avatarUrl: '/storage/defaults/avatar.svg'
+        },
+        {
+          email: 'cashier.coffee@bizx.ua',
+          name: 'Максим Ткачук',
+          passwordHash: PASSWORD_HASH,
+          role: 'client',
+          phone: '+380672223303',
+          preferredLanguage: 'uk',
+          subscriptionTier: 'free',
+          subscriptionStatus: 'none',
+          avatarUrl: '/storage/defaults/avatar.svg'
+        },
+        {
+          email: 'analyst.coffee@bizx.ua',
+          name: 'Вікторія Савченко',
+          passwordHash: PASSWORD_HASH,
+          role: 'client',
+          phone: '+380672223304',
+          preferredLanguage: 'uk',
+          subscriptionTier: 'free',
+          subscriptionStatus: 'none',
+          avatarUrl: '/storage/defaults/avatar.svg'
+        },
+        // CyberTech Ukraine
+        {
+          email: 'manager.tech@bizx.ua',
+          name: 'Владислав Мороз',
+          passwordHash: PASSWORD_HASH,
+          role: 'client',
+          phone: '+380935556601',
+          preferredLanguage: 'uk',
+          subscriptionTier: 'free',
+          subscriptionStatus: 'none',
+          avatarUrl: '/storage/defaults/avatar.svg'
+        },
+        {
+          email: 'content.tech@bizx.ua',
+          name: 'Аліна Козак',
+          passwordHash: PASSWORD_HASH,
+          role: 'client',
+          phone: '+380935556602',
+          preferredLanguage: 'uk',
+          subscriptionTier: 'free',
+          subscriptionStatus: 'none',
+          avatarUrl: '/storage/defaults/avatar.svg'
+        },
+        {
+          email: 'sales.tech@bizx.ua',
+          name: 'Артем Захарченко',
+          passwordHash: PASSWORD_HASH,
+          role: 'client',
+          phone: '+380935556603',
+          preferredLanguage: 'uk',
+          subscriptionTier: 'free',
+          subscriptionStatus: 'none',
+          avatarUrl: '/storage/defaults/avatar.svg'
+        },
+        // Хлібна Майстерня
+        {
+          email: 'manager.bakery@bizx.ua',
+          name: 'Катерина Литвин',
+          passwordHash: PASSWORD_HASH,
+          role: 'client',
+          phone: '+380668889901',
+          preferredLanguage: 'uk',
+          subscriptionTier: 'free',
+          subscriptionStatus: 'none',
+          avatarUrl: '/storage/defaults/avatar.svg'
+        },
+        {
+          email: 'baker.bakery@bizx.ua',
+          name: 'Роман Дорошенко',
+          passwordHash: PASSWORD_HASH,
+          role: 'client',
+          phone: '+380668889902',
+          preferredLanguage: 'uk',
+          subscriptionTier: 'free',
+          subscriptionStatus: 'none',
+          avatarUrl: '/storage/defaults/avatar.svg'
+        },
+        {
+          email: 'courier.bakery@bizx.ua',
+          name: 'Юрій Петренко',
+          passwordHash: PASSWORD_HASH,
+          role: 'client',
+          phone: '+380668889903',
+          preferredLanguage: 'uk',
+          subscriptionTier: 'free',
+          subscriptionStatus: 'none',
+          avatarUrl: '/storage/defaults/avatar.svg'
+        }
+      ])
       .returning();
 
-    // Клієнт: використовує аватарку-заглушку за замовчуванням
-    const [clientUser] = await db
+    // 3e. Звичайні користувачі (11 чистих акаунтів: без підписок, без бізнесів, без адмін-доступів)
+    const regularUsers = await db
       .insert(schema.users)
-      .values({
-        email: 'client@bizx.ua',
-        name: 'Марія Бондаренко',
-        passwordHash: PASSWORD_HASH,
-        role: 'client',
-        phone: '+380991239876',
-        preferredLanguage: 'uk',
-        subscriptionTier: 'free',
-        subscriptionStatus: 'none',
-        avatarUrl: '/storage/defaults/avatar.svg' // Статична заглушка
-      })
+      .values([
+        {
+          email: 'client@bizx.ua',
+          name: 'Марія Бондаренко',
+          passwordHash: PASSWORD_HASH,
+          role: 'client',
+          phone: '+380991239876',
+          preferredLanguage: 'uk',
+          subscriptionTier: 'free',
+          subscriptionStatus: 'none',
+          avatarUrl: '/storage/defaults/avatar.svg'
+        },
+        {
+          email: 'user1@bizx.ua',
+          name: 'Іван Ковальчук',
+          passwordHash: PASSWORD_HASH,
+          role: 'client',
+          phone: '+380991110001',
+          preferredLanguage: 'uk',
+          subscriptionTier: 'free',
+          subscriptionStatus: 'none',
+          avatarUrl: '/storage/defaults/avatar.svg'
+        },
+        {
+          email: 'user2@bizx.ua',
+          name: 'Ольга Савчук',
+          passwordHash: PASSWORD_HASH,
+          role: 'client',
+          phone: '+380991110002',
+          preferredLanguage: 'uk',
+          subscriptionTier: 'free',
+          subscriptionStatus: 'none',
+          avatarUrl: '/storage/defaults/avatar.svg'
+        },
+        {
+          email: 'user3@bizx.ua',
+          name: 'Денис Марченко',
+          passwordHash: PASSWORD_HASH,
+          role: 'client',
+          phone: '+380991110003',
+          preferredLanguage: 'en',
+          subscriptionTier: 'free',
+          subscriptionStatus: 'none',
+          avatarUrl: '/storage/defaults/avatar.svg'
+        },
+        {
+          email: 'user4@bizx.ua',
+          name: 'Анастасія Павленко',
+          passwordHash: PASSWORD_HASH,
+          role: 'client',
+          phone: '+380991110004',
+          preferredLanguage: 'uk',
+          subscriptionTier: 'free',
+          subscriptionStatus: 'none',
+          avatarUrl: '/storage/defaults/avatar.svg'
+        },
+        {
+          email: 'user5@bizx.ua',
+          name: 'Павло Тимошенко',
+          passwordHash: PASSWORD_HASH,
+          role: 'client',
+          phone: '+380991110005',
+          preferredLanguage: 'uk',
+          subscriptionTier: 'free',
+          subscriptionStatus: 'none',
+          avatarUrl: '/storage/defaults/avatar.svg'
+        },
+        {
+          email: 'user6@bizx.ua',
+          name: 'Дарина Климчук',
+          passwordHash: PASSWORD_HASH,
+          role: 'client',
+          phone: '+380991110006',
+          preferredLanguage: 'uk',
+          subscriptionTier: 'free',
+          subscriptionStatus: 'none',
+          avatarUrl: '/storage/defaults/avatar.svg'
+        },
+        {
+          email: 'user7@bizx.ua',
+          name: 'Сергій Гриценко',
+          passwordHash: PASSWORD_HASH,
+          role: 'client',
+          phone: '+380991110007',
+          preferredLanguage: 'uk',
+          subscriptionTier: 'free',
+          subscriptionStatus: 'none',
+          avatarUrl: '/storage/defaults/avatar.svg'
+        },
+        {
+          email: 'user8@bizx.ua',
+          name: 'Тетяна Олійник',
+          passwordHash: PASSWORD_HASH,
+          role: 'client',
+          phone: '+380991110008',
+          preferredLanguage: 'uk',
+          subscriptionTier: 'free',
+          subscriptionStatus: 'none',
+          avatarUrl: '/storage/defaults/avatar.svg'
+        },
+        {
+          email: 'user9@bizx.ua',
+          name: 'Євгеній Білоус',
+          passwordHash: PASSWORD_HASH,
+          role: 'client',
+          phone: '+380991110009',
+          preferredLanguage: 'en',
+          subscriptionTier: 'free',
+          subscriptionStatus: 'none',
+          avatarUrl: '/storage/defaults/avatar.svg'
+        },
+        {
+          email: 'user10@bizx.ua',
+          name: 'Христина Василенко',
+          passwordHash: PASSWORD_HASH,
+          role: 'client',
+          phone: '+380991110010',
+          preferredLanguage: 'uk',
+          subscriptionTier: 'free',
+          subscriptionStatus: 'none',
+          avatarUrl: '/storage/defaults/avatar.svg'
+        }
+      ])
       .returning();
 
-    // 3. Категорії магазинів (Store Categories)
+    // 4. Категорії магазинів (Store Categories)
     console.info('🏷️ Створення категорій магазинів...');
-    const [catCafes] = await db
+    const [catCafes, catElectronics, catBakery] = await db
       .insert(schema.storeCategories)
-      .values({
-        name: "Ресторани та кав'ярні",
-        slug: 'restaurants-cafes',
-        description: 'Смачна ресторанна їжа, свіжа авторська кава та фірмові десерти',
-        icon: 'coffee',
-        sortOrder: 1,
-        isActive: true
-      })
+      .values([
+        {
+          name: "Ресторани та кав'ярні",
+          slug: 'restaurants-cafes',
+          description: 'Смачна ресторанна їжа, свіжа авторська кава та фірмові десерти',
+          icon: 'coffee',
+          sortOrder: 1,
+          isActive: true
+        },
+        {
+          name: 'Електроніка та гаджети',
+          slug: 'electronics',
+          description: 'Смартфони, ноутбуки, компʼютерна периферія та розумна техніка',
+          icon: 'smartphone',
+          sortOrder: 2,
+          isActive: true
+        },
+        {
+          name: 'Пекарні та кондитерські',
+          slug: 'bakeries',
+          description: 'Ремісничий хліб на заквасці, домашнє печиво та круасани',
+          icon: 'cake',
+          sortOrder: 3,
+          isActive: true
+        },
+        {
+          name: 'Одяг та взуття',
+          slug: 'apparel',
+          description: 'Сучасний український одяг, взуття та стильні аксесуари',
+          icon: 'shirt',
+          sortOrder: 4,
+          isActive: true
+        },
+        {
+          name: "Краса та здоров'я",
+          slug: 'beauty-health',
+          description: 'Натуральна косметика, догляд за тілом та вітаміни',
+          icon: 'heart',
+          sortOrder: 5,
+          isActive: true
+        }
+      ])
       .returning();
 
-    const [catElectronics] = await db
-      .insert(schema.storeCategories)
-      .values({
-        name: 'Електроніка та гаджети',
-        slug: 'electronics',
-        description: 'Смартфони, ноутбуки, компʼютерна периферія та розумна техніка',
-        icon: 'smartphone',
-        sortOrder: 2,
-        isActive: true
-      })
-      .returning();
-
-    const [catBakery] = await db
-      .insert(schema.storeCategories)
-      .values({
-        name: 'Пекарні та кондитерські',
-        slug: 'bakeries',
-        description: 'Ремісничий хліб на заквасці, домашнє печиво та круасани',
-        icon: 'cake',
-        sortOrder: 3,
-        isActive: true
-      })
-      .returning();
-
-    await db.insert(schema.storeCategories).values([
-      {
-        name: 'Одяг та взуття',
-        slug: 'apparel',
-        description: 'Сучасний український одяг, взуття та стильні аксесуари',
-        icon: 'shirt',
-        sortOrder: 4,
-        isActive: true
-      },
-      {
-        name: "Краса та здоров'я",
-        slug: 'beauty-health',
-        description: 'Натуральна косметика, догляд за тілом та вітаміни',
-        icon: 'heart',
-        sortOrder: 5,
-        isActive: true
-      }
-    ]);
-
-    // 4. Магазини (Stores) з медіафайлами в Cloudflare R2
+    // 5. Магазини (Stores)
     console.info('🏬 Створення магазинів...');
-    const [storeCoffee] = await db
+    const [storeCoffee, storeTech, storeBakery] = await db
       .insert(schema.stores)
-      .values({
-        ownerId: coffeeOwner.id,
-        categoryId: catCafes.id,
-        name: 'Львівська Кавова Мануфактура',
-        slug: 'lviv-coffee-factory',
-        description:
-          'Справжня львівська кава свіжого обсмаження, кавові бленди від майстрів та затишні десерти.',
-        logoUrl: coffeeLogoUrl,
-        bannerUrl: coffeeBannerUrl,
-        address: 'м. Львів, вул. Вірменська, 15',
-        phone: '+380322998877',
-        email: 'info@lvivcoffee.ua',
-        status: 'active'
-      })
+      .values([
+        {
+          ownerId: coffeeOwner.id,
+          categoryId: catCafes.id,
+          name: 'Львівська Кавова Мануфактура',
+          slug: 'lviv-coffee-factory',
+          description:
+            'Справжня львівська кава свіжого обсмаження, кавові бленди від майстрів та затишні десерти.',
+          logoUrl: coffeeLogoUrl,
+          bannerUrl: coffeeBannerUrl,
+          address: 'м. Львів, вул. Вірменська, 15',
+          phone: '+380322998877',
+          email: 'info@lvivcoffee.ua',
+          status: 'active'
+        },
+        {
+          ownerId: techOwner.id,
+          categoryId: catElectronics.id,
+          name: 'CyberTech Ukraine',
+          slug: 'cybertech-ua',
+          description:
+            'Офіційний дистрибʼютор сучасної компʼютерної техніки, ергономічної периферії та гаджетів.',
+          logoUrl: techLogoUrl,
+          bannerUrl: techBannerUrl,
+          address: 'м. Київ, вул. Хрещатик, 24',
+          phone: '+380442334455',
+          email: 'sales@cybertech.ua',
+          status: 'active'
+        },
+        {
+          ownerId: bakeryOwner.id,
+          categoryId: catBakery.id,
+          name: 'Хлібна Майстерня',
+          slug: 'khlibna-maisternia',
+          description:
+            'Крафтовий хліб тривалого бродіння, французькі круасани та випічка за традиційними рецептами.',
+          logoUrl: bakeryLogoUrl,
+          bannerUrl: bakeryBannerUrl,
+          address: 'м. Київ, вул. Велика Васильківська, 42',
+          phone: '+380445556677',
+          email: 'order@khlibna.ua',
+          status: 'active'
+        }
+      ])
       .returning();
 
-    const [storeTech] = await db
-      .insert(schema.stores)
-      .values({
-        ownerId: techOwner.id,
-        categoryId: catElectronics.id,
-        name: 'CyberTech Ukraine',
-        slug: 'cybertech-ua',
-        description:
-          'Офіційний дистрибʼютор сучасної компʼютерної техніки, ергономічної периферії та гаджетів.',
-        logoUrl: techLogoUrl,
-        bannerUrl: techBannerUrl,
-        address: 'м. Київ, вул. Хрещатик, 24',
-        phone: '+380442334455',
-        email: 'sales@cybertech.ua',
-        status: 'active'
-      })
-      .returning();
-
-    const [storeBakery] = await db
-      .insert(schema.stores)
-      .values({
-        ownerId: bakeryOwner.id,
-        categoryId: catBakery.id,
-        name: 'Хлібна Майстерня',
-        slug: 'khlibna-maisternia',
-        description:
-          'Крафтовий хліб тривалого бродіння, французькі круасани та випічка за традиційними рецептами.',
-        logoUrl: bakeryLogoUrl,
-        bannerUrl: bakeryBannerUrl,
-        address: 'м. Київ, вул. Велика Васильківська, 42',
-        phone: '+380445556677',
-        email: 'order@khlibna.ua',
-        status: 'active'
-      })
-      .returning();
-
-    // 5. Ролі магазинів та членство (RBAC Roles & Store Members)
-    console.info('👥 Створення базових ролей та привʼязка власників до магазинів...');
-    const seedStoreRoles = async (storeId: string) => {
-      const [ownerR] = await db
+    // 6. Ролі магазинів та команди (RBAC Roles & Store Members)
+    console.info('👥 Створення ролей (включно з кастомними) та наповнення команд кожного бізнесу...');
+    const seedStoreRoles = async (
+      storeId: string,
+      extraRole: {
+        name: string;
+        icon: string;
+        color: string;
+        priority: number;
+        permCodes: string[];
+      }
+    ) => {
+      const [ownerR, managerR, customTierR, staffR] = await db
         .insert(schema.roles)
-        .values({
-          scope: 'store',
-          storeId,
-          name: 'Власник',
-          icon: '👑',
-          color: '#0f172a',
-          priority: OWNER_ROLE_PRIORITY,
-          isSystem: true
-        })
-        .returning();
-
-      const [managerR] = await db
-        .insert(schema.roles)
-        .values({
-          scope: 'store',
-          storeId,
-          name: 'Керуючий',
-          icon: '💼',
-          color: '#2563eb',
-          priority: 500,
-          isSystem: false
-        })
-        .returning();
-
-      const [staffR] = await db
-        .insert(schema.roles)
-        .values({
-          scope: 'store',
-          storeId,
-          name: 'Персонал',
-          icon: '🛒',
-          color: '#475569',
-          priority: 100,
-          isSystem: false
-        })
+        .values([
+          {
+            scope: 'store',
+            storeId,
+            name: 'Власник',
+            icon: '👑',
+            color: '#0f172a',
+            priority: OWNER_ROLE_PRIORITY,
+            isSystem: true
+          },
+          {
+            scope: 'store',
+            storeId,
+            name: 'Керуючий',
+            icon: '💼',
+            color: '#2563eb',
+            priority: 500,
+            isSystem: false
+          },
+          {
+            scope: 'store',
+            storeId,
+            name: extraRole.name,
+            icon: extraRole.icon,
+            color: extraRole.color,
+            priority: extraRole.priority,
+            isSystem: false
+          },
+          {
+            scope: 'store',
+            storeId,
+            name: 'Персонал',
+            icon: '🛒',
+            color: '#475569',
+            priority: 100,
+            isSystem: false
+          }
+        ])
         .returning();
 
       await db.insert(schema.rolePermissions).values([
@@ -675,330 +950,675 @@ async function seed() {
           'staff.read',
           'staff.write',
           'staff.edit',
-          'roles.read'
+          'roles.read',
+          'roles.write',
+          'roles.edit'
         ].map((c) => ({ roleId: managerR.id, permissionId: permByCode.get(c)! })),
+        ...extraRole.permCodes.map((c) => ({
+          roleId: customTierR.id,
+          permissionId: permByCode.get(c)!
+        })),
         ...['products.read', 'orders.read', 'orders.edit', 'store.read'].map((c) => ({
           roleId: staffR.id,
           permissionId: permByCode.get(c)!
         }))
       ]);
 
-      return { ownerRoleId: ownerR.id };
+      return {
+        ownerRoleId: ownerR.id,
+        managerRoleId: managerR.id,
+        extraRoleId: customTierR.id,
+        staffRoleId: staffR.id
+      };
     };
 
-    const coffeeRoles = await seedStoreRoles(storeCoffee.id);
-    const techRoles = await seedStoreRoles(storeTech.id);
-    const bakeryRoles = await seedStoreRoles(storeBakery.id);
+    const coffeeRoles = await seedStoreRoles(storeCoffee.id, {
+      name: 'Старший бариста',
+      icon: '☕',
+      color: '#d97706',
+      priority: 300,
+      permCodes: ['products.read', 'products.write', 'orders.read', 'orders.edit', 'store.read']
+    });
 
-    await db.insert(schema.storeMembers).values([
-      {
-        storeId: storeCoffee.id,
-        userId: coffeeOwner.id,
-        role: 'owner',
-        roleId: coffeeRoles.ownerRoleId,
-        isCustom: false
-      },
-      {
-        storeId: storeTech.id,
-        userId: techOwner.id,
-        role: 'owner',
-        roleId: techRoles.ownerRoleId,
-        isCustom: false
-      },
-      {
-        storeId: storeBakery.id,
-        userId: bakeryOwner.id,
-        role: 'owner',
-        roleId: bakeryRoles.ownerRoleId,
-        isCustom: false
-      }
+    const techRoles = await seedStoreRoles(storeTech.id, {
+      name: 'Контент-менеджер',
+      icon: '📦',
+      color: '#7c3aed',
+      priority: 250,
+      permCodes: ['products.read', 'products.write', 'products.edit', 'store.read']
+    });
+
+    const bakeryRoles = await seedStoreRoles(storeBakery.id, {
+      name: 'Пекар-технолог',
+      icon: '🔥',
+      color: '#b45309',
+      priority: 250,
+      permCodes: ['products.read', 'products.write', 'products.edit', 'orders.read', 'store.read']
+    });
+
+    const insertedMembers = await db
+      .insert(schema.storeMembers)
+      .values([
+        // --- Львівська Кавова Мануфактура (власник + 4 працівники) ---
+        {
+          storeId: storeCoffee.id,
+          userId: coffeeOwner.id,
+          role: 'owner',
+          roleId: coffeeRoles.ownerRoleId,
+          isCustom: false
+        },
+        {
+          storeId: storeCoffee.id,
+          userId: coffeeManagerUser.id,
+          role: 'manager',
+          roleId: coffeeRoles.managerRoleId,
+          isCustom: false
+        },
+        {
+          storeId: storeCoffee.id,
+          userId: coffeeBaristaUser.id,
+          role: 'staff',
+          roleId: coffeeRoles.extraRoleId,
+          isCustom: false
+        },
+        {
+          storeId: storeCoffee.id,
+          userId: coffeeCashierUser.id,
+          role: 'staff',
+          roleId: coffeeRoles.staffRoleId,
+          isCustom: false
+        },
+        {
+          storeId: storeCoffee.id,
+          userId: coffeeAnalystUser.id,
+          role: 'custom',
+          roleId: null,
+          isCustom: true,
+          customPriority: 50
+        },
+
+        // --- CyberTech Ukraine (власниця + 3 працівники) ---
+        {
+          storeId: storeTech.id,
+          userId: techOwner.id,
+          role: 'owner',
+          roleId: techRoles.ownerRoleId,
+          isCustom: false
+        },
+        {
+          storeId: storeTech.id,
+          userId: techManagerUser.id,
+          role: 'manager',
+          roleId: techRoles.managerRoleId,
+          isCustom: false
+        },
+        {
+          storeId: storeTech.id,
+          userId: techContentUser.id,
+          role: 'staff',
+          roleId: techRoles.extraRoleId,
+          isCustom: false
+        },
+        {
+          storeId: storeTech.id,
+          userId: techSalesUser.id,
+          role: 'staff',
+          roleId: techRoles.staffRoleId,
+          isCustom: false
+        },
+
+        // --- Хлібна Майстерня (власник + 3 працівники) ---
+        {
+          storeId: storeBakery.id,
+          userId: bakeryOwner.id,
+          role: 'owner',
+          roleId: bakeryRoles.ownerRoleId,
+          isCustom: false
+        },
+        {
+          storeId: storeBakery.id,
+          userId: bakeryManagerUser.id,
+          role: 'manager',
+          roleId: bakeryRoles.managerRoleId,
+          isCustom: false
+        },
+        {
+          storeId: storeBakery.id,
+          userId: bakeryBakerUser.id,
+          role: 'staff',
+          roleId: bakeryRoles.extraRoleId,
+          isCustom: false
+        },
+        {
+          storeId: storeBakery.id,
+          userId: bakeryCourierUser.id,
+          role: 'custom',
+          roleId: null,
+          isCustom: true,
+          customPriority: 50
+        }
+      ])
+      .returning();
+
+    const coffeeAnalystMember = insertedMembers.find((m) => m.userId === coffeeAnalystUser.id)!;
+    const bakeryCourierMember = insertedMembers.find((m) => m.userId === bakeryCourierUser.id)!;
+
+    await db.insert(schema.storeMemberPermissions).values([
+      ...['analytics.read', 'analytics.export', 'orders.read', 'store.read'].map((c) => ({
+        storeMemberId: coffeeAnalystMember.id,
+        permissionId: permByCode.get(c)!
+      })),
+      ...['orders.read', 'orders.edit', 'store.read'].map((c) => ({
+        storeMemberId: bakeryCourierMember.id,
+        permissionId: permByCode.get(c)!
+      }))
     ]);
 
-    // 6. Категорії товарів
+    // 7. Категорії товарів (6 категорій по 2 на магазин)
     console.info('📑 Створення категорій товарів...');
-    const [pCatCoffeeBeans] = await db
+    const [
+      pCatCoffeeBeans,
+      pCatCoffeeDesserts,
+      pCatTechAccessories,
+      pCatTechPower,
+      pCatBakeryBread,
+      pCatBakeryPastry
+    ] = await db
       .insert(schema.productCategories)
-      .values({
-        storeId: storeCoffee.id,
-        name: 'Зернова кава',
-        sortOrder: 1
-      })
+      .values([
+        { storeId: storeCoffee.id, name: 'Зернова та дріп-кава', sortOrder: 1 },
+        { storeId: storeCoffee.id, name: 'Десерти та випічка', sortOrder: 2 },
+        { storeId: storeTech.id, name: 'Периферія та аксесуари', sortOrder: 1 },
+        { storeId: storeTech.id, name: 'Зарядка та живлення', sortOrder: 2 },
+        { storeId: storeBakery.id, name: 'Хліб на заквасці', sortOrder: 1 },
+        { storeId: storeBakery.id, name: 'Круасани та солона випічка', sortOrder: 2 }
+      ])
       .returning();
 
-    const [pCatCoffeeDesserts] = await db
-      .insert(schema.productCategories)
-      .values({
-        storeId: storeCoffee.id,
-        name: 'Десерти та випічка',
-        sortOrder: 2
-      })
-      .returning();
-
-    const [pCatTechAccessories] = await db
-      .insert(schema.productCategories)
-      .values({
-        storeId: storeTech.id,
-        name: 'Периферія та аксесуари',
-        sortOrder: 1
-      })
-      .returning();
-
-    const [pCatBakeryBread] = await db
-      .insert(schema.productCategories)
-      .values({
-        storeId: storeBakery.id,
-        name: 'Хліб на заквасці',
-        sortOrder: 1
-      })
-      .returning();
-
-    // 6. Товари з фотографіями в Cloudflare R2
-    console.info('📦 Створення товарів...');
-    const [prodCoffee1] = await db
+    // 8. Товари (18 товарів: по 6 на кожен магазин)
+    console.info('📦 Створення каталогу товарів (18 позицій)...');
+    const coffeeProducts = await db
       .insert(schema.products)
-      .values({
-        storeId: storeCoffee.id,
-        categoryId: pCatCoffeeBeans.id,
-        name: 'Арабіка Ефіопія Їргачиф (250г)',
-        sku: 'COF-ETH-250',
-        description:
-          'Яскравий квітковий аромат з нотами бергамоту, жасмину та цитрусових фруктів. Свіже обсмаження.',
-        price: 38000, // 380.00 грн
-        oldPrice: 42000,
-        imageUrl: prodCoffee1Url,
-        inventoryCount: 45,
-        isActive: true
-      })
+      .values([
+        {
+          storeId: storeCoffee.id,
+          categoryId: pCatCoffeeBeans.id,
+          name: 'Арабіка Ефіопія Їргачиф (250г)',
+          sku: 'COF-ETH-250',
+          description:
+            'Яскравий квітковий аромат з нотами бергамоту, жасмину та цитрусових фруктів. Свіже обсмаження.',
+          price: 38000,
+          oldPrice: 42000,
+          imageUrl: prodCoffee1Url,
+          inventoryCount: 45,
+          isActive: true
+        },
+        {
+          storeId: storeCoffee.id,
+          categoryId: pCatCoffeeBeans.id,
+          name: 'Фірмовий Бленд «Львівський Ранок» (1кг)',
+          sku: 'COF-LVIV-1KG',
+          description:
+            'Збалансований бленд з шоколадно-горіховим смаком та оксамитовою пінкою крема. Ідеально для еспресо.',
+          price: 85000,
+          oldPrice: 95000,
+          imageUrl: prodCoffee2Url,
+          inventoryCount: 30,
+          isActive: true
+        },
+        {
+          storeId: storeCoffee.id,
+          categoryId: pCatCoffeeBeans.id,
+          name: 'Колумбія Супремо Медельїн (500г)',
+          sku: 'COF-COL-500',
+          description:
+            'Насичена кава середнього обсмаження з відтінками карамелі, стиглої вишні та какао.',
+          price: 59000,
+          oldPrice: null,
+          imageUrl: prodCoffee3Url,
+          inventoryCount: 38,
+          isActive: true
+        },
+        {
+          storeId: storeCoffee.id,
+          categoryId: pCatCoffeeBeans.id,
+          name: 'Дріп-кава Дегустаційний Мікс (10 шт)',
+          sku: 'COF-DRIP-10',
+          description:
+            'Зручний формат заварювання у чашці: 5 сортів спешелті арабіки для офісу та подорожей.',
+          price: 32000,
+          oldPrice: 36000,
+          imageUrl: prodCoffee4Url,
+          inventoryCount: 60,
+          isActive: true
+        },
+        {
+          storeId: storeCoffee.id,
+          categoryId: pCatCoffeeDesserts.id,
+          name: 'Львівський сирник з шоколадною глазурʼю',
+          sku: 'DES-SYRNYK',
+          description:
+            'Класичний ніжний сирник з родзинками за автентичним галицьким рецептом, вкритий чорним шоколадом.',
+          price: 13500,
+          oldPrice: null,
+          imageUrl: prodCoffee5Url,
+          inventoryCount: 25,
+          isActive: true
+        },
+        {
+          storeId: storeCoffee.id,
+          categoryId: pCatCoffeeDesserts.id,
+          name: 'Яблучний штрудель з ванільним соусом',
+          sku: 'DES-STRUDEL',
+          description:
+            'Тонке витяжне тісто, карамелізовані яблука з корицею, грецькі горіхи та теплий ванільний соус.',
+          price: 14500,
+          oldPrice: 16500,
+          imageUrl: prodCoffee6Url,
+          inventoryCount: 18,
+          isActive: true
+        }
+      ])
       .returning();
 
-    await db.insert(schema.products).values({
-      storeId: storeCoffee.id,
-      categoryId: pCatCoffeeBeans.id,
-      name: 'Фірмовий Бленд «Львівський Ранок» (1кг)',
-      sku: 'COF-LVIV-1KG',
-      description:
-        'Збалансований бленд з шоколадно-горіховим смаком та оксамитовою пінкою крема. Ідеально для еспресо.',
-      price: 85000, // 850.00 грн
-      oldPrice: 95000,
-      imageUrl: prodCoffee2Url,
-      inventoryCount: 30,
-      isActive: true
-    });
-
-    const [prodCoffeeDessert] = await db
+    const techProducts = await db
       .insert(schema.products)
-      .values({
-        storeId: storeCoffee.id,
-        categoryId: pCatCoffeeDesserts.id,
-        name: 'Львівський сирник з шоколадною глазурʼю',
-        sku: 'DES-SYRNYK',
-        description:
-          'Класичний ніжний сирник з родзинками за автентичним галицьким рецептом, вкритий чорним шоколадом.',
-        price: 13500, // 135.00 грн
-        oldPrice: null,
-        imageUrl: prodCoffeeDessertUrl,
-        inventoryCount: 20,
-        isActive: true
-      })
+      .values([
+        {
+          storeId: storeTech.id,
+          categoryId: pCatTechAccessories.id,
+          name: 'Бездротові навушники CyberPods Pro ANC',
+          sku: 'TECH-PODS-PRO',
+          description:
+            'Активне шумозаглушення (ANC), до 36 годин роботи з кейсом, підтримка швидкої бездротової зарядки.',
+          price: 249900,
+          oldPrice: 289900,
+          imageUrl: prodTech1Url,
+          inventoryCount: 22,
+          isActive: true
+        },
+        {
+          storeId: storeTech.id,
+          categoryId: pCatTechAccessories.id,
+          name: 'Механічна клавіатура CyberKey RGB (Linear Red)',
+          sku: 'TECH-KEY-RGB',
+          description:
+            'Компактний формат 75%, тихі лінійні перемикачі, гаряча заміна (Hot-Swap) та PBT-ковпачки з укр. гравіюванням.',
+          price: 329900,
+          oldPrice: 360000,
+          imageUrl: prodTech2Url,
+          inventoryCount: 14,
+          isActive: true
+        },
+        {
+          storeId: storeTech.id,
+          categoryId: pCatTechAccessories.id,
+          name: 'Бездротова миша CyberMouse Pro UltraLight',
+          sku: 'TECH-MOUSE-PRO',
+          description:
+            'Сенсор 26000 DPI, вага 54 г, підключення 2.4 ГГц + Bluetooth, до 80 годин автономної роботи.',
+          price: 189900,
+          oldPrice: 215000,
+          imageUrl: prodTech3Url,
+          inventoryCount: 28,
+          isActive: true
+        },
+        {
+          storeId: storeTech.id,
+          categoryId: pCatTechAccessories.id,
+          name: 'USB-C Хаб 8-в-1 Aluminum 4K HDMI / PD 100W',
+          sku: 'TECH-HUB-8IN1',
+          description:
+            'Алюмінієвий корпус, HDMI 4K@60Hz, Gigabit Ethernet, кардрідер SD/TF та наскрізна зарядка 100W.',
+          price: 125000,
+          oldPrice: null,
+          imageUrl: prodTech4Url,
+          inventoryCount: 40,
+          isActive: true
+        },
+        {
+          storeId: storeTech.id,
+          categoryId: pCatTechPower.id,
+          name: 'Павербанк CyberCharge 20000mAh PD 65W',
+          sku: 'TECH-PWR-20K',
+          description:
+            'Швидка зарядка ноутбуків та смартфонів до 65W, цифровий дисплей заряду, 2x USB-C + USB-A.',
+          price: 219000,
+          oldPrice: 249000,
+          imageUrl: prodTech5Url,
+          inventoryCount: 35,
+          isActive: true
+        },
+        {
+          storeId: storeTech.id,
+          categoryId: pCatTechPower.id,
+          name: 'GaN Зарядний пристрій 100W (3xUSB-C + USB-A)',
+          sku: 'TECH-GAN-100W',
+          description:
+            'Компактний блок живлення нового покоління GaN для одночасної зарядки MacBook, планшета та телефону.',
+          price: 159000,
+          oldPrice: 179000,
+          imageUrl: prodTech6Url,
+          inventoryCount: 50,
+          isActive: true
+        }
+      ])
       .returning();
 
-    const [prodTech1] = await db
+    const bakeryProducts = await db
       .insert(schema.products)
-      .values({
-        storeId: storeTech.id,
-        categoryId: pCatTechAccessories.id,
-        name: 'Бездротові навушники CyberPods Pro ANC',
-        sku: 'TECH-PODS-PRO',
-        description:
-          'Активне шумозаглушення (ANC), до 36 годин роботи з кейсом, підтримка швидкої бездротової зарядки.',
-        price: 249900, // 2499.00 грн
-        oldPrice: 289900,
-        imageUrl: prodTech1Url,
-        inventoryCount: 15,
-        isActive: true
-      })
+      .values([
+        {
+          storeId: storeBakery.id,
+          categoryId: pCatBakeryBread.id,
+          name: 'Хліб тартин на пшеничній заквасці (550г)',
+          sku: 'BRD-TARTIN',
+          description:
+            'Хрустка скоринка та пористий ніжний мʼякуш з легкою кислинкою. Випікається у подовій печі.',
+          price: 6800,
+          oldPrice: null,
+          imageUrl: prodBread1Url,
+          inventoryCount: 35,
+          isActive: true
+        },
+        {
+          storeId: storeBakery.id,
+          categoryId: pCatBakeryBread.id,
+          name: 'Житній солодовий хліб з насінням (600г)',
+          sku: 'BRD-RYE-SEED',
+          description:
+            'Ароматний житній хліб на ферментованому солоді з гарбузовим, лляним та соняшниковим насінням.',
+          price: 7400,
+          oldPrice: null,
+          imageUrl: prodBread2Url,
+          inventoryCount: 28,
+          isActive: true
+        },
+        {
+          storeId: storeBakery.id,
+          categoryId: pCatBakeryBread.id,
+          name: 'Багет французький традиційний (280г)',
+          sku: 'BRD-BAGUETTE',
+          description:
+            'Класичний хрусткий багет холодної ферментації на борошні Т65 — свіжий щоранку.',
+          price: 5200,
+          oldPrice: null,
+          imageUrl: prodBread3Url,
+          inventoryCount: 45,
+          isActive: true
+        },
+        {
+          storeId: storeBakery.id,
+          categoryId: pCatBakeryPastry.id,
+          name: 'Французький круасан з мигдалевим кремом',
+          sku: 'BRD-CROISSANT-ALM',
+          description:
+            'Багатошарове листкове тісто на вершковому маслі 82% з ніжною мигдалевою начинкою франжипан.',
+          price: 9500,
+          oldPrice: 11000,
+          imageUrl: prodBread4Url,
+          inventoryCount: 50,
+          isActive: true
+        },
+        {
+          storeId: storeBakery.id,
+          categoryId: pCatBakeryPastry.id,
+          name: 'Равлик з корицею та крем-сиром',
+          sku: 'BRD-CINNAMON',
+          description:
+            'Пухка здобна булочка з цейлонською корицею, тростинним цукром та глазурʼю з маскарпоне.',
+          price: 8500,
+          oldPrice: null,
+          imageUrl: prodBread5Url,
+          inventoryCount: 32,
+          isActive: true
+        },
+        {
+          storeId: storeBakery.id,
+          categoryId: pCatBakeryPastry.id,
+          name: 'Кіш з лососем, шпинатом та броколі (цілий)',
+          sku: 'BRD-QUICHE-SALMON',
+          description:
+            'Пісочна основа на вершковому маслі, слабосолений лосось, броколі та вершкова заливка з пармезаном.',
+          price: 36000,
+          oldPrice: 39500,
+          imageUrl: prodBread6Url,
+          inventoryCount: 12,
+          isActive: true
+        }
+      ])
       .returning();
 
-    await db.insert(schema.products).values({
-      storeId: storeTech.id,
-      categoryId: pCatTechAccessories.id,
-      name: 'Механічна клавіатура CyberKey RGB (Linear Red)',
-      sku: 'TECH-KEY-RGB',
-      description:
-        'Компактний формат 75%, тихі лінійні перемикачі, гаряча заміна (Hot-Swap) та PBT-ковпачки з укр. гравіюванням.',
-      price: 329900, // 3299.00 грн
-      oldPrice: 360000,
-      imageUrl: prodTech2Url,
-      inventoryCount: 12,
-      isActive: true
-    });
+    // 9. Розширена історія замовлень (96 замовлень за останні 175 днів для повної аналітики)
+    console.info('💳 Генерація 96 замовлень по різних датах, товарах, клієнтах та статусах...');
 
-    const [prodBread1] = await db
-      .insert(schema.products)
-      .values({
-        storeId: storeBakery.id,
-        categoryId: pCatBakeryBread.id,
-        name: 'Хліб тартин на пшеничній заквасці (550г)',
-        sku: 'BRD-TARTIN',
-        description:
-          'Хрустка скоринка та пористий ніжний мʼякуш з легкою кислинкою. Випікається у подовій печі.',
-        price: 6800, // 68.00 грн
-        oldPrice: null,
-        imageUrl: prodBread1Url,
-        inventoryCount: 25,
-        isActive: true
-      })
-      .returning();
+    const rng = createRng(20261119);
+    const nowMs = Date.now();
+    const DAY_MS = 24 * 60 * 60 * 1000;
+    const HOUR_MS = 60 * 60 * 1000;
 
-    const [prodBread2] = await db
-      .insert(schema.products)
-      .values({
-        storeId: storeBakery.id,
-        categoryId: pCatBakeryBread.id,
-        name: 'Французький круасан з мигдалевим кремом',
-        sku: 'BRD-CROISSANT-ALM',
-        description:
-          'Багатошарове листкове тісто на вершковому маслі 82% з ніжною мигдалевою начинкою франжипан.',
-        price: 9500, // 95.00 грн
-        oldPrice: 11000,
-        imageUrl: prodBread2Url,
-        inventoryCount: 40,
-        isActive: true
-      })
-      .returning();
+    const deliveryAddresses = [
+      'м. Київ, вул. Саксаганського, 10, кв. 24',
+      'м. Київ, Нова Пошта Відділення №45',
+      'м. Київ, вул. Антоновича, 55, підʼїзд 2',
+      'м. Львів, пр-т Свободи, 28, офіс 14',
+      'м. Львів, вул. Городоцька, 112, кв. 8',
+      'м. Одеса, вул. Дерибасівська, 19',
+      'м. Дніпро, Нова Пошта Поштомат №1204',
+      'м. Харків, вул. Сумська, 74, кв. 19',
+      'м. Вінниця, вул. Соборна, 41',
+      'м. Івано-Франківськ, вул. Незалежності, 30',
+      'Самовивіз із закладу'
+    ];
 
-    // 7. Тестові замовлення
-    console.info('💳 Створення замовлень та позицій для аналітики...');
-    const now = new Date();
+    const orderNotes = [
+      null,
+      null,
+      'Домофон 24, залишити біля дверей якщо не відповім',
+      'Зателефонуйте за 15 хвилин до доставки',
+      'Швидка доставка, дякую!',
+      'Прошу додати чек у пакунок',
+      'Безконтактна доставка',
+      'Подарункове пакування якщо можливо'
+    ];
 
-    const [order1] = await db
-      .insert(schema.orders)
-      .values({
-        orderNumber: 'ORD-2026-001',
-        storeId: storeCoffee.id,
-        customerId: clientUser.id,
-        status: 'delivered',
-        totalAmount: prodCoffee1.price + prodCoffeeDessert.price,
-        deliveryAddress: 'м. Київ, вул. Саксаганського, 10, кв. 24',
-        contactPhone: clientUser.phone || '+380991239876',
-        contactName: clientUser.name,
-        paymentStatus: 'paid',
-        paymentMethod: 'card',
-        notes: 'Домофон 24, залишити біля дверей якщо не відповім',
-        createdAt: now,
-        updatedAt: now
-      })
-      .returning();
+    const paymentMethods = ['card', 'online', 'cash'] as const;
 
-    await db.insert(schema.orderItems).values([
-      {
-        orderId: order1.id,
-        productId: prodCoffee1.id,
-        productName: prodCoffee1.name,
-        unitPrice: prodCoffee1.price,
-        quantity: 1,
-        totalPrice: prodCoffee1.price,
-        createdAt: now
-      },
-      {
-        orderId: order1.id,
-        productId: prodCoffeeDessert.id,
-        productName: prodCoffeeDessert.name,
-        unitPrice: prodCoffeeDessert.price,
-        quantity: 1,
-        totalPrice: prodCoffeeDessert.price,
-        createdAt: now
+    // Різноманітні зсуви в днях для кожного з 3 магазинів (32 замовлення на магазин = 96 всього):
+    // • Сьогодні (0 днів) — 3 замовлення на магазин (працює фільтр «За день»)
+    // • Останній тиждень (1–6 днів) — 7 замовлень на магазин (працює фільтр «За тиждень»)
+    // • Останній місяць (7–29 днів) — 10 замовлень на магазин (працює фільтр «За місяць»)
+    // • Попередні 5 місяців (32–172 дні) — 12 замовлень на магазин (графік по місяцях і «За рік»)
+    const dayOffsetsTemplate = [
+      0, 0, 0,
+      1, 1, 2, 3, 4, 5, 6,
+      8, 10, 12, 14, 16, 19, 21, 24, 26, 28,
+      34, 42, 51, 63, 75, 88, 99, 114, 127, 141, 156, 170
+    ];
+
+    const storeCatalogs = [
+      { store: storeCoffee, products: coffeeProducts, maxQty: 4 },
+      { store: storeTech, products: techProducts, maxQty: 2 },
+      { store: storeBakery, products: bakeryProducts, maxQty: 5 }
+    ];
+
+    const pick = <T,>(arr: readonly T[]): T => arr[Math.floor(rng() * arr.length)]!;
+
+    let orderSeq = 1;
+    let totalOrderItemsCount = 0;
+
+    for (let sIdx = 0; sIdx < storeCatalogs.length; sIdx++) {
+      const { store, products, maxQty } = storeCatalogs[sIdx]!;
+
+      for (let i = 0; i < dayOffsetsTemplate.length; i++) {
+        const baseDaysAgo = dayOffsetsTemplate[i]!;
+        // Невелике зміщення в межах дня/години, але для 0 днів тримаємо в межах останніх 12 годин
+        const createdAt =
+          baseDaysAgo === 0
+            ? new Date(nowMs - Math.floor((1 + rng() * 10) * HOUR_MS))
+            : new Date(
+                nowMs -
+                  (baseDaysAgo + (sIdx === 1 ? 0 : sIdx === 2 ? 1 : 0)) * DAY_MS -
+                  Math.floor(rng() * 14 * HOUR_MS)
+              );
+
+        const customer = regularUsers[(orderSeq * 3 + sIdx + i) % regularUsers.length]!;
+
+        // Статус залежить від давності замовлення (свіжі частіше в роботі, старіші — доставлені або скасовані)
+        let status: 'pending' | 'paid' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled';
+        let paymentStatus: 'pending' | 'paid' | 'failed';
+        const roll = rng();
+
+        if (baseDaysAgo === 0) {
+          if (roll < 0.35) {
+            status = 'pending';
+            paymentStatus = 'pending';
+          } else if (roll < 0.65) {
+            status = 'confirmed';
+            paymentStatus = 'paid';
+          } else if (roll < 0.85) {
+            status = 'paid';
+            paymentStatus = 'paid';
+          } else {
+            status = 'shipped';
+            paymentStatus = 'paid';
+          }
+        } else if (baseDaysAgo <= 5) {
+          if (roll < 0.4) {
+            status = 'delivered';
+            paymentStatus = 'paid';
+          } else if (roll < 0.72) {
+            status = 'shipped';
+            paymentStatus = 'paid';
+          } else if (roll < 0.88) {
+            status = 'confirmed';
+            paymentStatus = 'paid';
+          } else {
+            status = 'cancelled';
+            paymentStatus = roll < 0.94 ? 'failed' : 'pending';
+          }
+        } else {
+          if (roll < 0.82) {
+            status = 'delivered';
+            paymentStatus = 'paid';
+          } else if (roll < 0.9) {
+            status = 'shipped';
+            paymentStatus = 'paid';
+          } else {
+            status = 'cancelled';
+            paymentStatus = 'failed';
+          }
+        }
+
+        // Обираємо 1–3 унікальні товари в замовлення з різною кількістю
+        const lineCount = 1 + Math.floor(rng() * 3); // 1..3 позиції
+        const shuffledProducts = [...products].sort(() => rng() - 0.5);
+        const chosenProducts = shuffledProducts.slice(0, lineCount);
+
+        const itemsDraft = chosenProducts.map((prod) => {
+          const quantity = 1 + Math.floor(rng() * maxQty);
+          return {
+            productId: prod.id,
+            productName: prod.name,
+            unitPrice: prod.price,
+            quantity,
+            totalPrice: prod.price * quantity,
+            createdAt
+          };
+        });
+
+        const totalAmount = itemsDraft.reduce((acc, item) => acc + item.totalPrice, 0);
+        const orderNumber = `ORD-2026-${String(orderSeq).padStart(3, '0')}`;
+        orderSeq++;
+
+        const [insertedOrder] = await db
+          .insert(schema.orders)
+          .values({
+            orderNumber,
+            storeId: store.id,
+            customerId: customer.id,
+            status,
+            totalAmount,
+            deliveryAddress: pick(deliveryAddresses),
+            contactPhone: customer.phone || '+380991239876',
+            contactName: customer.name,
+            paymentStatus,
+            paymentMethod: pick(paymentMethods),
+            notes: pick(orderNotes),
+            createdAt,
+            updatedAt: createdAt
+          })
+          .returning();
+
+        await db.insert(schema.orderItems).values(
+          itemsDraft.map((item) => ({
+            ...item,
+            orderId: insertedOrder.id
+          }))
+        );
+        totalOrderItemsCount += itemsDraft.length;
       }
-    ]);
+    }
 
-    const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
-    const [order2] = await db
-      .insert(schema.orders)
-      .values({
-        orderNumber: 'ORD-2026-002',
-        storeId: storeTech.id,
-        customerId: clientUser.id,
-        status: 'shipped',
-        totalAmount: prodTech1.price,
-        deliveryAddress: 'м. Київ, Нова Пошта Відділення №45',
-        contactPhone: clientUser.phone || '+380991239876',
-        contactName: clientUser.name,
-        paymentStatus: 'paid',
-        paymentMethod: 'online',
-        notes: 'Швидка доставка',
-        createdAt: threeDaysAgo,
-        updatedAt: threeDaysAgo
-      })
-      .returning();
-
-    await db.insert(schema.orderItems).values({
-      orderId: order2.id,
-      productId: prodTech1.id,
-      productName: prodTech1.name,
-      unitPrice: prodTech1.price,
-      quantity: 1,
-      totalPrice: prodTech1.price,
-      createdAt: threeDaysAgo
-    });
-
-    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    const [order3] = await db
-      .insert(schema.orders)
-      .values({
-        orderNumber: 'ORD-2026-003',
-        storeId: storeBakery.id,
-        customerId: clientUser.id,
-        status: 'delivered',
-        totalAmount: prodBread1.price * 2 + prodBread2.price * 2,
-        deliveryAddress: 'м. Київ, вул. Антоновича, 55',
-        contactPhone: clientUser.phone || '+380991239876',
-        contactName: clientUser.name,
-        paymentStatus: 'paid',
-        paymentMethod: 'card',
-        createdAt: sevenDaysAgo,
-        updatedAt: sevenDaysAgo
-      })
-      .returning();
-
-    await db.insert(schema.orderItems).values([
-      {
-        orderId: order3.id,
-        productId: prodBread1.id,
-        productName: prodBread1.name,
-        unitPrice: prodBread1.price,
-        quantity: 2,
-        totalPrice: prodBread1.price * 2,
-        createdAt: sevenDaysAgo
-      },
-      {
-        orderId: order3.id,
-        productId: prodBread2.id,
-        productName: prodBread2.name,
-        unitPrice: prodBread2.price,
-        quantity: 2,
-        totalPrice: prodBread2.price * 2,
-        createdAt: sevenDaysAgo
-      }
-    ]);
+    const totalOrdersCount = orderSeq - 1;
 
     console.info('✅ Наповнення тестовими даними успішно завершено!');
     console.info(`
-══════════════════════════════════════════════════════════════════════════
- 🚀 Тестові акаунти для входу (пароль для всіх: password123):
- ──────────────────────────────────────────────────────────────────────
- • Адміністратор:          admin@bizx.ua (роль: admin)
- • Власник кав'ярні:       owner.coffee@bizx.ua (роль: business_owner)
- • Власниця електроніки:   owner.tech@bizx.ua (роль: business_owner)
- • Власник пекарні:        owner.bakery@bizx.ua (роль: business_owner)
- • Клієнт:                 client@bizx.ua (роль: client, дефолтна аватарка)
+════════════════════════════════════════════════════════════════════════════════════
+ 🚀 ТЕСТОВІ АКАУНТИ BIZX PLATFORM (пароль для ВСІХ: password123)
+════════════════════════════════════════════════════════════════════════════════════
 
- ☁️ Медіафайли завантажено у Cloudflare R2:
- • Аватарки:               /storage/file/avatars/*.svg
- • Логотипи магазинів:     /storage/file/stores/logos/*.svg
- • Банери магазинів:       /storage/file/stores/banners/*.svg
- • Зображення товарів:     /storage/file/products/*.svg
- • Статична заглушка:      /storage/defaults/avatar.svg
-══════════════════════════════════════════════════════════════════════════
+ 🛡️  КОМАНДА ПЛАТФОРМИ BIZX (вхід у BizX Core Admin):
+ ──────────────────────────────────────────────────────────────────────────────────
+ • admin@bizx.ua           | +380501234567 | 👑 Власник платформи (priority 10000)
+ • ops.bizx@bizx.ua        | +380502223344 | ⚡ Операційний менеджер (priority 500)
+ • support.bizx@bizx.ua    | +380503334455 | 🎧 Підтримка та модерація (priority 100)
+ • analyst.bizx@bizx.ua    | +380504445566 | ⚙️ Custom (аналітика + експорт + магазини)
+
+ 🏬 ВЛАСНИКИ БІЗНЕСІВ (активні бізнес-підписки, вхід у BizX Business Admin):
+ ──────────────────────────────────────────────────────────────────────────────────
+ • owner.coffee@bizx.ua    | +380671112233 | 👑 Львівська Кавова Мануфактура (PRO)
+ • owner.tech@bizx.ua      | +380934445566 | 👑 CyberTech Ukraine (STARTER)
+ • owner.bakery@bizx.ua    | +380667778899 | 👑 Хлібна Майстерня (STARTER)
+
+ 👥 ПРАЦІВНИКИ БІЗНЕСІВ (без власних підписок, різні ролі та Custom-доступи):
+ ──────────────────────────────────────────────────────────────────────────────────
+ [Львівська Кавова Мануфактура]
+ • manager.coffee@bizx.ua  | +380672223301 | 💼 Керуючий (priority 500)
+ • barista.coffee@bizx.ua  | +380672223302 | ☕ Старший бариста (priority 300)
+ • cashier.coffee@bizx.ua  | +380672223303 | 🛒 Персонал (priority 100)
+ • analyst.coffee@bizx.ua  | +380672223304 | ⚙️ Custom (аналітика + експорт + замовлення)
+
+ [CyberTech Ukraine]
+ • manager.tech@bizx.ua    | +380935556601 | 💼 Керуючий (priority 500)
+ • content.tech@bizx.ua    | +380935556602 | 📦 Контент-менеджер (priority 250)
+ • sales.tech@bizx.ua      | +380935556603 | 🛒 Персонал (priority 100)
+
+ [Хлібна Майстерня]
+ • manager.bakery@bizx.ua  | +380668889901 | 💼 Керуючий (priority 500)
+ • baker.bakery@bizx.ua    | +380668889902 | 🔥 Пекар-технолог (priority 250)
+ • courier.bakery@bizx.ua  | +380668889903 | ⚙️ Custom (замовлення read/edit + магазин)
+
+ 👤 ЗВИЧАЙНІ КОРИСТУВАЧІ (11 чистих акаунтів БЕЗ підписок, бізнесів і доступів):
+ ──────────────────────────────────────────────────────────────────────────────────
+ • client@bizx.ua          | +380991239876 | Марія Бондаренко
+ • user1@bizx.ua           | +380991110001 | Іван Ковальчук
+ • user2@bizx.ua           | +380991110002 | Ольга Савчук
+ • user3@bizx.ua           | +380991110003 | Денис Марченко
+ • user4@bizx.ua           | +380991110004 | Анастасія Павленко
+ • user5@bizx.ua           | +380991110005 | Павло Тимошенко
+ • user6@bizx.ua           | +380991110006 | Дарина Климчук
+ • user7@bizx.ua           | +380991110007 | Сергій Гриценко
+ • user8@bizx.ua           | +380991110008 | Тетяна Олійник
+ • user9@bizx.ua           | +380991110009 | Євгеній Білоус
+ • user10@bizx.ua          | +380991110010 | Христина Василенко
+
+ 📊 ЗГЕНЕРОВАНІ ДАНІ ДЛЯ АНАЛІТИКИ:
+ ──────────────────────────────────────────────────────────────────────────────────
+ • Користувачів всього:    28 (4 платформа + 3 власники + 10 працівників + 11 клієнтів)
+ • Магазинів / Товарів:    3 магазини / 18 товарів у 6 категоріях
+ • Замовлень / Позицій:    ${totalOrdersCount} замовлень / ${totalOrderItemsCount} позицій (за останні 175 днів)
+════════════════════════════════════════════════════════════════════════════════════
     `);
   } catch (error) {
     console.error('❌ Помилка під час наповнення тестовими даними:', error);
