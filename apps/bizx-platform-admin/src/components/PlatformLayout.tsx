@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
 import { platformApi } from '../lib/api';
+import { useTranslation } from '../hooks/useTranslation';
 import type { UserProfile } from '@bizx/common-types';
+import { LanguageSelector } from '@bizx/ui';
 import {
+  LayoutDashboard,
   BarChart3,
   Building2,
   Users,
@@ -12,7 +15,7 @@ import {
   ExternalLink
 } from 'lucide-react';
 
-export type PlatformTab = 'metrics' | 'businesses' | 'users' | 'staff';
+export type PlatformTab = 'metrics' | 'analytics' | 'businesses' | 'users' | 'staff';
 
 interface PlatformLayoutProps {
   currentTab: PlatformTab;
@@ -29,6 +32,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({
   onLogout,
   children
 }) => {
+  const { t, locale, setLocale } = useTranslation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
 
@@ -37,11 +41,19 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({
     : null;
 
   const navItems = [
-    { id: 'metrics' as const, label: 'Огляд та метрики', icon: BarChart3 },
-    { id: 'businesses' as const, label: 'Торгові точки', icon: Building2 },
-    { id: 'users' as const, label: 'Користувачі', icon: Users },
-    { id: 'staff' as const, label: 'Команда BizX', icon: ShieldCheck }
+    { id: 'metrics' as const, label: t('platform.tabMetrics'), icon: LayoutDashboard },
+    { id: 'analytics' as const, label: t('platform.tabAnalytics'), icon: BarChart3 },
+    { id: 'businesses' as const, label: t('platform.tabBusinesses'), icon: Building2 },
+    { id: 'users' as const, label: t('platform.tabUsers'), icon: Users },
+    { id: 'staff' as const, label: t('platform.tabStaff'), icon: ShieldCheck }
   ];
+
+  const handleLanguageChange = (next: 'uk' | 'en') => {
+    setLocale(next);
+    if (currentUser) {
+      platformApi.auth.updateProfile({ preferredLanguage: next }).catch(() => {});
+    }
+  };
 
   const getInitials = (nameVal?: string) => {
     if (!nameVal) return 'SA';
@@ -101,7 +113,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({
           {/* Platform Navigation */}
           <nav className="space-y-1">
             <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-3 mb-2">
-              Консоль керування
+              {t('platform.consoleTitle')}
             </div>
             {navItems.map((item) => {
               const Icon = item.icon;
@@ -129,7 +141,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({
           {/* Quick External Links */}
           <div className="pt-4 border-t border-slate-100 space-y-1">
             <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-3 mb-2">
-              Швидкі переходи
+              {t('platform.quickLinks')}
             </div>
             <a
               href="http://localhost:3100"
@@ -137,8 +149,8 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({
               rel="noreferrer"
               className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-colors text-xs font-medium"
             >
-              <span>Головний портал</span>
-              <ExternalLink className="w-3 h-3 text-slate-400" />
+              <span>{t('nav.mainPortal')}</span>
+              <ExternalLink className="w-3.5 h-3.5 shrink-0 text-slate-400" />
             </a>
             <a
               href="http://localhost:3102"
@@ -146,14 +158,23 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({
               rel="noreferrer"
               className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-colors text-xs font-medium"
             >
-              <span>Панель бізнесу</span>
-              <ExternalLink className="w-3 h-3 text-slate-400" />
+              <span>{t('nav.businessAdmin')}</span>
+              <ExternalLink className="w-3.5 h-3.5 shrink-0 text-slate-400" />
             </a>
           </div>
         </div>
 
-        {/* Bottom Operator Pill */}
-        <div className="p-4 border-t border-slate-200 bg-slate-50/50">
+        {/* Bottom Operator Pill + Language Dropdown */}
+        <div className="p-4 border-t border-slate-200 bg-slate-50/50 space-y-3">
+          <LanguageSelector
+            value={locale}
+            onChange={handleLanguageChange}
+            variant="sidebar"
+            dropUp={true}
+            align="left"
+            label={t('account.language')}
+          />
+
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5 min-w-0">
               <div className="w-8 h-8 rounded-full bg-slate-900 text-white font-bold flex items-center justify-center text-xs shrink-0 overflow-hidden">
@@ -170,10 +191,10 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({
               </div>
               <div className="min-w-0">
                 <div className="text-xs font-bold text-slate-900 truncate">
-                  {currentUser?.name || 'Оператор платформи'}
+                  {currentUser?.name || t('platform.operatorFallback')}
                 </div>
                 <div className="text-[10px] font-bold text-blue-700 bg-blue-50 px-1.5 py-0.2 rounded inline-block">
-                  Staff Admin
+                  {t('roles.platformAdmin')}
                 </div>
               </div>
             </div>
@@ -181,10 +202,10 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({
             <button
               type="button"
               onClick={onLogout}
-              title="Вийти з консолі"
+              title={t('platform.logoutTitle')}
               className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
             >
-              <LogOut className="w-4 h-4" />
+              <LogOut className="w-4 h-4 shrink-0" />
             </button>
           </div>
         </div>

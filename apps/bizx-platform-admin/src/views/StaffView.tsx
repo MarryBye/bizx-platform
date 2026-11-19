@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from '../hooks/useTranslation';
 import {
   ShieldCheck,
   UserPlus,
@@ -21,6 +22,7 @@ interface StaffViewProps {
 }
 
 export const StaffView: React.FC<StaffViewProps> = ({ staffList, onAddStaff }) => {
+  const { t } = useTranslation();
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -90,13 +92,13 @@ export const StaffView: React.FC<StaffViewProps> = ({ staffList, onAddStaff }) =
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-            Внутрішня команда платформи
+            {t('platform.tabStaff')}
           </span>
           <h1 className="text-2xl font-black tracking-tight text-slate-900 mt-0.5">
-            Співробітники BizX Core
+            {t('platform.staffTitle')}
           </h1>
           <p className="text-xs text-slate-500 mt-1">
-            Команда операторів, комплаєнсу та підтримки з доступом до керування платформою
+            {t('platform.staffSubtitle')}
           </p>
         </div>
 

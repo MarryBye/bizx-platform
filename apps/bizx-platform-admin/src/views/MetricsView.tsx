@@ -1,5 +1,6 @@
 import React from 'react';
 import type { PlatformAnalytics } from '@bizx/common-types';
+import { useTranslation } from '../hooks/useTranslation';
 import {
   DollarSign,
   ShoppingBag,
@@ -13,7 +14,8 @@ import {
   CheckCircle2,
   Clock,
   AlertTriangle,
-  Archive
+  Archive,
+  BarChart3
 } from 'lucide-react';
 
 interface MetricsViewProps {
@@ -27,16 +29,20 @@ interface MetricsViewProps {
     archived: number;
   };
   isLoading: boolean;
+  onOpenDetailedAnalytics?: () => void;
 }
 
 export const MetricsView: React.FC<MetricsViewProps> = ({
   analytics,
   totalUsersCount,
   businessesCount,
-  isLoading: _isLoading
+  isLoading: _isLoading,
+  onOpenDetailedAnalytics
 }) => {
+  const { t, locale } = useTranslation();
+
   const formatPrice = (kopecks: number) => {
-    return (kopecks / 100).toLocaleString('uk-UA', {
+    return (kopecks / 100).toLocaleString(locale === 'en' ? 'en-US' : 'uk-UA', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2
     });
@@ -51,30 +57,40 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-            Огляд платформи BizX
-          </span>
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            Режим реального часу
-          </span>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+              {t('platform.overviewBadge')}
+            </span>
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              {t('platform.realtimeBadge')}
+            </span>
+          </div>
+          <h1 className="text-2xl font-black tracking-tight text-slate-900 mt-0.5">
+            {t('platform.metricsTitle')}
+          </h1>
+          <p className="text-xs text-slate-500 mt-1">{t('platform.metricsSubtitle')}</p>
         </div>
-        <h1 className="text-2xl font-black tracking-tight text-slate-900 mt-0.5">
-          Аналітика та системні показники
-        </h1>
-        <p className="text-xs text-slate-500 mt-1">
-          Зведений оборот торгівлі, стан підключених бізнесів та навантаження на систему
-        </p>
+
+        {onOpenDetailedAnalytics && (
+          <button
+            type="button"
+            onClick={onOpenDetailedAnalytics}
+            className="self-start sm:self-auto inline-flex items-center gap-2 px-3.5 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-800 rounded-lg text-xs font-bold transition-colors shadow-xs"
+          >
+            <BarChart3 className="w-4 h-4 shrink-0" />
+            <span>{t('admin.openDetailedAnalytics')}</span>
+          </button>
+        )}
       </div>
 
       {/* KPI Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3.5">
-        {/* GMV */}
         <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm">
           <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-[10px] font-bold uppercase tracking-wider">Оборот GMV</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider">{t('platform.gmv')}</span>
             <div className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg">
               <DollarSign className="w-3.5 h-3.5" />
             </div>
@@ -83,26 +99,24 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
             {formatPrice(revenue)} <span className="text-xs font-semibold text-slate-500">₴</span>
           </div>
           <div className="text-[11px] text-emerald-600 font-semibold mt-1 flex items-center gap-1">
-            <TrendingUp className="w-3 h-3" /> Успішні оплати
+            <TrendingUp className="w-3 h-3" /> {t('admin.successfulPayments')}
           </div>
         </div>
 
-        {/* Orders */}
         <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm">
           <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-[10px] font-bold uppercase tracking-wider">Замовлення</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider">{t('platform.orders')}</span>
             <div className="p-1.5 bg-blue-50 text-blue-600 rounded-lg">
               <ShoppingBag className="w-3.5 h-3.5" />
             </div>
           </div>
           <div className="text-xl font-black text-slate-900">{ordersCount}</div>
-          <div className="text-[11px] text-slate-500 mt-1">Оброблено платформою</div>
+          <div className="text-[11px] text-slate-500 mt-1">{t('platform.processedByPlatform')}</div>
         </div>
 
-        {/* Average Order Value */}
         <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm">
           <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-[10px] font-bold uppercase tracking-wider">Середній чек</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider">{t('platform.avgCheck')}</span>
             <div className="p-1.5 bg-purple-50 text-purple-600 rounded-lg">
               <TrendingUp className="w-3.5 h-3.5" />
             </div>
@@ -110,81 +124,72 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
           <div className="text-xl font-black text-slate-900 truncate">
             {formatPrice(aov)} <span className="text-xs font-semibold text-slate-500">₴</span>
           </div>
-          <div className="text-[11px] text-slate-500 mt-1">По всіх закладах</div>
+          <div className="text-[11px] text-slate-500 mt-1">{t('platform.acrossAllStores')}</div>
         </div>
 
-        {/* Total Stores */}
         <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm">
           <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-[10px] font-bold uppercase tracking-wider">Заклади</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider">{t('platform.stores')}</span>
             <div className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg">
               <Building2 className="w-3.5 h-3.5" />
             </div>
           </div>
           <div className="text-xl font-black text-slate-900">{businessesCount.total}</div>
           <div className="text-[11px] text-slate-500 mt-1">
-            <span className="font-bold text-emerald-600">{businessesCount.active}</span> активних
+            {t('platform.activeCount', { count: businessesCount.active })}
           </div>
         </div>
 
-        {/* Products */}
         <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm">
           <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-[10px] font-bold uppercase tracking-wider">Товари</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider">{t('platform.products')}</span>
             <div className="p-1.5 bg-amber-50 text-amber-600 rounded-lg">
               <Package className="w-3.5 h-3.5" />
             </div>
           </div>
           <div className="text-xl font-black text-slate-900">{productsCount}</div>
-          <div className="text-[11px] text-slate-500 mt-1">В каталогах бізнесу</div>
+          <div className="text-[11px] text-slate-500 mt-1">{t('platform.inBusinessCatalogs')}</div>
         </div>
 
-        {/* Total Users */}
         <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm">
           <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-[10px] font-bold uppercase tracking-wider">Користувачі</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider">{t('platform.users')}</span>
             <div className="p-1.5 bg-slate-100 text-slate-700 rounded-lg">
               <Users className="w-3.5 h-3.5" />
             </div>
           </div>
           <div className="text-xl font-black text-slate-900">{totalUsersCount}</div>
-          <div className="text-[11px] text-slate-500 mt-1">BizX ID акаунтів</div>
+          <div className="text-[11px] text-slate-500 mt-1">{t('platform.bizxIdAccounts')}</div>
         </div>
       </div>
 
       {/* Two Column Detailed Blocks */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left: Store Status Breakdown & Top Stores */}
         <div className="lg:col-span-8 space-y-6">
-          {/* Top Stores by Volume */}
           <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-sm font-black text-slate-900">
-                  Лідери торгівлі за виручкою
-                </h3>
-                <p className="text-[11px] text-slate-500">
-                  Підключені бізнеси з найбільшим оборотом продажів у системі
-                </p>
+                <h3 className="text-sm font-black text-slate-900">{t('platform.topStoresTitle')}</h3>
+                <p className="text-[11px] text-slate-500">{t('platform.topStoresSubtitle')}</p>
               </div>
               <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-md">
-                Топ {topStores.length || 3}
+                {t('platform.topCount', { count: topStores.length || 3 })}
               </span>
             </div>
 
             {topStores.length === 0 ? (
               <div className="p-8 text-center text-slate-400 text-xs border border-dashed border-slate-200 rounded-lg">
-                Дані по виручці формуються на основі сплачених замовлень
+                {t('platform.noRevenueData')}
               </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-xs text-left">
                   <thead>
                     <tr className="border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                      <th className="py-2.5 px-3">Торгова точка</th>
-                      <th className="py-2.5 px-3 text-right">Замовлень</th>
-                      <th className="py-2.5 px-3 text-right">Виручка</th>
-                      <th className="py-2.5 px-3 text-right">Частка обороту</th>
+                      <th className="py-2.5 px-3">{t('platform.storeCol')}</th>
+                      <th className="py-2.5 px-3 text-right">{t('platform.ordersCol')}</th>
+                      <th className="py-2.5 px-3 text-right">{t('platform.revenueCol')}</th>
+                      <th className="py-2.5 px-3 text-right">{t('platform.shareCol')}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -226,20 +231,15 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
             )}
           </div>
 
-          {/* Infrastructure Health & Tech Stack */}
           <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-sm font-black text-slate-900">
-                  Стан системного оточення та інфраструктури
-                </h3>
-                <p className="text-[11px] text-slate-500">
-                  Моніторинг сервісів бекенду, бази даних, сховища та черг
-                </p>
+                <h3 className="text-sm font-black text-slate-900">{t('platform.infraTitle')}</h3>
+                <p className="text-[11px] text-slate-500">{t('platform.infraSubtitle')}</p>
               </div>
               <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200">
                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Всі системи в нормі</span>
+                <span>{t('platform.allSystemsOperational')}</span>
               </div>
             </div>
 
@@ -251,7 +251,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
                   </div>
                   <div>
                     <div className="text-xs font-bold text-slate-900">NestJS Core API</div>
-                    <div className="text-[10px] text-slate-400 font-mono">Основний API Gateway</div>
+                    <div className="text-[10px] text-slate-400 font-mono">API Gateway</div>
                   </div>
                 </div>
                 <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded uppercase">
@@ -266,7 +266,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
                   </div>
                   <div>
                     <div className="text-xs font-bold text-slate-900">PostgreSQL + Drizzle</div>
-                    <div className="text-[10px] text-slate-400 font-mono">База даних PostgreSQL Primary</div>
+                    <div className="text-[10px] text-slate-400 font-mono">PostgreSQL Primary</div>
                   </div>
                 </div>
                 <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded uppercase">
@@ -296,7 +296,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
                   </div>
                   <div>
                     <div className="text-xs font-bold text-slate-900">Merchant Portal</div>
-                    <div className="text-[10px] text-slate-400 font-mono">Бізнес-портал мерчантів</div>
+                    <div className="text-[10px] text-slate-400 font-mono">{t('nav.businessAdmin')}</div>
                   </div>
                 </div>
                 <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded uppercase">
@@ -307,25 +307,19 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
           </div>
         </div>
 
-        {/* Right: Business Statuses Distribution Tile */}
         <div className="lg:col-span-4 space-y-6">
           <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
             <div>
-              <h3 className="text-sm font-black text-slate-900">
-                Розподіл бізнесів за статусами
-              </h3>
-              <p className="text-[11px] text-slate-500">
-                Поточний стан підключених торгових закладів
-              </p>
+              <h3 className="text-sm font-black text-slate-900">{t('platform.storeStatusDist')}</h3>
+              <p className="text-[11px] text-slate-500">{t('platform.storeStatusSubtitle')}</p>
             </div>
 
             <div className="space-y-3 pt-1">
-              {/* Active */}
               <div className="p-3 rounded-lg border border-slate-100 bg-slate-50/50 space-y-1.5">
                 <div className="flex items-center justify-between text-xs font-semibold">
                   <span className="flex items-center gap-1.5 text-slate-800">
                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Активні магазини</span>
+                    <span>{t('platform.activeStores')}</span>
                   </span>
                   <span className="font-bold text-slate-900">{businessesCount.active}</span>
                 </div>
@@ -339,12 +333,11 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
                 </div>
               </div>
 
-              {/* Pending */}
               <div className="p-3 rounded-lg border border-slate-100 bg-slate-50/50 space-y-1.5">
                 <div className="flex items-center justify-between text-xs font-semibold">
                   <span className="flex items-center gap-1.5 text-slate-800">
                     <Clock className="w-3.5 h-3.5 text-amber-500" />
-                    <span>Очікують перевірки</span>
+                    <span>{t('platform.pendingStores')}</span>
                   </span>
                   <span className="font-bold text-slate-900">{businessesCount.pending}</span>
                 </div>
@@ -358,12 +351,11 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
                 </div>
               </div>
 
-              {/* Suspended */}
               <div className="p-3 rounded-lg border border-slate-100 bg-slate-50/50 space-y-1.5">
                 <div className="flex items-center justify-between text-xs font-semibold">
                   <span className="flex items-center gap-1.5 text-slate-800">
                     <AlertTriangle className="w-3.5 h-3.5 text-rose-500" />
-                    <span>Призупинені</span>
+                    <span>{t('platform.suspendedStores')}</span>
                   </span>
                   <span className="font-bold text-slate-900">{businessesCount.suspended}</span>
                 </div>
@@ -377,12 +369,11 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
                 </div>
               </div>
 
-              {/* Archived */}
               <div className="p-3 rounded-lg border border-slate-100 bg-slate-50/50 space-y-1.5">
                 <div className="flex items-center justify-between text-xs font-semibold">
                   <span className="flex items-center gap-1.5 text-slate-800">
                     <Archive className="w-3.5 h-3.5 text-slate-400" />
-                    <span>Архівовані</span>
+                    <span>{t('platform.archivedStores')}</span>
                   </span>
                   <span className="font-bold text-slate-900">{businessesCount.archived}</span>
                 </div>
@@ -398,13 +389,12 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
             </div>
           </div>
 
-          {/* Quick Notice Tile */}
           <div className="p-4 bg-slate-900 text-white rounded-xl shadow-sm space-y-2">
             <div className="text-xs font-bold uppercase tracking-wider text-slate-400">
-              Політика модерації
+              {t('platform.moderationPolicy')}
             </div>
             <div className="text-xs leading-relaxed text-slate-200">
-              Співробітники BizX мають право змінювати статус активності закладів та блокувати підозрілі акаунти, але не редагують товари та ціни мерчантів.
+              {t('platform.moderationPolicyDesc')}
             </div>
           </div>
         </div>

@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { platformApi } from './lib/api';
+import { useTranslation, initPlatformLocale } from './hooks/useTranslation';
 import type { UserProfile, PlatformAnalytics, StoreCategory } from '@bizx/common-types';
 import { ShieldAlert } from 'lucide-react';
 import { PlatformLayout, type PlatformTab } from './components/PlatformLayout';
 import { MetricsView } from './views/MetricsView';
+import { PlatformAnalyticsView } from './views/PlatformAnalyticsView';
 import { BusinessesView, type ExtendedBusiness } from './views/BusinessesView';
 import { UsersView } from './views/UsersView';
 import { StaffView, type PlatformStaffMember } from './views/StaffView';
@@ -12,6 +14,7 @@ import { BusinessDetailsModal } from './components/BusinessDetailsModal';
 import { UserDetailsModal, type PlatformUserRecord } from './components/UserDetailsModal';
 
 export const App: React.FC = () => {
+  const { t } = useTranslation();
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const [activeTab, setActiveTab] = useState<PlatformTab>('metrics');
@@ -302,6 +305,7 @@ export const App: React.FC = () => {
         const res = await platformApi.auth.me();
         if (res.success && res.data) {
           setCurrentUser(res.data);
+          initPlatformLocale(res.data.preferredLanguage);
         } else {
           setCurrentUser(null);
         }
@@ -403,7 +407,7 @@ export const App: React.FC = () => {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center space-y-3">
         <div className="w-8 h-8 border-2 border-slate-900 border-t-transparent rounded-full animate-spin" />
-        <span className="text-xs font-bold text-slate-500">Завантаження консолі BizX Core...</span>
+        <span className="text-xs font-bold text-slate-500">{t('common.loading')}</span>
       </div>
     );
   }
@@ -422,10 +426,9 @@ export const App: React.FC = () => {
             <ShieldAlert className="w-6 h-6" />
           </div>
           <div>
-            <h2 className="text-base font-black text-slate-900">Доступ заборонено</h2>
+            <h2 className="text-base font-black text-slate-900">{t('auth.accessForbidden')}</h2>
             <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-              Консоль BizX Core призначена виключно для співробітників компанії BizX.
-              Ваш поточний обліковий запис <strong>{currentUser.email}</strong> ({currentUser.name}) не має привілеїв адміністратора платформи.
+              {t('auth.staffOnlyError')} ({currentUser.email})
             </p>
           </div>
           <div className="pt-2 flex flex-col gap-2">
@@ -433,13 +436,13 @@ export const App: React.FC = () => {
               onClick={handleLogout}
               className="w-full py-2.5 px-4 rounded-lg bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 transition-colors"
             >
-              Увійти під службовим акаунтом BizX
+              {t('common.logout')}
             </button>
             <a
               href="http://localhost:3102"
               className="w-full py-2 px-4 rounded-lg border border-slate-200 text-slate-700 text-xs font-semibold hover:bg-slate-50 transition-colors text-center"
             >
-              Перейти в кабінет бізнесу
+              {t('nav.businessAdmin')}
             </a>
           </div>
         </div>
@@ -470,6 +473,15 @@ export const App: React.FC = () => {
           totalUsersCount={usersList.length}
           businessesCount={businessesCount}
           isLoading={isDataLoading}
+          onOpenDetailedAnalytics={() => setActiveTab('analytics')}
+        />
+      )}
+
+      {/* View: Detailed Platform Analytics */}
+      {activeTab === 'analytics' && (
+        <PlatformAnalyticsView
+          initialAnalytics={analytics}
+          businesses={businesses}
         />
       )}
 
