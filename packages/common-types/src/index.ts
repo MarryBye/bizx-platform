@@ -192,12 +192,15 @@ export const PLATFORM_PERMISSIONS: PermissionDefinition[] = [
   { id: 201, code: 'platform.stores.read', scope: 'platform', category: 'platform_stores', action: 'read', ownerOnly: false },
   { id: 202, code: 'platform.stores.moderate', scope: 'platform', category: 'platform_stores', action: 'manage', ownerOnly: false },
   { id: 205, code: 'platform.stores.approve', scope: 'platform', category: 'platform_stores', action: 'manage', ownerOnly: false },
+  { id: 206, code: 'platform.stores.unblock', scope: 'platform', category: 'platform_stores', action: 'manage', ownerOnly: false },
   { id: 203, code: 'platform.categories.manage', scope: 'platform', category: 'platform_stores', action: 'edit', ownerOnly: false },
   { id: 204, code: 'platform.stores.archive', scope: 'platform', category: 'platform_stores', action: 'archive', ownerOnly: false },
   // Користувачі BizX
   { id: 211, code: 'platform.users.read', scope: 'platform', category: 'platform_users', action: 'read', ownerOnly: false },
   { id: 212, code: 'platform.users.edit', scope: 'platform', category: 'platform_users', action: 'edit', ownerOnly: false },
   { id: 213, code: 'platform.users.archive', scope: 'platform', category: 'platform_users', action: 'archive', ownerOnly: false },
+  { id: 214, code: 'platform.users.unblock', scope: 'platform', category: 'platform_users', action: 'manage', ownerOnly: false },
+  { id: 215, code: 'platform.users.subscriptions', scope: 'platform', category: 'platform_users', action: 'manage', ownerOnly: false },
   // Аналітика платформи
   { id: 221, code: 'platform.analytics.read', scope: 'platform', category: 'platform_analytics', action: 'read', ownerOnly: false },
   { id: 222, code: 'platform.analytics.export', scope: 'platform', category: 'platform_analytics', action: 'export', ownerOnly: false },
@@ -214,7 +217,8 @@ export const PLATFORM_PERMISSIONS: PermissionDefinition[] = [
   // Скарги та арбітраж
   { id: 251, code: 'platform.disputes.read', scope: 'platform', category: 'platform_disputes', action: 'read', ownerOnly: false },
   { id: 252, code: 'platform.disputes.resolve', scope: 'platform', category: 'platform_disputes', action: 'manage', ownerOnly: false },
-  { id: 253, code: 'platform.strikes.revoke', scope: 'platform', category: 'platform_disputes', action: 'manage', ownerOnly: false }
+  { id: 253, code: 'platform.strikes.revoke', scope: 'platform', category: 'platform_disputes', action: 'manage', ownerOnly: false },
+  { id: 254, code: 'platform.strikes.issue', scope: 'platform', category: 'platform_disputes', action: 'manage', ownerOnly: false }
 ];
 
 export const ALL_PERMISSIONS: PermissionDefinition[] = [
@@ -251,11 +255,14 @@ export type PlatformPermissionCode =
   | 'platform.stores.read'
   | 'platform.stores.moderate'
   | 'platform.stores.approve'
+  | 'platform.stores.unblock'
   | 'platform.categories.manage'
   | 'platform.stores.archive'
   | 'platform.users.read'
   | 'platform.users.edit'
   | 'platform.users.archive'
+  | 'platform.users.unblock'
+  | 'platform.users.subscriptions'
   | 'platform.analytics.read'
   | 'platform.analytics.export'
   | 'platform.staff.read'
@@ -268,7 +275,8 @@ export type PlatformPermissionCode =
   | 'platform.roles.archive'
   | 'platform.disputes.read'
   | 'platform.disputes.resolve'
-  | 'platform.strikes.revoke';
+  | 'platform.strikes.revoke'
+  | 'platform.strikes.issue';
 
 export const OWNER_ROLE_PRIORITY = 10000;
 
@@ -585,7 +593,9 @@ export const createStoreDtoSchema = z.object({
 export type CreateStoreDto = z.infer<typeof createStoreDtoSchema>;
 
 export const updateStoreDtoSchema = createStoreDtoSchema.partial().extend({
-  status: storeStatusSchema.optional()
+  status: storeStatusSchema.optional(),
+  suspensionDays: z.number().int().min(1).max(3650).nullable().optional(),
+  suspensionReason: z.string().trim().max(1500).nullable().optional()
 });
 export type UpdateStoreDto = z.infer<typeof updateStoreDtoSchema>;
 
@@ -1196,3 +1206,28 @@ export const createSupportThreadDtoSchema = z.object({
   body: z.string().trim().min(5, 'Опишіть ваше питання (мін. 5 символів)').max(4000)
 });
 export type CreateSupportThreadDto = z.infer<typeof createSupportThreadDtoSchema>;
+
+export const issueStoreStrikeDtoSchema = z.object({
+  reason: z.string().trim().min(5, 'Вкажіть причину видачі страйку (мін. 5 символів)').max(1500),
+  /** Кількість днів блокування при досягненні 3-го страйку (null = до ручного зняття) */
+  suspensionDays: z.number().int().min(1).max(3650).nullable().optional()
+});
+export type IssueStoreStrikeDto = z.infer<typeof issueStoreStrikeDtoSchema>;
+
+export const updatePlatformUserStatusDtoSchema = z.object({
+  status: z.enum(['active', 'suspended', 'archived']),
+  /** Кількість днів блокування (null = назавжди / до ручного розблокування) */
+  suspensionDays: z.number().int().min(1).max(3650).nullable().optional(),
+  suspensionReason: z.string().trim().max(1500).nullable().optional()
+});
+export type UpdatePlatformUserStatusDto = z.infer<typeof updatePlatformUserStatusDtoSchema>;
+
+export const updatePlatformUserSubscriptionDtoSchema = z.object({
+  subscriptionTier: subscriptionTierSchema,
+  subscriptionStatus: z.enum(['none', 'active', 'expired', 'cancelled']),
+  subscriptionExpiresAt: z.string().datetime().nullable().optional(),
+  note: z.string().trim().max(1000).optional()
+});
+export type UpdatePlatformUserSubscriptionDto = z.infer<
+  typeof updatePlatformUserSubscriptionDtoSchema
+>;
