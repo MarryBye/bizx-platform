@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import { SafeImage } from '../components/SafeImage';
 import { useCartStore } from '../store/useCartStore';
 import { useMobileAuthStore } from '../store/useMobileAuthStore';
 import { mobileApi } from '../lib/api';
+import type { StoreMarketingSubscriptionState } from '@bizx/common-types';
 
 interface CartScreenProps {
   onGoToStores?: () => void;
@@ -38,6 +39,29 @@ export const CartScreen: React.FC<CartScreenProps> = ({
   const [contactPhone, setContactPhone] = useState(user?.phone || '+380');
   const [deliveryAddress, setDeliveryAddress] = useState('м. Київ, Відділення Нової Пошти');
   const [notes, setNotes] = useState('');
+  const [marketingSub, setMarketingSub] = useState<StoreMarketingSubscriptionState | null>(null);
+  const [optInMarketing, setOptInMarketing] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    if (!storeId || !user) {
+      setMarketingSub(null);
+      setOptInMarketing(false);
+      return;
+    }
+    mobileApi.broadcasts
+      .getStoreMarketingSubscription(storeId)
+      .then((res) => {
+        if (active && res.success && res.data) {
+          setMarketingSub(res.data);
+          if (!res.data.showCheckoutOptIn) setOptInMarketing(false);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [storeId, user]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -68,6 +92,7 @@ export const CartScreen: React.FC<CartScreenProps> = ({
         paymentMethod: 'card' as const,
         deliveryAddress: deliveryAddress || 'Самовивіз',
         notes: notes || undefined,
+        ...(marketingSub?.showCheckoutOptIn ? { subscribeToStoreMarketing: optInMarketing } : {}),
         items: items.map((item) => ({
           productId: item.product.id,
           quantity: item.quantity
@@ -264,6 +289,30 @@ export const CartScreen: React.FC<CartScreenProps> = ({
               className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900"
             />
           </View>
+
+          {user && marketingSub?.showCheckoutOptIn && (
+            <TouchableOpacity
+              onPress={() => setOptInMarketing((v) => !v)}
+              activeOpacity={0.8}
+              className="flex-row items-start gap-2.5 p-3 rounded-lg bg-slate-50 border border-slate-200 mt-1"
+            >
+              <View
+                className={`w-5 h-5 rounded border items-center justify-center mt-0.5 ${
+                  optInMarketing ? 'bg-slate-900 border-slate-900' : 'bg-white border-slate-300'
+                }`}
+              >
+                {optInMarketing && <MaterialIcon name="check" size={14} color="#ffffff" />}
+              </View>
+              <View className="flex-1">
+                <Text className="text-xs font-bold text-slate-900">
+                  Отримувати акції та знижки від закладу
+                </Text>
+                <Text className="text-[10px] text-slate-500 mt-0.5 leading-4">
+                  Необов’язково. Повідомлення приходитимуть у Пошту BizX. Відписатися можна в 1 клік у будь-який момент.
+                </Text>
+              </View>
+            </TouchableOpacity>
+          )}
 
           {/* Total & Submit Button */}
           <View className="pt-3 border-t border-slate-100 mt-2">

@@ -10,8 +10,9 @@ import { MaterialIcon } from '../components/MaterialIcon';
 import { SafeImage } from '../components/SafeImage';
 import { useMobileStoresStore } from '../store/useMobileStoresStore';
 import { useCartStore } from '../store/useCartStore';
+import { useMobileAuthStore } from '../store/useMobileAuthStore';
 import { mobileApi } from '../lib/api';
-import type { Store, StoreReviewItem } from '@bizx/common-types';
+import type { Store, StoreReviewItem, StoreMarketingSubscriptionState } from '@bizx/common-types';
 
 interface StoreDetailScreenProps {
   store: Store;
@@ -33,11 +34,47 @@ export const StoreDetailScreen: React.FC<StoreDetailScreenProps> = ({
   } = useMobileStoresStore();
 
   const { addToCart, items, getTotalCount } = useCartStore();
+  const { user } = useMobileAuthStore();
   const [section, setSection] = useState<'catalog' | 'reviews'>('catalog');
   const [reviews, setReviews] = useState<StoreReviewItem[]>([]);
   const [ratingAvg, setRatingAvg] = useState<number>(store.ratingAvg ?? 0);
   const [ratingCount, setRatingCount] = useState<number>(store.ratingCount ?? 0);
   const [isLoadingReviews, setIsLoadingReviews] = useState(false);
+  const [marketingSub, setMarketingSub] = useState<StoreMarketingSubscriptionState | null>(null);
+  const [isTogglingSub, setIsTogglingSub] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    if (!user) {
+      setMarketingSub(null);
+      return;
+    }
+    mobileApi.broadcasts
+      .getStoreMarketingSubscription(store.id)
+      .then((res) => {
+        if (active && res.success && res.data) setMarketingSub(res.data);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [store.id, user]);
+
+  const handleToggleMarketingSub = async () => {
+    if (!user || isTogglingSub) return;
+    setIsTogglingSub(true);
+    try {
+      const res = await mobileApi.broadcasts.updateStoreMarketingSubscription(store.id, {
+        subscribed: !marketingSub?.subscribed,
+        source: 'storefront_button'
+      });
+      if (res.success && res.data) setMarketingSub(res.data);
+    } catch {
+      // ignore
+    } finally {
+      setIsTogglingSub(false);
+    }
+  };
 
   useEffect(() => {
     let active = true;
@@ -155,6 +192,34 @@ export const StoreDetailScreen: React.FC<StoreDetailScreenProps> = ({
               <Text className="text-xs text-slate-600 mt-3 pt-3 border-t border-slate-100 leading-4">
                 {store.description}
               </Text>
+            )}
+
+            {user && store.status === 'active' && (
+              <TouchableOpacity
+                onPress={handleToggleMarketingSub}
+                disabled={isTogglingSub}
+                activeOpacity={0.8}
+                className={`mt-3 py-2 px-3 rounded-lg border flex-row items-center justify-center gap-2 ${
+                  marketingSub?.subscribed
+                    ? 'bg-emerald-50 border-emerald-200'
+                    : 'bg-slate-50 border-slate-200'
+                }`}
+              >
+                <MaterialIcon
+                  name={marketingSub?.subscribed ? 'notifications-active' : 'notifications-none'}
+                  size={15}
+                  color={marketingSub?.subscribed ? '#059669' : '#2563eb'}
+                />
+                <Text
+                  className={`text-xs font-bold ${
+                    marketingSub?.subscribed ? 'text-emerald-800' : 'text-slate-700'
+                  }`}
+                >
+                  {marketingSub?.subscribed
+                    ? 'Ви підписані на акції закладу'
+                    : 'Підписатися на розсилку акцій'}
+                </Text>
+              </TouchableOpacity>
             )}
 
             {store.phone && (

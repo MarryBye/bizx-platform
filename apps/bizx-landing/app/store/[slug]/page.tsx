@@ -18,7 +18,8 @@ import {
   type OrderMessageAttachmentDto,
   type DisputeCategory,
   type StoreReviewsResponse,
-  type StorePreviewReadiness
+  type StorePreviewReadiness,
+  type StoreMarketingSubscriptionState
 } from '@bizx/common-types';
 import {
   LanguageSelector,
@@ -51,7 +52,9 @@ import {
   Eye,
   LogIn,
   ArrowLeft,
-  Loader2
+  Loader2,
+  Bell,
+  BellOff
 } from 'lucide-react';
 
 type StorefrontTab = 'catalog' | 'cart' | 'orders' | 'reviews';
@@ -87,6 +90,9 @@ export default function StorefrontPage() {
   const [contactPhone, setContactPhone] = useState('+380');
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [orderNotes, setOrderNotes] = useState('');
+  const [optInMarketing, setOptInMarketing] = useState(false);
+  const [marketingSub, setMarketingSub] = useState<StoreMarketingSubscriptionState | null>(null);
+  const [isTogglingMarketingSub, setIsTogglingMarketingSub] = useState(false);
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [orderSuccessNum, setOrderSuccessNum] = useState<string | null>(null);
@@ -220,6 +226,50 @@ export default function StorefrontPage() {
     };
   }, [slug]);
 
+  const loadMarketingSub = useCallback(async () => {
+    if (!user || !store?.id || isPreviewMode) {
+      setMarketingSub(null);
+      setOptInMarketing(false);
+      return;
+    }
+    try {
+      const res = await api.broadcasts.getStoreMarketingSubscription(store.id);
+      if (res.success && res.data) {
+        setMarketingSub(res.data);
+        if (!res.data.showCheckoutOptIn) setOptInMarketing(false);
+      }
+    } catch {
+      // ignore
+    }
+  }, [user, store?.id, isPreviewMode]);
+
+  useEffect(() => {
+    void loadMarketingSub();
+  }, [loadMarketingSub]);
+
+  const handleToggleStoreSubscription = async () => {
+    if (!store || isPreviewMode) return;
+    if (!user) {
+      setIsAuthOpen(true);
+      return;
+    }
+    setIsTogglingMarketingSub(true);
+    try {
+      const nextSubscribed = !marketingSub?.subscribed;
+      const res = await api.broadcasts.updateStoreMarketingSubscription(store.id, {
+        subscribed: nextSubscribed,
+        source: 'storefront_button'
+      });
+      if (res.success && res.data) {
+        setMarketingSub(res.data);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setIsTogglingMarketingSub(false);
+    }
+  };
+
   const loadMyOrders = useCallback(async () => {
     if (!user || !store?.id) {
       setOrders([]);
@@ -343,13 +393,15 @@ export default function StorefrontPage() {
         deliveryAddress: deliveryAddress.trim() || undefined,
         paymentMethod: 'card',
         notes: orderNotes.trim() || undefined,
+        ...(marketingSub?.showCheckoutOptIn ? { subscribeToStoreMarketing: optInMarketing } : {}),
         items: cart.map((i) => ({ productId: i.product.id, quantity: i.quantity }))
       });
       if (res.success && res.data) {
         setOrderSuccessNum(res.data.orderNumber);
         setCart([]);
         setOrderNotes('');
-        await loadMyOrders();
+        setOptInMarketing(false);
+        await Promise.all([loadMyOrders(), loadMarketingSub()]);
         setActiveTab('orders');
       }
     } catch (err: any) {
@@ -672,6 +724,34 @@ export default function StorefrontPage() {
                   <span>{displayRating.toFixed(1)}</span>
                   <span className="text-amber-700/80 font-medium">({displayRatingCount})</span>
                 </button>
+                {!isPreviewMode && store.status === 'active' && (
+                  <button
+                    type="button"
+                    disabled={isTogglingMarketingSub}
+                    onClick={() => void handleToggleStoreSubscription()}
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-bold transition-colors disabled:opacity-50 ${
+                      marketingSub?.subscribed
+                        ? 'bg-emerald-50 border-emerald-200 text-emerald-800 hover:bg-emerald-100'
+                        : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300'
+                    }`}
+                  >
+                    {marketingSub?.subscribed ? (
+                      <>
+                        <BellOff className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>
+                          {locale === 'en' ? 'Subscribed to promos' : 'Ви підписані на акції'}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <Bell className="w-3.5 h-3.5 text-blue-600" />
+                        <span>
+                          {locale === 'en' ? 'Subscribe to promos' : 'Підписатися на розсилку'}
+                        </span>
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
               {store.description && (
                 <p className="text-xs sm:text-sm text-slate-600 max-w-2xl">{store.description}</p>
@@ -956,6 +1036,29 @@ export default function StorefrontPage() {
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:border-slate-900"
                   />
                 </div>
+
+                {user && marketingSub?.showCheckoutOptIn && (
+                  <label className="flex items-start gap-2.5 p-3 rounded-xl bg-slate-50 border border-slate-200 cursor-pointer hover:bg-slate-100/70 transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={optInMarketing}
+                      onChange={(e) => setOptInMarketing(e.target.checked)}
+                      className="mt-0.5 rounded border-slate-300 text-slate-900 focus:ring-slate-900"
+                    />
+                    <span className="text-xs text-slate-700 leading-relaxed">
+                      <span className="font-bold text-slate-900 block">
+                        {locale === 'en'
+                          ? `Receive promotions and discounts from «${store.name}»`
+                          : `Отримувати акції, знижки та спецпропозиції від «${store.name}»`}
+                      </span>
+                      <span className="text-[11px] text-slate-500">
+                        {locale === 'en'
+                          ? 'Optional. Delivered to your BizX Mail. You can unsubscribe in 1 click anytime.'
+                          : 'Необов’язково. Листи приходитимуть у вашу Пошту BizX. Відписатися можна в 1 клік у будь-який момент.'}
+                      </span>
+                    </span>
+                  </label>
+                )}
 
                 <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-3">
                   <div>
