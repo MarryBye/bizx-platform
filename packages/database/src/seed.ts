@@ -94,9 +94,12 @@ const PLATFORM_PERMISSIONS = [
   { id: 203, code: 'platform.categories.manage', scope: 'platform', category: 'platform_stores', action: 'edit', ownerOnly: false },
   { id: 204, code: 'platform.stores.archive', scope: 'platform', category: 'platform_stores', action: 'archive', ownerOnly: false },
   { id: 205, code: 'platform.stores.approve', scope: 'platform', category: 'platform_stores', action: 'manage', ownerOnly: false },
+  { id: 206, code: 'platform.stores.unblock', scope: 'platform', category: 'platform_stores', action: 'manage', ownerOnly: false },
   { id: 211, code: 'platform.users.read', scope: 'platform', category: 'platform_users', action: 'read', ownerOnly: false },
   { id: 212, code: 'platform.users.edit', scope: 'platform', category: 'platform_users', action: 'edit', ownerOnly: false },
   { id: 213, code: 'platform.users.archive', scope: 'platform', category: 'platform_users', action: 'archive', ownerOnly: false },
+  { id: 214, code: 'platform.users.unblock', scope: 'platform', category: 'platform_users', action: 'manage', ownerOnly: false },
+  { id: 215, code: 'platform.users.subscriptions', scope: 'platform', category: 'platform_users', action: 'manage', ownerOnly: false },
   { id: 221, code: 'platform.analytics.read', scope: 'platform', category: 'platform_analytics', action: 'read', ownerOnly: false },
   { id: 222, code: 'platform.analytics.export', scope: 'platform', category: 'platform_analytics', action: 'export', ownerOnly: false },
   { id: 231, code: 'platform.staff.read', scope: 'platform', category: 'platform_staff', action: 'read', ownerOnly: false },
@@ -109,7 +112,8 @@ const PLATFORM_PERMISSIONS = [
   { id: 244, code: 'platform.roles.archive', scope: 'platform', category: 'platform_roles', action: 'archive', ownerOnly: false },
   { id: 251, code: 'platform.disputes.read', scope: 'platform', category: 'platform_disputes', action: 'read', ownerOnly: false },
   { id: 252, code: 'platform.disputes.resolve', scope: 'platform', category: 'platform_disputes', action: 'manage', ownerOnly: false },
-  { id: 253, code: 'platform.strikes.revoke', scope: 'platform', category: 'platform_disputes', action: 'manage', ownerOnly: false }
+  { id: 253, code: 'platform.strikes.revoke', scope: 'platform', category: 'platform_disputes', action: 'manage', ownerOnly: false },
+  { id: 254, code: 'platform.strikes.issue', scope: 'platform', category: 'platform_disputes', action: 'manage', ownerOnly: false }
 ];
 
 const ALL_PERMISSIONS = [...STORE_PERMISSIONS, ...PLATFORM_PERMISSIONS];
@@ -438,6 +442,7 @@ async function seed() {
         'platform.categories.manage',
         'platform.users.read',
         'platform.users.edit',
+        'platform.users.subscriptions',
         'platform.analytics.read',
         'platform.analytics.export',
         'platform.staff.read',
@@ -447,7 +452,8 @@ async function seed() {
         'platform.roles.write',
         'platform.roles.edit',
         'platform.disputes.read',
-        'platform.disputes.resolve'
+        'platform.disputes.resolve',
+        'platform.strikes.issue'
       ].map((c) => ({ roleId: platOpsRole.id, permissionId: permByCode.get(c)! })),
       ...[
         'platform.stores.read',
