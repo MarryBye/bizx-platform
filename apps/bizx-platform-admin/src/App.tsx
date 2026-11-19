@@ -1,8 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { platformApi } from './lib/api';
 import { useTranslation, initPlatformLocale } from './hooks/useTranslation';
-import type { UserProfile, PlatformAnalytics, StoreCategory } from '@bizx/common-types';
-import { ShieldAlert } from 'lucide-react';
+import type {
+  UserProfile,
+  PlatformAnalytics,
+  StoreCategory,
+  MemberAccessSummary
+} from '@bizx/common-types';
+import { ShieldAlert, AlertCircle, X, Lock } from 'lucide-react';
 import { PlatformLayout, type PlatformTab } from './components/PlatformLayout';
 import { MetricsView } from './views/MetricsView';
 import { PlatformAnalyticsView } from './views/PlatformAnalyticsView';
@@ -15,17 +20,19 @@ import { BusinessDetailsModal } from './components/BusinessDetailsModal';
 import { UserDetailsModal, type PlatformUserRecord } from './components/UserDetailsModal';
 
 export const App: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const [activeTab, setActiveTab] = useState<PlatformTab>('metrics');
 
-  // Platform Data State
+  // Platform Data State (100% real DB — zero mock fallbacks)
   const [analytics, setAnalytics] = useState<PlatformAnalytics | null>(null);
   const [businesses, setBusinesses] = useState<ExtendedBusiness[]>([]);
   const [categories, setCategories] = useState<Array<{ id: string; name: string }>>([]);
-  const [myPermissions, setMyPermissions] = useState<string[] | null>(null);
+  const [myAccess, setMyAccess] = useState<MemberAccessSummary | null>(null);
+  const [permsLoaded, setPermsLoaded] = useState(false);
   const [isDataLoading, setIsDataLoading] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   // Modals & Active Selections
   const [selectedBusiness, setSelectedBusiness] = useState<ExtendedBusiness | null>(null);
@@ -38,196 +45,121 @@ export const App: React.FC = () => {
   // Users State (loaded from real DB /platform/users)
   const [usersList, setUsersList] = useState<PlatformUserRecord[]>([]);
 
-  // Load Real Data from Backend API
-  const loadPlatformData = async () => {
+  const myPermissions = myAccess?.permissions ?? [];
+  const hasPerm = (code: string) => Boolean(myAccess && myPermissions.includes(code));
+
+  // Load Real Data from Backend API strictly according to user permissions
+  const loadPlatformData = useCallback(async () => {
     setIsDataLoading(true);
     try {
-      // 1. Fetch Categories
-      let fetchedCategories: Array<{ id: string; name: string }> = [];
-      try {
-        const catRes = await platformApi.stores.getCategories();
-        if (catRes.success && catRes.data) {
-          fetchedCategories = catRes.data.map((c: StoreCategory) => ({ id: c.id, name: c.name }));
-          setCategories(fetchedCategories);
-        }
-      } catch {
-        // Fallback categories
-        fetchedCategories = [
-          { id: 'cat-1', name: 'Кавʼярні та десерти' },
-          { id: 'cat-2', name: 'Електроніка та гаджети' },
-          { id: 'cat-3', name: 'Пекарні та випічка' }
-        ];
-        setCategories(fetchedCategories);
-      }
-
-      // 2. Fetch Real Stores
-      try {
-        const storesRes = await platformApi.stores.getStores({ page: 1, pageSize: 100 });
-        if (storesRes.success && storesRes.data?.items && storesRes.data.items.length > 0) {
-          const categoryMap = new Map(fetchedCategories.map((c) => [c.id, c.name]));
-
-          const mappedStores: ExtendedBusiness[] = storesRes.data.items.map((st) => ({
-            ...st,
-            categoryName: (st.categoryId && categoryMap.get(st.categoryId)) || 'Торгівля',
-            ownerName:
-              st.slug === 'lviv-coffee'
-                ? 'Тарас Шевчук'
-                : st.slug === 'cybertech-ukraine'
-                ? 'Ірина Мельник'
-                : st.slug === 'khlibna-maisternia'
-                ? 'Богдан Кравченко'
-                : 'Партнер BizX',
-            ownerEmail:
-              st.slug === 'lviv-coffee'
-                ? 'owner.coffee@bizx.ua'
-                : st.slug === 'cybertech-ukraine'
-                ? 'owner.tech@bizx.ua'
-                : st.slug === 'khlibna-maisternia'
-                ? 'owner.bakery@bizx.ua'
-                : undefined
-          }));
-          setBusinesses(mappedStores);
-        } else {
-          // Fallback seed stores
-          setBusinesses([
-            {
-              id: 'store-1',
-              name: 'Львівська Кавова Мануфактура',
-              slug: 'lviv-coffee',
-              status: 'active',
-              ownerId: 'u-2',
-              ownerName: 'Тарас Шевчук',
-              ownerEmail: 'owner.coffee@bizx.ua',
-              categoryName: 'Кавʼярні та десерти',
-              createdAt: new Date().toISOString()
-            },
-            {
-              id: 'store-2',
-              name: 'CyberTech Ukraine',
-              slug: 'cybertech-ukraine',
-              status: 'active',
-              ownerId: 'u-3',
-              ownerName: 'Ірина Мельник',
-              ownerEmail: 'owner.tech@bizx.ua',
-              categoryName: 'Електроніка та гаджети',
-              createdAt: new Date().toISOString()
-            },
-            {
-              id: 'store-3',
-              name: 'Хлібна Майстерня',
-              slug: 'khlibna-maisternia',
-              status: 'active',
-              ownerId: 'u-4',
-              ownerName: 'Богдан Кравченко',
-              ownerEmail: 'owner.bakery@bizx.ua',
-              categoryName: 'Пекарні та випічка',
-              createdAt: new Date().toISOString()
-            }
-          ]);
-        }
-      } catch {
-        // Fallback stores
-      }
-
-      // 3. Fetch Platform Analytics
-      try {
-        const aRes = await platformApi.analytics.getPlatformAnalytics();
-        if (aRes.success && aRes.data) {
-          setAnalytics(aRes.data);
-        } else {
-          setAnalytics({
-            totalPlatformRevenue: 24500000,
-            totalOrders: 1420,
-            totalStores: 3,
-            activeStores: 3,
-            totalProducts: 12,
-            topStoresByRevenue: [
-              {
-                storeId: 'store-2',
-                storeName: 'CyberTech Ukraine',
-                revenue: 16500000,
-                ordersCount: 420
-              },
-              {
-                storeId: 'store-1',
-                storeName: 'Львівська Кавова Мануфактура',
-                revenue: 5600000,
-                ordersCount: 780
-              },
-              {
-                storeId: 'store-3',
-                storeName: 'Хлібна Майстерня',
-                revenue: 2400000,
-                ordersCount: 220
-              }
-            ]
-          });
-        }
-      } catch {
-        // Fallback analytics
-        setAnalytics({
-          totalPlatformRevenue: 24500000,
-          totalOrders: 1420,
-          totalStores: 3,
-          activeStores: 3,
-          totalProducts: 12,
-          topStoresByRevenue: [
-            {
-              storeId: 'store-2',
-              storeName: 'CyberTech Ukraine',
-              revenue: 16500000,
-              ordersCount: 420
-            },
-            {
-              storeId: 'store-1',
-              storeName: 'Львівська Кавова Мануфактура',
-              revenue: 5600000,
-              ordersCount: 780
-            },
-            {
-              storeId: 'store-3',
-              storeName: 'Хлібна Майстерня',
-              revenue: 2400000,
-              ordersCount: 220
-            }
-          ]
-        });
-      }
-      // 4. Fetch Real Platform Permissions & Users from DB
+      // 1. Fetch Real Platform Permissions FIRST
+      let perms: string[] = [];
       try {
         const permRes = await platformApi.rbac.getPlatformPermissions();
         if (permRes.success && permRes.data?.myAccess) {
-          setMyPermissions(permRes.data.myAccess.permissions);
+          setMyAccess(permRes.data.myAccess);
+          perms = permRes.data.myAccess.permissions;
+        } else {
+          setMyAccess(null);
         }
       } catch {
-        // ignore
+        setMyAccess(null);
+      } finally {
+        setPermsLoaded(true);
       }
 
+      // 2. Fetch Categories (public)
       try {
-        const uRes = await platformApi.rbac.getPlatformUsers();
-        if (uRes.success && uRes.data) {
-          setUsersList(
-            uRes.data.map((u) => ({
-              id: u.id,
-              name: u.name,
-              email: u.email,
-              phone: u.phone || undefined,
-              isPlatformStaff: Boolean(u.isPlatformStaff),
-              platformRoleName: u.platformRoleName || null,
-              isBusinessOwner: Boolean(u.isBusinessOwner),
-              storesCount: u.storesCount ?? 0,
-              status: u.status,
-              createdAt: new Date(u.createdAt).toLocaleDateString('uk-UA')
-            }))
-          );
+        const catRes = await platformApi.stores.getCategories();
+        if (catRes.success && catRes.data) {
+          setCategories(catRes.data.map((c: StoreCategory) => ({ id: c.id, name: c.name })));
         }
       } catch {
-        // ignore
+        setCategories([]);
+      }
+
+      // 3. Fetch ALL Platform Stores (including draft/pending/suspended/archived) ONLY if platform.stores.read
+      if (perms.includes('platform.stores.read')) {
+        try {
+          const storesRes = await platformApi.rbac.getPlatformStores();
+          if (storesRes.success && storesRes.data) {
+            setBusinesses(
+              storesRes.data.map((st) => ({
+                ...st,
+                categoryName: st.categoryName || undefined,
+                ownerName: st.ownerName || undefined,
+                ownerEmail: st.ownerEmail || undefined
+              }))
+            );
+          }
+        } catch {
+          setBusinesses([]);
+        }
+      } else {
+        setBusinesses([]);
+      }
+
+      // 4. Fetch Platform Analytics ONLY if platform.analytics.read
+      if (perms.includes('platform.analytics.read')) {
+        try {
+          const aRes = await platformApi.analytics.getPlatformAnalytics();
+          if (aRes.success && aRes.data) {
+            setAnalytics(aRes.data);
+          }
+        } catch {
+          setAnalytics(null);
+        }
+      } else {
+        setAnalytics(null);
+      }
+
+      // 5. Fetch Users ONLY if platform.users.read
+      if (perms.includes('platform.users.read')) {
+        try {
+          const uRes = await platformApi.rbac.getPlatformUsers();
+          if (uRes.success && uRes.data) {
+            setUsersList(
+              uRes.data.map((u) => ({
+                id: u.id,
+                name: u.name,
+                email: u.email,
+                phone: u.phone || undefined,
+                isPlatformStaff: Boolean(u.isPlatformStaff),
+                platformRoleName: u.platformRoleName || null,
+                isBusinessOwner: Boolean(u.isBusinessOwner),
+                storesCount: u.storesCount ?? 0,
+                status: u.status,
+                createdAt: new Date(u.createdAt).toLocaleDateString('uk-UA')
+              }))
+            );
+          }
+        } catch {
+          setUsersList([]);
+        }
+      } else {
+        setUsersList([]);
       }
     } finally {
       setIsDataLoading(false);
     }
-  };
+  }, []);
+
+  // Auto-select first permitted tab when permissions finish loading
+  useEffect(() => {
+    if (!permsLoaded || !myAccess) return;
+    const allowedTabs: PlatformTab[] = [];
+    if (myAccess.permissions.includes('platform.analytics.read')) {
+      allowedTabs.push('metrics', 'analytics');
+    }
+    if (myAccess.permissions.includes('platform.stores.read')) allowedTabs.push('businesses');
+    if (myAccess.permissions.includes('platform.users.read')) allowedTabs.push('users');
+    if (myAccess.permissions.includes('platform.staff.read')) allowedTabs.push('staff');
+    if (myAccess.permissions.includes('platform.roles.read')) allowedTabs.push('roles');
+
+    if (allowedTabs.length > 0 && !allowedTabs.includes(activeTab)) {
+      setActiveTab(allowedTabs[0]);
+    }
+  }, [permsLoaded, myAccess, activeTab]);
 
   // Check auth on mount
   useEffect(() => {
@@ -238,6 +170,9 @@ export const App: React.FC = () => {
         if (res.success && res.data) {
           setCurrentUser(res.data);
           initPlatformLocale(res.data.preferredLanguage);
+          if (res.data.isPlatformStaff) {
+            await loadPlatformData();
+          }
         } else {
           setCurrentUser(null);
         }
@@ -248,9 +183,8 @@ export const App: React.FC = () => {
       }
     };
 
-    initAuth();
-    loadPlatformData();
-  }, []);
+    void initAuth();
+  }, [loadPlatformData]);
 
   // Handler: Update Business Status
   const handleUpdateBusinessStatus = async (
@@ -258,6 +192,7 @@ export const App: React.FC = () => {
     newStatus: 'active' | 'pending' | 'suspended' | 'archived'
   ) => {
     setIsUpdatingBusinessStatus(true);
+    setActionError(null);
     try {
       if (newStatus === 'archived') {
         await platformApi.stores.archiveStore(id);
@@ -265,7 +200,6 @@ export const App: React.FC = () => {
         await platformApi.stores.updateStore(id, { status: newStatus });
       }
 
-      // Update local state
       setBusinesses((prev) =>
         prev.map((b) => (b.id === id ? { ...b, status: newStatus } : b))
       );
@@ -273,14 +207,12 @@ export const App: React.FC = () => {
       if (selectedBusiness && selectedBusiness.id === id) {
         setSelectedBusiness((prev) => (prev ? { ...prev, status: newStatus } : null));
       }
-    } catch {
-      // Still update UI optimistically
-      setBusinesses((prev) =>
-        prev.map((b) => (b.id === id ? { ...b, status: newStatus } : b))
+    } catch (err: any) {
+      setActionError(
+        err?.data?.message ||
+          err?.message ||
+          (locale === 'en' ? 'Insufficient permissions to update store status' : 'Недостатньо прав для зміни статусу закладу')
       );
-      if (selectedBusiness && selectedBusiness.id === id) {
-        setSelectedBusiness((prev) => (prev ? { ...prev, status: newStatus } : null));
-      }
     } finally {
       setIsUpdatingBusinessStatus(false);
     }
@@ -291,16 +223,21 @@ export const App: React.FC = () => {
     userId: string,
     newStatus: 'active' | 'suspended' | 'archived'
   ) => {
+    setActionError(null);
     try {
       await platformApi.rbac.updatePlatformUserStatus(userId, newStatus);
-    } catch {
-      // ignore
-    }
-    setUsersList((prev) =>
-      prev.map((u) => (u.id === userId ? { ...u, status: newStatus } : u))
-    );
-    if (selectedUser && selectedUser.id === userId) {
-      setSelectedUser((prev) => (prev ? { ...prev, status: newStatus } : null));
+      setUsersList((prev) =>
+        prev.map((u) => (u.id === userId ? { ...u, status: newStatus } : u))
+      );
+      if (selectedUser && selectedUser.id === userId) {
+        setSelectedUser((prev) => (prev ? { ...prev, status: newStatus } : null));
+      }
+    } catch (err: any) {
+      setActionError(
+        err?.data?.message ||
+          err?.message ||
+          (locale === 'en' ? 'Insufficient permissions to update user status' : 'Недостатньо прав для зміни статусу користувача')
+      );
     }
   };
 
@@ -316,6 +253,8 @@ export const App: React.FC = () => {
     localStorage.removeItem('bizx_access_token');
     localStorage.removeItem('bizx_admin_access_token');
     setCurrentUser(null);
+    setMyAccess(null);
+    setPermsLoaded(false);
   };
 
   if (isLoadingAuth) {
@@ -332,7 +271,7 @@ export const App: React.FC = () => {
       <LoginView
         onSuccess={(user) => {
           setCurrentUser(user);
-          loadPlatformData();
+          void loadPlatformData();
         }}
       />
     );
@@ -372,7 +311,6 @@ export const App: React.FC = () => {
     );
   }
 
-  // Count businesses by status
   const businessesCount = {
     total: businesses.length,
     active: businesses.filter((b) => b.status === 'active').length,
@@ -387,60 +325,91 @@ export const App: React.FC = () => {
       onTabChange={setActiveTab}
       currentUser={currentUser}
       myPermissions={myPermissions}
+      myRoleName={myAccess?.roleName}
+      permsLoaded={permsLoaded}
       onLogout={handleLogout}
     >
-      {/* View: Metrics */}
-      {activeTab === 'metrics' && (
-        <MetricsView
-          analytics={analytics}
-          totalUsersCount={usersList.length}
-          businessesCount={businessesCount}
-          isLoading={isDataLoading}
-          onOpenDetailedAnalytics={() => setActiveTab('analytics')}
-        />
+      {actionError && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-800 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+            <span>{actionError}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setActionError(null)}
+            className="text-red-500 hover:text-red-700"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
       )}
 
-      {/* View: Detailed Platform Analytics */}
-      {activeTab === 'analytics' && (
-        <PlatformAnalyticsView
-          initialAnalytics={analytics}
-          businesses={businesses}
-        />
+      {permsLoaded && myPermissions.length === 0 ? (
+        <div className="bg-white border border-slate-200 rounded-xl p-10 text-center space-y-2">
+          <Lock className="w-8 h-8 text-slate-300 mx-auto" />
+          <h3 className="text-sm font-bold text-slate-900">
+            {locale === 'en' ? 'No platform permissions assigned' : 'Немає призначених прав платформи'}
+          </h3>
+          <p className="text-xs text-slate-500">
+            {locale === 'en'
+              ? 'Contact the BizX Platform Owner to assign a role or custom permissions.'
+              : 'Зверніться до власника платформи BizX для надання ролі або прав доступу.'}
+          </p>
+        </div>
+      ) : (
+        <>
+          {activeTab === 'metrics' && hasPerm('platform.analytics.read') && (
+            <MetricsView
+              analytics={analytics}
+              totalUsersCount={usersList.length}
+              businessesCount={businessesCount}
+              isLoading={isDataLoading}
+              onOpenDetailedAnalytics={() => setActiveTab('analytics')}
+            />
+          )}
+
+          {activeTab === 'analytics' && hasPerm('platform.analytics.read') && (
+            <PlatformAnalyticsView
+              initialAnalytics={analytics}
+              businesses={businesses}
+              canExport={hasPerm('platform.analytics.export')}
+            />
+          )}
+
+          {activeTab === 'businesses' && hasPerm('platform.stores.read') && (
+            <BusinessesView
+              businesses={businesses}
+              categories={categories}
+              onSelectBusiness={(b) => {
+                setSelectedBusiness(b);
+                setIsBusinessModalOpen(true);
+              }}
+              onRefresh={loadPlatformData}
+              isLoading={isDataLoading}
+            />
+          )}
+
+          {activeTab === 'users' && hasPerm('platform.users.read') && (
+            <UsersView
+              users={usersList}
+              onSelectUser={(u) => {
+                setSelectedUser(u);
+                setIsUserModalOpen(true);
+              }}
+              isLoading={isDataLoading}
+            />
+          )}
+
+          {activeTab === 'staff' && hasPerm('platform.staff.read') && (
+            <StaffView currentUserId={currentUser.id} />
+          )}
+
+          {activeTab === 'roles' && hasPerm('platform.roles.read') && <PlatformRolesView />}
+        </>
       )}
 
-      {/* View: Businesses */}
-      {activeTab === 'businesses' && (
-        <BusinessesView
-          businesses={businesses}
-          categories={categories}
-          onSelectBusiness={(b) => {
-            setSelectedBusiness(b);
-            setIsBusinessModalOpen(true);
-          }}
-          onRefresh={loadPlatformData}
-          isLoading={isDataLoading}
-        />
-      )}
-
-      {/* View: Users */}
-      {activeTab === 'users' && (
-        <UsersView
-          users={usersList}
-          onSelectUser={(u) => {
-            setSelectedUser(u);
-            setIsUserModalOpen(true);
-          }}
-          isLoading={isDataLoading}
-        />
-      )}
-
-      {/* View: Staff (Real DB RBAC) */}
-      {activeTab === 'staff' && <StaffView currentUserId={currentUser.id} />}
-
-      {/* View: Platform Roles & Permissions (Discord-style hierarchy) */}
-      {activeTab === 'roles' && <PlatformRolesView />}
-
-      {/* Business Details Slide-over / Modal */}
+      {/* Business Details Modal */}
       <BusinessDetailsModal
         business={selectedBusiness}
         isOpen={isBusinessModalOpen}
@@ -450,6 +419,8 @@ export const App: React.FC = () => {
         }}
         onUpdateStatus={handleUpdateBusinessStatus}
         isUpdating={isUpdatingBusinessStatus}
+        canModerate={hasPerm('platform.stores.moderate')}
+        canArchive={hasPerm('platform.stores.archive')}
       />
 
       {/* User Details Modal */}
@@ -461,6 +432,8 @@ export const App: React.FC = () => {
           setSelectedUser(null);
         }}
         onUpdateStatus={handleUpdateUserStatus}
+        canEditStatus={hasPerm('platform.users.edit')}
+        canArchive={hasPerm('platform.users.archive')}
       />
     </PlatformLayout>
   );

@@ -25,13 +25,17 @@ interface UserDetailsModalProps {
   isOpen: boolean;
   onClose: () => void;
   onUpdateStatus: (userId: string, newStatus: 'active' | 'suspended' | 'archived') => void;
+  canEditStatus?: boolean;
+  canArchive?: boolean;
 }
 
 export const UserDetailsModal: React.FC<UserDetailsModalProps> = ({
   user,
   isOpen,
   onClose,
-  onUpdateStatus
+  onUpdateStatus,
+  canEditStatus = false,
+  canArchive = false
 }) => {
   if (!isOpen || !user) return null;
 
@@ -138,57 +142,69 @@ export const UserDetailsModal: React.FC<UserDetailsModalProps> = ({
           </div>
 
           {/* Account Status Control */}
-          <div className="p-4 border border-slate-200 rounded-xl bg-white space-y-3">
-            <div>
-              <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
-                Керування статусом облікового запису
-              </h3>
-              <p className="text-[11px] text-slate-500 mt-0.5">
-                Блокування або архівація акаунта у всій системі
-              </p>
+          {canEditStatus || canArchive ? (
+            <div className="p-4 border border-slate-200 rounded-xl bg-white space-y-3">
+              <div>
+                <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
+                  Керування статусом облікового запису
+                </h3>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  Блокування або архівація акаунта у всій системі
+                </p>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2.5 pt-1">
+                {canEditStatus && (
+                  <button
+                    type="button"
+                    onClick={() => onUpdateStatus(user.id, 'active')}
+                    className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition-all ${
+                      user.status === 'active'
+                        ? 'border-emerald-500 bg-emerald-50 text-emerald-800 font-bold ring-2 ring-emerald-400/20'
+                        : 'border-slate-200 hover:border-emerald-300 text-slate-700'
+                    }`}
+                  >
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 mb-1" />
+                    <span className="text-xs font-bold">Активний</span>
+                  </button>
+                )}
+
+                {canEditStatus && (
+                  <button
+                    type="button"
+                    onClick={() => onUpdateStatus(user.id, 'suspended')}
+                    className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition-all ${
+                      user.status === 'suspended'
+                        ? 'border-rose-500 bg-rose-50 text-rose-800 font-bold ring-2 ring-rose-400/20'
+                        : 'border-slate-200 hover:border-rose-300 text-slate-700'
+                    }`}
+                  >
+                    <AlertTriangle className="w-4 h-4 text-rose-500 mb-1" />
+                    <span className="text-xs font-bold">Заблокований</span>
+                  </button>
+                )}
+
+                {canArchive && (
+                  <button
+                    type="button"
+                    onClick={() => onUpdateStatus(user.id, 'archived')}
+                    className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition-all ${
+                      user.status === 'archived'
+                        ? 'border-slate-400 bg-slate-100 text-slate-900 font-bold ring-2 ring-slate-300'
+                        : 'border-slate-200 hover:border-slate-400 text-slate-700'
+                    }`}
+                  >
+                    <Archive className="w-4 h-4 text-slate-500 mb-1" />
+                    <span className="text-xs font-bold">В архів</span>
+                  </button>
+                )}
+              </div>
             </div>
-
-            <div className="grid grid-cols-3 gap-2.5 pt-1">
-              <button
-                type="button"
-                onClick={() => onUpdateStatus(user.id, 'active')}
-                className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition-all ${
-                  user.status === 'active'
-                    ? 'border-emerald-500 bg-emerald-50 text-emerald-800 font-bold ring-2 ring-emerald-400/20'
-                    : 'border-slate-200 hover:border-emerald-300 text-slate-700'
-                }`}
-              >
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 mb-1" />
-                <span className="text-xs font-bold">Активний</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => onUpdateStatus(user.id, 'suspended')}
-                className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition-all ${
-                  user.status === 'suspended'
-                    ? 'border-rose-500 bg-rose-50 text-rose-800 font-bold ring-2 ring-rose-400/20'
-                    : 'border-slate-200 hover:border-rose-300 text-slate-700'
-                }`}
-              >
-                <AlertTriangle className="w-4 h-4 text-rose-500 mb-1" />
-                <span className="text-xs font-bold">Заблокований</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => onUpdateStatus(user.id, 'archived')}
-                className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition-all ${
-                  user.status === 'archived'
-                    ? 'border-slate-400 bg-slate-100 text-slate-900 font-bold ring-2 ring-slate-300'
-                    : 'border-slate-200 hover:border-slate-400 text-slate-700'
-                }`}
-              >
-                <Archive className="w-4 h-4 text-slate-500 mb-1" />
-                <span className="text-xs font-bold">В архів</span>
-              </button>
+          ) : (
+            <div className="p-3.5 border border-slate-200 rounded-xl bg-slate-50 text-[11px] text-slate-500">
+              Режим перегляду: у вас немає прав на зміну статусу або архівацію користувачів.
             </div>
-          </div>
+          )}
 
           <div className="p-3.5 border border-slate-200 rounded-xl bg-slate-50/70 text-[11px] text-slate-600 leading-relaxed">
             Надання або зміна платформних ролей та індивідуальних прав доступу виконується через розділ{' '}

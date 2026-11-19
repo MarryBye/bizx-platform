@@ -43,7 +43,7 @@ const ORDER_STATUSES: OrderStatus[] = [
   'cancelled'
 ];
 
-export const DetailedAnalyticsView: React.FC = () => {
+export const DetailedAnalyticsView: React.FC<{ canExport?: boolean }> = ({ canExport = true }) => {
   const { activeStore } = useBusinessStore();
   const { t, locale } = useTranslation();
 
@@ -246,27 +246,29 @@ export const DetailedAnalyticsView: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleExportCsv}
-            disabled={!data}
-            className="inline-flex items-center gap-1.5 text-xs font-bold"
-          >
-            <Download className="w-4 h-4 shrink-0" />
-            <span>{t('analytics.exportCsv')}</span>
-          </Button>
-          <Button
-            size="sm"
-            onClick={handleExportExcel}
-            disabled={!data}
-            className="inline-flex items-center gap-1.5 text-xs font-bold bg-emerald-700 hover:bg-emerald-800 text-white"
-          >
-            <FileSpreadsheet className="w-4 h-4 shrink-0" />
-            <span>{t('analytics.exportExcel')}</span>
-          </Button>
-        </div>
+        {canExport && (
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExportCsv}
+              disabled={!data}
+              className="inline-flex items-center gap-1.5 text-xs font-bold"
+            >
+              <Download className="w-4 h-4 shrink-0" />
+              <span>{t('analytics.exportCsv')}</span>
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleExportExcel}
+              disabled={!data}
+              className="inline-flex items-center gap-1.5 text-xs font-bold bg-emerald-700 hover:bg-emerald-800 text-white"
+            >
+              <FileSpreadsheet className="w-4 h-4 shrink-0" />
+              <span>{t('analytics.exportExcel')}</span>
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Filters Panel */}

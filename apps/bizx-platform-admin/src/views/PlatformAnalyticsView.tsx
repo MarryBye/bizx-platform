@@ -34,6 +34,7 @@ import {
 interface PlatformAnalyticsViewProps {
   initialAnalytics: PlatformAnalytics | null;
   businesses: ExtendedBusiness[];
+  canExport?: boolean;
 }
 
 type TableTab = 'daily' | 'monthly' | 'stores';
@@ -49,7 +50,8 @@ const ORDER_STATUSES: OrderStatus[] = [
 
 export const PlatformAnalyticsView: React.FC<PlatformAnalyticsViewProps> = ({
   initialAnalytics,
-  businesses
+  businesses,
+  canExport = false
 }) => {
   const { t, locale } = useTranslation();
 
@@ -248,26 +250,28 @@ export const PlatformAnalyticsView: React.FC<PlatformAnalyticsViewProps> = ({
           <p className="text-xs text-slate-500 mt-1">{t('analytics.platformSubtitle')}</p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={handleExportCsv}
-            disabled={!data}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-800 rounded-lg text-xs font-bold transition-colors disabled:opacity-50"
-          >
-            <Download className="w-4 h-4 shrink-0" />
-            <span>{t('analytics.exportCsv')}</span>
-          </button>
-          <button
-            type="button"
-            onClick={handleExportExcel}
-            disabled={!data}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold transition-colors shadow-sm disabled:opacity-50"
-          >
-            <FileSpreadsheet className="w-4 h-4 shrink-0" />
-            <span>{t('analytics.exportExcel')}</span>
-          </button>
-        </div>
+        {canExport && (
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={handleExportCsv}
+              disabled={!data}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-800 rounded-lg text-xs font-bold transition-colors disabled:opacity-50"
+            >
+              <Download className="w-4 h-4 shrink-0" />
+              <span>{t('analytics.exportCsv')}</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleExportExcel}
+              disabled={!data}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold transition-colors shadow-sm disabled:opacity-50"
+            >
+              <FileSpreadsheet className="w-4 h-4 shrink-0" />
+              <span>{t('analytics.exportExcel')}</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Filters Panel */}

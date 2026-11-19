@@ -50,6 +50,7 @@ export const PlatformRolesView: React.FC = () => {
       myAccess={myAccess}
       canCreate={myAccess.permissions.includes('platform.roles.write')}
       canEdit={myAccess.permissions.includes('platform.roles.edit')}
+      canArchive={myAccess.permissions.includes('platform.roles.archive')}
       isLoading={isLoading}
       locale={locale}
       t={t}

@@ -101,6 +101,7 @@ export const StaffView: React.FC = () => {
       currentUserId={currentUser?.id}
       canAdd={myAccess.permissions.includes('staff.write')}
       canEdit={myAccess.permissions.includes('staff.edit')}
+      canArchive={myAccess.permissions.includes('staff.archive')}
       readOnly={!ownerHasActiveSub}
       isLoading={isLoading}
       locale={locale}

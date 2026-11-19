@@ -7,12 +7,30 @@ import { Plus, Search, Archive, Image as ImageIcon, Upload, AlertCircle, Pencil 
 import { resolveMediaUrl } from '../lib/media';
 import type { Product } from '@bizx/common-types';
 
-export const ProductsView: React.FC<{ isReadOnly?: boolean }> = ({ isReadOnly: isReadOnlyProp }) => {
+export interface ProductsViewProps {
+  isReadOnly?: boolean;
+  canCreate?: boolean;
+  canEdit?: boolean;
+  canChangeStatus?: boolean;
+  canArchive?: boolean;
+}
+
+export const ProductsView: React.FC<ProductsViewProps> = ({
+  isReadOnly: isReadOnlyProp,
+  canCreate: canCreateProp,
+  canEdit: canEditProp,
+  canChangeStatus: canChangeStatusProp,
+  canArchive: canArchiveProp
+}) => {
   const { products, categories, activeStore, createProduct, updateProduct, deleteProduct, isLoading } =
     useBusinessStore();
   const { hasActiveSubscription } = useAuthStore();
   const { t, locale } = useTranslation();
   const isReadOnly = isReadOnlyProp !== undefined ? isReadOnlyProp : !hasActiveSubscription;
+  const canCreate = !isReadOnly && (canCreateProp !== undefined ? canCreateProp : true);
+  const canEdit = !isReadOnly && (canEditProp !== undefined ? canEditProp : true);
+  const canChangeStatus = !isReadOnly && (canChangeStatusProp !== undefined ? canChangeStatusProp : true);
+  const canArchive = !isReadOnly && (canArchiveProp !== undefined ? canArchiveProp : true);
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -96,21 +114,30 @@ export const ProductsView: React.FC<{ isReadOnly?: boolean }> = ({ isReadOnly: i
 
     let success = false;
     if (editingProduct) {
+      const updatePayload: Record<string, unknown> = {};
+      if (canEdit) {
+        updatePayload.name = name;
+        updatePayload.categoryId = categoryId || undefined;
+        updatePayload.sku = sku || undefined;
+        updatePayload.price = priceKopecks;
+        updatePayload.oldPrice = oldPriceKopecks;
+        updatePayload.inventoryCount = invCount;
+        updatePayload.description = description || undefined;
+      }
+      if (canChangeStatus && isActive !== editingProduct.isActive) {
+        updatePayload.isActive = isActive;
+      }
+      if (Object.keys(updatePayload).length === 0 && !imageFile) {
+        setIsModalOpen(false);
+        setEditingProduct(null);
+        return;
+      }
       success = await updateProduct(
         editingProduct.id,
-        {
-          name,
-          categoryId: categoryId || undefined,
-          sku: sku || undefined,
-          price: priceKopecks,
-          oldPrice: oldPriceKopecks,
-          inventoryCount: invCount,
-          description: description || undefined,
-          isActive
-        },
-        imageFile || undefined
+        updatePayload as any,
+        canEdit ? imageFile || undefined : undefined
       );
-    } else {
+    } else if (canCreate) {
       success = await createProduct(
         {
           name,
@@ -120,7 +147,7 @@ export const ProductsView: React.FC<{ isReadOnly?: boolean }> = ({ isReadOnly: i
           oldPrice: oldPriceKopecks,
           inventoryCount: invCount,
           description: description || undefined,
-          isActive
+          isActive: canChangeStatus ? isActive : true
         },
         imageFile || undefined
       );
@@ -161,13 +188,14 @@ export const ProductsView: React.FC<{ isReadOnly?: boolean }> = ({ isReadOnly: i
           </p>
         </div>
 
-        <Button
-          onClick={openCreateModal}
-          disabled={isReadOnly}
-          className="flex items-center gap-1.5 shrink-0 disabled:opacity-50"
-        >
-          <Plus className="w-4 h-4" /> {t('products.addProduct')}
-        </Button>
+        {canCreate && (
+          <Button
+            onClick={openCreateModal}
+            className="flex items-center gap-1.5 shrink-0"
+          >
+            <Plus className="w-4 h-4" /> {t('products.addProduct')}
+          </Button>
+        )}
       </div>
 
       {/* Filter and Search Bar */}
@@ -241,9 +269,22 @@ export const ProductsView: React.FC<{ isReadOnly?: boolean }> = ({ isReadOnly: i
                   <div>
                     <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
                       <span>{p.sku || 'Без артикулу'}</span>
-                      <Badge variant={p.isActive ? 'success' : 'outline'} className="text-[10px]">
-                        {p.isActive ? 'Активний' : 'Чернетка'}
-                      </Badge>
+                      {canChangeStatus ? (
+                        <button
+                          type="button"
+                          onClick={() => void updateProduct(p.id, { isActive: !p.isActive })}
+                          title={locale === 'en' ? 'Toggle Active / Draft status' : 'Перемкнути статус Активний / Чернетка'}
+                          className="cursor-pointer hover:opacity-80 transition-opacity"
+                        >
+                          <Badge variant={p.isActive ? 'success' : 'outline'} className="text-[10px]">
+                            {p.isActive ? 'Активний' : 'Чернетка'}
+                          </Badge>
+                        </button>
+                      ) : (
+                        <Badge variant={p.isActive ? 'success' : 'outline'} className="text-[10px]">
+                          {p.isActive ? 'Активний' : 'Чернетка'}
+                        </Badge>
+                      )}
                     </div>
                     <h3 className="font-semibold text-slate-900 line-clamp-2 text-sm">{p.name}</h3>
                     {p.description && (
@@ -261,30 +302,36 @@ export const ProductsView: React.FC<{ isReadOnly?: boolean }> = ({ isReadOnly: i
                       )}
                     </div>
 
-                    <div className="flex items-center gap-1.5">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="text-slate-700 hover:bg-slate-50"
-                        onClick={() => openEditModal(p)}
-                        title="Редагувати товар"
-                      >
-                        <Pencil className="w-3.5 h-3.5" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="text-slate-500 hover:text-amber-700 hover:bg-amber-50 hover:border-amber-200"
-                        onClick={() => {
-                          if (confirm(`Архівувати товар "${p.name}"? Товар буде сховано з каталогу, але збережено в системному архіві.`)) {
-                            void deleteProduct(p.id);
-                          }
-                        }}
-                        title="Архівувати товар"
-                      >
-                        <Archive className="w-3.5 h-3.5" />
-                      </Button>
-                    </div>
+                    {(canEdit || canArchive) && (
+                      <div className="flex items-center gap-1.5">
+                        {canEdit && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-slate-700 hover:bg-slate-50"
+                            onClick={() => openEditModal(p)}
+                            title="Редагувати товар"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </Button>
+                        )}
+                        {canArchive && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-slate-500 hover:text-amber-700 hover:bg-amber-50 hover:border-amber-200"
+                            onClick={() => {
+                              if (confirm(`Архівувати товар "${p.name}"? Товар буде сховано з каталогу, але збережено в системному архіві.`)) {
+                                void deleteProduct(p.id);
+                              }
+                            }}
+                            title="Архівувати товар"
+                          >
+                            <Archive className="w-3.5 h-3.5" />
+                          </Button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -298,9 +345,11 @@ export const ProductsView: React.FC<{ isReadOnly?: boolean }> = ({ isReadOnly: i
           <p className="text-xs text-slate-400 mt-1 mb-4">
             Додайте свій перший товар або змініть критерії пошуку
           </p>
-          <Button onClick={openCreateModal} size="sm">
-            <Plus className="w-4 h-4 mr-1" /> Створити товар
-          </Button>
+          {canCreate && (
+            <Button onClick={openCreateModal} size="sm">
+              <Plus className="w-4 h-4 mr-1" /> Створити товар
+            </Button>
+          )}
         </Card>
       )}
 
@@ -400,18 +449,20 @@ export const ProductsView: React.FC<{ isReadOnly?: boolean }> = ({ isReadOnly: i
             />
           </div>
 
-          <div className="flex items-center gap-2 pt-1">
-            <input
-              type="checkbox"
-              id="isActiveCheckbox"
-              checked={isActive}
-              onChange={(e) => setIsActive(e.target.checked)}
-              className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-            />
-            <label htmlFor="isActiveCheckbox" className="text-xs font-semibold text-slate-700 cursor-pointer">
-              Товар активний (відображається покупцям у додатку)
-            </label>
-          </div>
+          {canChangeStatus && (
+            <div className="flex items-center gap-2 pt-1">
+              <input
+                type="checkbox"
+                id="isActiveCheckbox"
+                checked={isActive}
+                onChange={(e) => setIsActive(e.target.checked)}
+                className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+              />
+              <label htmlFor="isActiveCheckbox" className="text-xs font-semibold text-slate-700 cursor-pointer">
+                Товар активний (відображається покупцям у додатку)
+              </label>
+            </div>
+          )}
 
           {/* Image Upload Input */}
           <div className="space-y-1">

@@ -69,6 +69,7 @@ export const RolesView: React.FC = () => {
       myAccess={myAccess}
       canCreate={myAccess.permissions.includes('roles.write')}
       canEdit={myAccess.permissions.includes('roles.edit')}
+      canArchive={myAccess.permissions.includes('roles.archive')}
       readOnly={!ownerHasActiveSub}
       isLoading={isLoading}
       locale={locale}
