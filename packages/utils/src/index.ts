@@ -518,7 +518,9 @@ export const uk = {
     quickLinks: 'Швидкі переходи',
     tabMetrics: 'Огляд та метрики',
     tabAnalytics: 'Детальна аналітика',
-    tabBusinesses: 'Торгові точки',
+    tabBusinesses: 'Бізнеси',
+    tabBusinessesAll: 'Усі бізнеси',
+    tabBusinessesPending: 'Очікують підтвердження',
     tabUsers: 'Користувачі',
     tabDisputes: 'Скарги',
     tabStaff: 'Команда BizX',
@@ -635,6 +637,7 @@ export const uk = {
       stores: {
         read: 'Перегляд усіх торгових точок платформи',
         moderate: 'Модерація та зміна статусів закладів',
+        approve: 'Підтвердження та відхилення нових заявок бізнесів',
         archive: 'Архівація (видалення) торгових точок'
       },
       categories: {
@@ -1185,7 +1188,9 @@ export const en: typeof uk = {
     quickLinks: 'Quick Links',
     tabMetrics: 'Overview & Metrics',
     tabAnalytics: 'Detailed Analytics',
-    tabBusinesses: 'Stores',
+    tabBusinesses: 'Businesses',
+    tabBusinessesAll: 'All Businesses',
+    tabBusinessesPending: 'Pending Approval',
     tabUsers: 'Users',
     tabDisputes: 'Disputes',
     tabStaff: 'BizX Team',
@@ -1302,6 +1307,7 @@ export const en: typeof uk = {
       stores: {
         read: 'View all platform stores',
         moderate: 'Moderate & change store statuses',
+        approve: 'Approve & reject new business applications',
         archive: 'Archive (remove) platform stores'
       },
       categories: {

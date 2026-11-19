@@ -7,6 +7,7 @@ import { AnalyticsModule } from './analytics';
 import { StorageClientModule } from './storage';
 import { SubscriptionsModule } from './subscriptions';
 import { RbacModule } from './rbac';
+import { InboxModule } from './inbox';
 
 export * from './client';
 export * from './auth';
@@ -17,6 +18,7 @@ export * from './analytics';
 export * from './storage';
 export * from './subscriptions';
 export * from './rbac';
+export * from './inbox';
 export * from './errors';
 export * from '@bizx/common-types';
 
@@ -30,6 +32,7 @@ export interface BizXClient {
   storage: StorageClientModule;
   subscriptions: SubscriptionsModule;
   rbac: RbacModule;
+  inbox: InboxModule;
 }
 
 /**
@@ -45,6 +48,7 @@ export function createApiClient(config: ApiClientConfig = {}): BizXClient {
   const storage = new StorageClientModule(client);
   const subscriptions = new SubscriptionsModule(client);
   const rbac = new RbacModule(client);
+  const inbox = new InboxModule(client);
 
   return {
     client,
@@ -55,6 +59,7 @@ export function createApiClient(config: ApiClientConfig = {}): BizXClient {
     analytics,
     storage,
     subscriptions,
-    rbac
+    rbac,
+    inbox
   };
 }

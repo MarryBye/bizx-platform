@@ -191,6 +191,7 @@ export const PLATFORM_PERMISSIONS: PermissionDefinition[] = [
   // Торгові точки
   { id: 201, code: 'platform.stores.read', scope: 'platform', category: 'platform_stores', action: 'read', ownerOnly: false },
   { id: 202, code: 'platform.stores.moderate', scope: 'platform', category: 'platform_stores', action: 'manage', ownerOnly: false },
+  { id: 205, code: 'platform.stores.approve', scope: 'platform', category: 'platform_stores', action: 'manage', ownerOnly: false },
   { id: 203, code: 'platform.categories.manage', scope: 'platform', category: 'platform_stores', action: 'edit', ownerOnly: false },
   { id: 204, code: 'platform.stores.archive', scope: 'platform', category: 'platform_stores', action: 'archive', ownerOnly: false },
   // Користувачі BizX
@@ -249,6 +250,7 @@ export type PlatformPermissionCode =
   | 'platform.admin'
   | 'platform.stores.read'
   | 'platform.stores.moderate'
+  | 'platform.stores.approve'
   | 'platform.categories.manage'
   | 'platform.stores.archive'
   | 'platform.users.read'
@@ -1091,3 +1093,106 @@ export const STORE_QUICK_REPLIES = {
     'Sorry for the inconvenience, we are resolving this right away!'
   ]
 } as const;
+
+/**
+ * ============================================================================
+ * Модерація бізнесів (підтвердження / відхилення / прев'ю) та Пошта акаунту
+ * ============================================================================
+ */
+
+export const rejectStoreDtoSchema = z.object({
+  reason: z.string().trim().min(5, 'Вкажіть причину відхилення (мін. 5 символів)').max(1500)
+});
+export type RejectStoreDto = z.infer<typeof rejectStoreDtoSchema>;
+
+export interface PlatformStoresSummary {
+  pendingCount: number;
+  activeCount: number;
+  draftCount: number;
+  suspendedCount: number;
+  archivedCount: number;
+  totalCount: number;
+}
+
+export interface StorePreviewTokenResponse {
+  previewToken: string;
+  expiresInSeconds: number;
+}
+
+export interface StorePreviewReadiness {
+  hasLogo: boolean;
+  hasBanner: boolean;
+  hasDescription: boolean;
+  hasContacts: boolean;
+  hasAddress: boolean;
+  productsCount: number;
+  activeProductsCount: number;
+}
+
+export interface StorePreviewResponse {
+  store: Store & {
+    categoryName?: string | null;
+    ownerName?: string | null;
+    ownerEmail?: string | null;
+  };
+  categories: ProductCategory[];
+  products: Product[];
+  readiness: StorePreviewReadiness;
+  isPreviewMode: boolean;
+}
+
+export type InboxSenderType = 'bizx' | 'support' | 'promo' | 'user';
+export type InboxBadgeType = 'bizx' | 'support' | 'promo' | null;
+export type InboxMessageRole = 'system_bizx' | 'support_staff' | 'promo_business' | 'recipient';
+
+export interface InboxThreadItem {
+  id: string;
+  userId: string;
+  senderType: InboxSenderType;
+  senderStoreId: string | null;
+  senderName: string;
+  senderAvatarUrl: string | null;
+  badgeType: InboxBadgeType;
+  subject: string;
+  canReply: boolean;
+  relatedStoreId: string | null;
+  lastMessagePreview: string | null;
+  lastMessageAt: string;
+  unreadCount: number;
+  createdAt: string;
+}
+
+export interface InboxMessageItem {
+  id: string;
+  threadId: string;
+  senderUserId: string | null;
+  senderRole: InboxMessageRole;
+  senderName: string;
+  body: string | null;
+  attachments: OrderMessageAttachmentDto[];
+  readByRecipientAt: string | null;
+  readByStaffAt: string | null;
+  createdAt: string;
+}
+
+export interface InboxUnreadSummary {
+  totalUnreadMessages: number;
+  unreadThreadsCount: number;
+}
+
+export const sendInboxMessageDtoSchema = z
+  .object({
+    body: z.string().max(4000).optional(),
+    attachments: z.array(orderMessageAttachmentSchema).max(6).default([]).optional()
+  })
+  .refine(
+    (v) => Boolean((v.body && v.body.trim().length > 0) || (v.attachments && v.attachments.length > 0)),
+    { message: 'Повідомлення не може бути порожнім' }
+  );
+export type SendInboxMessageDto = z.infer<typeof sendInboxMessageDtoSchema>;
+
+export const createSupportThreadDtoSchema = z.object({
+  subject: z.string().trim().min(3, 'Вкажіть тему звернення').max(200),
+  body: z.string().trim().min(5, 'Опишіть ваше питання (мін. 5 символів)').max(4000)
+});
+export type CreateSupportThreadDto = z.infer<typeof createSupportThreadDtoSchema>;

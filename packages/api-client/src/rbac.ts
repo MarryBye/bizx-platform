@@ -49,10 +49,12 @@ export interface PlatformStoreListItem {
   ratingAvg?: number;
   ratingCount?: number;
   activeStrikesCount?: number;
+  productsCount?: number;
   createdAt: string;
   categoryName: string | null;
   ownerName: string | null;
   ownerEmail: string | null;
+  ownerPhone?: string | null;
 }
 
 export class RbacModule {
