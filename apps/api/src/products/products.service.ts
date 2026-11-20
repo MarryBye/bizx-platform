@@ -164,7 +164,7 @@ export class ProductsService {
       .where(eq(productCategories.id, categoryId));
 
     if (!category) {
-      throw new NotFoundException('Категория товаров не найдена');
+      throw new NotFoundException('Категорію товарів не знайдено');
     }
 
     await this.rbacService.assertStorePermission(category.storeId, userId, 'products.archive', { write: true });
@@ -201,7 +201,7 @@ export class ProductsService {
         );
 
       if (!category) {
-        throw new NotFoundException('Указанная категория товаров не найдена в данном магазине');
+        throw new NotFoundException('Вказану категорію товарів не знайдено в цьому магазині');
       }
     }
 
@@ -331,7 +331,7 @@ export class ProductsService {
       .where(and(eq(products.id, id), isNull(products.archivedAt)));
 
     if (!row) {
-      throw new NotFoundException('Товар не найден');
+      throw new NotFoundException('Товар не знайдено');
     }
 
     const isPubliclyVisible =
@@ -340,7 +340,7 @@ export class ProductsService {
     if (!isPubliclyVisible) {
       const canInspect = await this.canInspectUnpublishedStore(row.storeId, callerUserId);
       if (!canInspect) {
-        throw new NotFoundException('Товар не найден');
+        throw new NotFoundException('Товар не знайдено');
       }
     }
 
@@ -359,7 +359,7 @@ export class ProductsService {
       .where(and(eq(products.id, id), isNull(products.archivedAt)));
 
     if (!product) {
-      throw new NotFoundException('Товар не найден');
+      throw new NotFoundException('Товар не знайдено');
     }
 
     await this.rbacService.assertStorePermission(product.storeId, userId, requiredPerm, { write: true });
@@ -377,7 +377,7 @@ export class ProductsService {
       .where(and(eq(products.id, id), isNull(products.archivedAt)));
 
     if (!existing) {
-      throw new NotFoundException('Товар не найден');
+      throw new NotFoundException('Товар не знайдено');
     }
 
     const hasStatusChange =
@@ -418,7 +418,7 @@ export class ProductsService {
         );
 
       if (!category) {
-        throw new NotFoundException('Указанная категория товаров не найдена в данном магазине');
+        throw new NotFoundException('Вказану категорію товарів не знайдено в цьому магазині');
       }
     }
 

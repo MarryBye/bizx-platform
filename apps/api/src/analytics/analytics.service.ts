@@ -13,7 +13,8 @@ import {
   lte,
   sql,
   desc,
-  count
+  count,
+  isNull
 } from '@bizx/database';
 import type {
   AnalyticsQuery,
@@ -281,18 +282,22 @@ export class AnalyticsService {
       ordersCount: Number(row.ordersCount)
     }));
 
-    // 2. Количество магазинов
+    // 2. Кількість не-архівних магазинів
     const [storesCount] = await this.databaseService.db
       .select({
         total: count(),
         active: sql<string>`coalesce(count(case when ${stores.status} = 'active' then 1 end), 0)`
       })
-      .from(stores);
+      .from(stores)
+      .where(isNull(stores.archivedAt));
 
-    // 3. Количество товаров
-    const [productsCount] = await this.databaseService.db.select({ total: count() }).from(products);
+    // 3. Кількість не-архівних товарів
+    const [productsCount] = await this.databaseService.db
+      .select({ total: count() })
+      .from(products)
+      .where(isNull(products.archivedAt));
 
-    // 4. Топ магазинов по обороту (по умолчанию Топ-10, настраивается через topLimit)
+    // 4. Топ не-архівних магазинів по обороту (по умолчанию Топ-10, настраивается через topLimit)
     const topLimit = query.topLimit ?? 10;
     const topStoresRaw = await this.databaseService.db
       .select({
@@ -308,6 +313,7 @@ export class AnalyticsService {
           ? and(eq(stores.id, orders.storeId), whereClause)
           : eq(stores.id, orders.storeId)
       )
+      .where(isNull(stores.archivedAt))
       .groupBy(stores.id, stores.name)
       .orderBy(desc(sql`coalesce(sum(${orders.totalAmount}), 0)`))
       .limit(topLimit);

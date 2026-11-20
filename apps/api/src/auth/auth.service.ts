@@ -208,7 +208,7 @@ export class AuthService {
       .where(eq(users.email, dto.email.toLowerCase()));
 
     if (existing) {
-      throw new ConflictException('Пользователь с таким email уже зарегистрирован');
+      throw new ConflictException('Користувач із таким email вже зареєстрований');
     }
 
     const normalizedPhone = normalizePhone(dto.phone);
@@ -219,7 +219,7 @@ export class AuthService {
         .where(eq(users.phone, normalizedPhone));
 
       if (existingPhone) {
-        throw new ConflictException('Пользователь с таким номером телефона уже зарегистрирован');
+        throw new ConflictException('Користувач із таким номером телефону вже зареєстрований');
       }
     }
 
@@ -262,7 +262,7 @@ export class AuthService {
     if (phoneInput) {
       const normalizedPhone = normalizePhone(phoneInput);
       if (!normalizedPhone) {
-        throw new UnauthorizedException('Неверный номер телефона или пароль');
+        throw new UnauthorizedException('Невірний номер телефону або пароль');
       }
       const [foundByPhone] = await this.databaseService.db
         .select()
@@ -278,12 +278,12 @@ export class AuthService {
     }
 
     if (!user) {
-      throw new UnauthorizedException('Неверный логин или пароль');
+      throw new UnauthorizedException('Невірний логін або пароль');
     }
 
     const isMatch = await bcrypt.compare(dto.password, user.passwordHash);
     if (!isMatch) {
-      throw new UnauthorizedException('Неверный логин или пароль');
+      throw new UnauthorizedException('Невірний логін або пароль');
     }
 
     user = await this.assertUserNotBlocked(user);
