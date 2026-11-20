@@ -646,10 +646,33 @@ export const productCategorySchema = z.object({
 export type ProductCategory = z.infer<typeof productCategorySchema>;
 
 export const createProductCategoryDtoSchema = z.object({
-  name: z.string().min(1, 'Название категории обязательно'),
-  sortOrder: z.number().int().optional().default(0)
+  name: z.string().trim().min(1, 'Название категории обязательно').max(120),
+  sortOrder: z.number().int().min(0).max(10_000).optional().default(0)
 });
 export type CreateProductCategoryDto = z.infer<typeof createProductCategoryDtoSchema>;
+
+export const updateProductCategoryDtoSchema = z.object({
+  name: z.string().trim().min(1, 'Название категории обязательно').max(120).optional(),
+  sortOrder: z.number().int().min(0).max(10_000).optional()
+});
+export type UpdateProductCategoryDto = z.infer<typeof updateProductCategoryDtoSchema>;
+
+export const changePasswordDtoSchema = z.object({
+  currentPassword: z.string().min(1, 'Вкажіть поточний пароль'),
+  newPassword: z.string().min(6, 'Новий пароль має містити щонайменше 6 символів').max(128)
+});
+export type ChangePasswordDto = z.infer<typeof changePasswordDtoSchema>;
+
+export interface StoreCustomerSummaryItem {
+  customerId: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  ordersCount: number;
+  totalSpent: number;
+  lastOrderAt: string;
+  marketingSubscribed: boolean;
+}
 
 /**
  * Товары

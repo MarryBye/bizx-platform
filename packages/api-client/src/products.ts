@@ -5,6 +5,7 @@ import type {
   ProductCategory,
   Product,
   CreateProductCategoryDto,
+  UpdateProductCategoryDto,
   CreateProductDto,
   UpdateProductDto,
   ProductFilterQuery
@@ -31,6 +32,13 @@ export class ProductsModule {
       `/products/store/${storeId}/categories`,
       dto
     );
+  }
+
+  async updateCategory(
+    id: string,
+    dto: UpdateProductCategoryDto
+  ): Promise<ApiResponse<ProductCategory>> {
+    return this.client.patch<ApiResponse<ProductCategory>>(`/products/categories/${id}`, dto);
   }
 
   /**

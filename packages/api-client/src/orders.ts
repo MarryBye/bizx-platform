@@ -18,7 +18,8 @@ import type {
   IssueStoreStrikeDto,
   RevokeStrikeDto,
   CreateStoreReviewDto,
-  StoreReviewItem
+  StoreReviewItem,
+  StoreCustomerSummaryItem
 } from '@bizx/common-types';
 
 export interface EnrichedOrderResponse extends OrderResponse {
@@ -86,6 +87,12 @@ export class OrdersModule {
   async getStoreUnreadSummary(storeId: string): Promise<ApiResponse<StoreUnreadSummary>> {
     return this.client.get<ApiResponse<StoreUnreadSummary>>(
       `/orders/store/${storeId}/unread-summary`
+    );
+  }
+
+  async getStoreCustomers(storeId: string): Promise<ApiResponse<StoreCustomerSummaryItem[]>> {
+    return this.client.get<ApiResponse<StoreCustomerSummaryItem[]>>(
+      `/orders/store/${storeId}/customers`
     );
   }
 

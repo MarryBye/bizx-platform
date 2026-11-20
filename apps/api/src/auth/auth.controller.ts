@@ -29,9 +29,11 @@ import {
   registerDtoSchema,
   loginDtoSchema,
   updateUserProfileDtoSchema,
+  changePasswordDtoSchema,
   type RegisterDto,
   type LoginDto,
   type UpdateUserProfileDto,
+  type ChangePasswordDto,
   type RefreshTokenDto,
   type ApiResponse,
   type AuthResponse,
@@ -217,6 +219,21 @@ export class AuthController {
     return {
       success: true,
       data: profile,
+      timestamp: new Date().toISOString()
+    };
+  }
+
+  @Post('change-password')
+  @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { limit: 6, ttl: 60_000 } })
+  async changePassword(
+    @CurrentUser('sub') userId: string,
+    @Body(new ZodValidationPipe(changePasswordDtoSchema)) dto: ChangePasswordDto
+  ): Promise<ApiResponse<{ message: string }>> {
+    const data = await this.authService.changePassword(userId, dto.currentPassword, dto.newPassword);
+    return {
+      success: true,
+      data,
       timestamp: new Date().toISOString()
     };
   }

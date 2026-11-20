@@ -21,6 +21,7 @@ import type {
   UpdateProductDto,
   ProductFilterQuery,
   CreateProductCategoryDto,
+  UpdateProductCategoryDto,
   PaginatedResult
 } from '@bizx/common-types';
 
@@ -121,6 +122,36 @@ export class ProductsService {
       .returning();
 
     return category;
+  }
+
+  async updateProductCategory(
+    categoryId: string,
+    userId: string,
+    dto: UpdateProductCategoryDto
+  ): Promise<ProductCategoryRecord> {
+    const [category] = await this.databaseService.db
+      .select()
+      .from(productCategories)
+      .where(and(eq(productCategories.id, categoryId), isNull(productCategories.archivedAt)));
+
+    if (!category) {
+      throw new NotFoundException('Категорію товарів не знайдено');
+    }
+
+    await this.rbacService.assertStorePermission(category.storeId, userId, 'products.edit', {
+      write: true
+    });
+
+    const [updated] = await this.databaseService.db
+      .update(productCategories)
+      .set({
+        ...(dto.name !== undefined ? { name: dto.name } : {}),
+        ...(dto.sortOrder !== undefined ? { sortOrder: dto.sortOrder } : {})
+      })
+      .where(eq(productCategories.id, categoryId))
+      .returning();
+
+    return updated;
   }
 
   async deleteProductCategory(

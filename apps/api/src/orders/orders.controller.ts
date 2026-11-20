@@ -40,6 +40,7 @@ import {
   type OrderDisputeItem,
   type CreateStoreReviewDto,
   type StoreReviewItem,
+  type StoreCustomerSummaryItem,
   type ApiResponse
 } from '@bizx/common-types';
 
@@ -95,6 +96,15 @@ export class OrdersController {
   ): Promise<ApiResponse<{ totalUnreadMessages: number; activeDisputesCount: number }>> {
     const summary = await this.ordersService.getStoreUnreadSummary(storeId, userId);
     return { success: true, data: summary, timestamp: new Date().toISOString() };
+  }
+
+  @Get('store/:storeId/customers')
+  async getStoreCustomers(
+    @Param('storeId') storeId: string,
+    @CurrentUser('sub') userId: string
+  ): Promise<ApiResponse<StoreCustomerSummaryItem[]>> {
+    const customers = await this.ordersService.getStoreCustomers(storeId, userId);
+    return { success: true, data: customers, timestamp: new Date().toISOString() };
   }
 
   @Get(':id')

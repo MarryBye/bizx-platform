@@ -17,6 +17,7 @@ import {
   orderMessages,
   orderDisputes,
   storeReviews,
+  storeMarketingSubscriptions,
   products,
   stores,
   users,
@@ -46,7 +47,8 @@ import type {
   OrderDisputeItem,
   DisputeCategory,
   DisputeStatus,
-  OrderMessageSenderType
+  OrderMessageSenderType,
+  StoreCustomerSummaryItem
 } from '@bizx/common-types';
 
 export interface EnrichedOrder extends OrderRecord {
@@ -1095,5 +1097,70 @@ export class OrdersService {
       comment: created.comment,
       createdAt: created.createdAt.toISOString()
     };
+  }
+
+  async getStoreCustomers(storeId: string, userId: string): Promise<StoreCustomerSummaryItem[]> {
+    await this.rbacService.assertStorePermission(storeId, userId, 'orders.read', {
+      allowPlatformPermission: 'platform.stores.read',
+      allowWhenSuspended: true
+    });
+
+    const [orderRows, subRows] = await Promise.all([
+      this.databaseService.db
+        .select({
+          customerId: orders.customerId,
+          contactName: orders.contactName,
+          contactPhone: orders.contactPhone,
+          totalAmount: orders.totalAmount,
+          status: orders.status,
+          createdAt: orders.createdAt,
+          userName: users.name,
+          userEmail: users.email,
+          userPhone: users.phone
+        })
+        .from(orders)
+        .leftJoin(users, eq(orders.customerId, users.id))
+        .where(eq(orders.storeId, storeId))
+        .orderBy(desc(orders.createdAt)),
+      this.databaseService.db
+        .select({
+          userId: storeMarketingSubscriptions.userId,
+          status: storeMarketingSubscriptions.status
+        })
+        .from(storeMarketingSubscriptions)
+        .where(eq(storeMarketingSubscriptions.storeId, storeId))
+    ]);
+
+    const subMap = new Map<string, boolean>();
+    for (const s of subRows) {
+      subMap.set(s.userId, s.status === 'subscribed');
+    }
+
+    const byCustomer = new Map<string, StoreCustomerSummaryItem>();
+    for (const r of orderRows) {
+      const key = r.customerId || `guest:${r.contactPhone}`;
+      const existing = byCustomer.get(key);
+      const isCancelled = r.status === 'cancelled';
+      if (!existing) {
+        byCustomer.set(key, {
+          customerId: r.customerId || key,
+          name: r.userName || r.contactName || 'Покупець',
+          email: r.userEmail ?? null,
+          phone: r.userPhone || r.contactPhone || null,
+          ordersCount: 1,
+          totalSpent: isCancelled ? 0 : r.totalAmount,
+          lastOrderAt: r.createdAt.toISOString(),
+          marketingSubscribed: r.customerId ? Boolean(subMap.get(r.customerId)) : false
+        });
+      } else {
+        existing.ordersCount += 1;
+        if (!isCancelled) existing.totalSpent += r.totalAmount;
+        if (r.createdAt.toISOString() > existing.lastOrderAt) {
+          existing.lastOrderAt = r.createdAt.toISOString();
+        }
+      }
+    }
+
+    return Array.from(byCustomer.values()).sort((a, b) => b.totalSpent - a.totalSpent);
   }
 }

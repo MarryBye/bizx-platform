@@ -6,7 +6,8 @@ import type {
   RegisterDto,
   RefreshTokenDto,
   UserProfile,
-  UpdateUserProfileDto
+  UpdateUserProfileDto,
+  ChangePasswordDto
 } from '@bizx/common-types';
 
 export class AuthModule {
@@ -72,6 +73,10 @@ export class AuthModule {
    */
   async updateProfile(dto: UpdateUserProfileDto): Promise<ApiResponse<UserProfile>> {
     return this.client.patch<ApiResponse<UserProfile>>('/auth/me', dto);
+  }
+
+  async changePassword(dto: ChangePasswordDto): Promise<ApiResponse<{ message: string }>> {
+    return this.client.post<ApiResponse<{ message: string }>>('/auth/change-password', dto);
   }
 
   /**

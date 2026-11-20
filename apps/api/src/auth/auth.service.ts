@@ -6,6 +6,7 @@ import {
 } from '../subscriptions/subscriptions.constants.js';
 import {
   Injectable,
+  BadRequestException,
   ConflictException,
   UnauthorizedException,
   ForbiddenException,
@@ -484,9 +485,44 @@ export class AuthService {
       .returning();
 
     if (!updated) {
-      throw new NotFoundException('Пользователь не найден');
+      throw new NotFoundException('Користувача не знайдено');
     }
 
     return this.mapToProfile(updated);
+  }
+
+  async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string
+  ): Promise<{ message: string }> {
+    const [user] = await this.databaseService.db
+      .select()
+      .from(users)
+      .where(eq(users.id, userId));
+
+    if (!user) {
+      throw new NotFoundException('Користувача не знайдено');
+    }
+
+    const matches = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!matches) {
+      throw new BadRequestException('Поточний пароль вказано невірно');
+    }
+
+    if (currentPassword === newPassword) {
+      throw new BadRequestException('Новий пароль має відрізнятися від поточного');
+    }
+
+    const newHash = await bcrypt.hash(newPassword, 10);
+    await this.databaseService.db.transaction(async (tx) => {
+      await tx
+        .update(users)
+        .set({ passwordHash: newHash, updatedAt: new Date() })
+        .where(eq(users.id, userId));
+      await tx.delete(refreshTokens).where(eq(refreshTokens.userId, userId));
+    });
+
+    return { message: 'Пароль успішно оновлено' };
   }
 }
