@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { api } from '../../lib/api';
 import type { EnrichedOrderResponse } from '@bizx/api-client';
 import { StatusBadge, CountBadge } from '@bizx/ui';
+import { formatMoney as formatMoneyShared } from '@bizx/utils';
 import { ShoppingBag, ExternalLink, Clock, AlertTriangle, Loader2 } from 'lucide-react';
 
 interface AccountOrdersProps {
@@ -35,11 +36,7 @@ export const AccountOrders: React.FC<AccountOrdersProps> = ({ locale }) => {
     };
   }, []);
 
-  const formatMoney = (kopecks: number) =>
-    (kopecks / 100).toLocaleString(isEn ? 'en-US' : 'uk-UA', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    });
+  const formatMoney = (kopecks: number) => formatMoneyShared(kopecks, locale);
 
   const statusTone = (status: string): 'emerald' | 'blue' | 'amber' | 'rose' | 'slate' => {
     if (status === 'delivered') return 'emerald';

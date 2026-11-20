@@ -6,6 +6,7 @@ import { api } from '../lib/api';
 import { useTranslation } from '../hooks/useTranslation';
 import type { UserProfile, Store } from '@bizx/common-types';
 import { LanguageSelector, CountBadge } from '@bizx/ui';
+import { getInitials } from '@bizx/utils';
 import { AuthModal } from './AuthModal';
 import {
   ChevronDown,
@@ -131,15 +132,6 @@ export const SiteHeader: React.FC = () => {
 
   const isBusinessUser = Boolean(user?.hasStoreAccess || user?.isBusinessOwner || stores.length > 0);
   const isPlatformStaff = Boolean(user?.isPlatformStaff);
-
-  const getInitials = (name?: string) => {
-    if (!name) return 'U';
-    const parts = name.trim().split(/\s+/);
-    if (parts.length >= 2) {
-      return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
-    }
-    return name.slice(0, 2).toUpperCase();
-  };
 
   return (
     <>

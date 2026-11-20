@@ -17,8 +17,10 @@ import { api } from '../lib/api';
 import { SiteHeader } from '../components/SiteHeader';
 import { AccountInbox } from './components/AccountInbox';
 import { AccountOrders } from './components/AccountOrders';
+import { AccountBusinesses } from './components/AccountBusinesses';
+import { AccountSubscriptions } from './components/AccountSubscriptions';
 import { useTranslation } from '../hooks/useTranslation';
-import { translateApiError, type SupportedLocale } from '@bizx/utils';
+import { translateApiError, getInitials, type SupportedLocale } from '@bizx/utils';
 import type {
   UserProfile,
   Store,
@@ -39,7 +41,6 @@ import {
   CreditCard,
   Store as StoreIcon,
   Mail,
-  Eye,
   ShoppingBag
 } from 'lucide-react';
 
@@ -422,15 +423,6 @@ export default function AccountPage() {
     }
   };
 
-  const getInitials = (val?: string) => {
-    if (!val) return 'U';
-    const parts = val.trim().split(/\s+/);
-    if (parts.length >= 2) {
-      return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
-    }
-    return val.slice(0, 2).toUpperCase();
-  };
-
   const isBusinessUser = Boolean(user?.hasStoreAccess || user?.isBusinessOwner || myStores.length > 0);
 
   const isPlatformStaff = Boolean(user?.isPlatformStaff);
@@ -712,8 +704,8 @@ export default function AccountPage() {
                         </label>
                         <div className="text-[11px] text-slate-400 mt-1">
                           {locale === 'en'
-                            ? 'JPG, PNG, WebP and SVG formats supported'
-                            : 'Підтримуються формати JPG, PNG, WebP та SVG'}
+                            ? 'JPG, PNG and WebP formats supported'
+                            : 'Підтримуються формати JPG, PNG та WebP'}
                         </div>
                       </div>
                     </div>
@@ -796,347 +788,32 @@ export default function AccountPage() {
 
               {/* Tab: Businesses */}
               {activeTab === 'businesses' && (
-                <div className="space-y-6">
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-100 pb-4">
-                    <div>
-                      <h2 className="text-lg font-black text-slate-900">{t('account.myStoresTitle')}</h2>
-                      <p className="text-xs text-slate-500 mt-0.5">
-                        {t('account.businessesTabDesc')}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowCreateStoreModal(true);
-                        setCreateStoreError(null);
-                      }}
-                      className="self-start sm:self-auto inline-flex items-center gap-1.5 px-3 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold transition-colors shadow-sm"
-                    >
-                      <StoreIcon className="w-4 h-4 shrink-0" />
-                      <span>{t('account.createStore')}</span>
-                    </button>
-                  </div>
-
-                  {moderationNotice && (
-                    <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-800 flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4 text-blue-600 shrink-0" />
-                      <span>{moderationNotice}</span>
-                    </div>
-                  )}
-
-                  {(subDetails?.needsStoreSelection || subDetails?.hasExceededStoreLimit) && (
-                    <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl space-y-1.5 text-xs text-amber-900">
-                      <div className="flex items-center gap-2 font-bold text-amber-950">
-                        <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-                        <span>
-                          {locale === 'en'
-                            ? `Action required: select up to ${subDetails.maxAllowedStores} store(s) for your current plan`
-                            : `Потрібна дія: оберіть до ${subDetails.maxAllowedStores} заклад(ів) для вашого поточного тарифу`}
-                        </span>
-                      </div>
-                      <p className="text-[11px] leading-relaxed">
-                        {locale === 'en'
-                          ? 'Your stores were temporarily paused after a plan downgrade. Submit the stores you want to keep active for BizX review, or upgrade your subscription.'
-                          : 'Через пониження тарифу всі заклади було тимчасово призупинено. Оберіть заклади в межах ліміту та відправте їх на перевірку в BizX, або підвищте тариф.'}
-                      </p>
-                    </div>
-                  )}
-
-                  {myStores.length === 0 ? (
-                    <div className="p-8 text-center border border-dashed border-slate-200 rounded-xl space-y-3">
-                      <Building2 className="w-8 h-8 text-slate-400 mx-auto" />
-                      <div className="text-xs font-bold text-slate-800">
-                        {t('account.noStoresYet')}
-                      </div>
-                      <p className="text-[11px] text-slate-500 max-w-sm mx-auto">
-                        {t('account.createFirstStoreHint')}
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowCreateStoreModal(true);
-                          setCreateStoreError(null);
-                        }}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 text-white rounded-lg text-xs font-bold hover:bg-slate-800 transition-colors"
-                      >
-                        <StoreIcon className="w-4 h-4 shrink-0" />
-                        <span>{t('account.createStore')}</span>
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {myStores.map((st) => {
-                        const isDraft = st.status === 'draft';
-                        const isPending = st.status === 'pending';
-                        const isActive = st.status === 'active';
-
-                        return (
-                          <div
-                            key={st.id}
-                            className="p-4 border border-slate-200 rounded-xl bg-slate-50/50 space-y-3"
-                          >
-                            <div className="flex items-center justify-between">
-                              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                                Торгова точка
-                              </span>
-                              {isDraft && (
-                                <span className="text-[10px] font-bold text-amber-800 bg-amber-100 border border-amber-200 px-2 py-0.5 rounded uppercase">
-                                  В розробці
-                                </span>
-                              )}
-                              {isPending && (
-                                <span className="text-[10px] font-bold text-blue-800 bg-blue-100 border border-blue-200 px-2 py-0.5 rounded uppercase">
-                                  На перевірці
-                                </span>
-                              )}
-                              {isActive && (
-                                <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded uppercase">
-                                  Активний
-                                </span>
-                              )}
-                              {!isDraft && !isPending && !isActive && (
-                                <span className="text-[10px] font-bold text-slate-700 bg-slate-200 px-2 py-0.5 rounded uppercase">
-                                  {st.status}
-                                </span>
-                              )}
-                            </div>
-
-                            <div>
-                              <div className="text-sm font-bold text-slate-900">{st.name}</div>
-                              <div className="text-[11px] text-slate-500 font-mono">/{st.slug}</div>
-                              {st.description && (
-                                <p className="text-xs text-slate-600 mt-1 line-clamp-2">
-                                  {st.description}
-                                </p>
-                              )}
-                            </div>
-
-                            {isDraft && (
-                              <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-lg space-y-2">
-                                <div className="text-[11px] text-amber-900 leading-tight">
-                                  Заклад у статусі чернетки. Надішліть його на перевірку адміністраторам BizX, коли будете готові.
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={() => handleSubmitForModeration(st.id)}
-                                  className="w-full py-1.5 px-2 bg-amber-600 hover:bg-amber-700 text-white rounded text-xs font-bold transition-colors"
-                                >
-                                  Відправити на модерацію в BizX
-                                </button>
-                              </div>
-                            )}
-
-                            {isPending && (
-                              <div className="p-2.5 bg-blue-50 border border-blue-200 rounded-lg text-[11px] text-blue-900 leading-tight">
-                                Заявку надіслано на розгляд модераторам BizX. Заклад очікує підтвердження.
-                              </div>
-                            )}
-
-                            <div className="pt-2 border-t border-slate-200 flex items-center justify-between gap-2">
-                              <span className="text-[11px] font-semibold text-slate-700">
-                                Власник
-                              </span>
-                              <div className="flex items-center gap-2">
-                                {st.status === 'active' && (
-                                  <button
-                                    type="button"
-                                    onClick={() => setStoreToSuspend(st)}
-                                    className="text-[11px] font-bold text-slate-600 hover:text-red-600 transition-colors"
-                                  >
-                                    {t('subscriptions.suspendStore')}
-                                  </button>
-                                )}
-                                {st.status === 'suspended' && (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleToggleStoreStatus(st.id, st.status)}
-                                    className="text-[11px] font-bold text-emerald-700 hover:underline transition-colors"
-                                  >
-                                    {locale === 'en' ? 'Submit for BizX review' : 'На перевірку в BizX'}
-                                  </button>
-                                )}
-                                {(st.status === 'active' || st.status === 'draft' || st.status === 'pending') && (
-                                  <Link
-                                    href={`/store/${st.slug}`}
-                                    className="text-xs font-bold text-emerald-700 hover:underline inline-flex items-center gap-1"
-                                  >
-                                    {st.status === 'active' ? (
-                                      <>
-                                        <span>{locale === 'en' ? 'Storefront' : 'Сайт закладу'}</span>
-                                        <ExternalLink className="w-3 h-3" />
-                                      </>
-                                    ) : (
-                                      <>
-                                        <Eye className="w-3 h-3" />
-                                        <span>{locale === 'en' ? 'Preview' : 'Превʼю'}</span>
-                                      </>
-                                    )}
-                                  </Link>
-                                )}
-                                <a
-                                  href="http://localhost:3102"
-                                  className="text-xs font-bold text-slate-900 hover:underline inline-flex items-center gap-1"
-                                >
-                                  <span>Панель</span>
-                                  <ExternalLink className="w-3 h-3" />
-                                </a>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
+                <AccountBusinesses
+                  locale={locale}
+                  t={t}
+                  myStores={myStores}
+                  subDetails={subDetails}
+                  moderationNotice={moderationNotice}
+                  onOpenCreateStoreModal={() => {
+                    setShowCreateStoreModal(true);
+                    setCreateStoreError(null);
+                  }}
+                  onSubmitForModeration={handleSubmitForModeration}
+                  onSelectStoreToSuspend={setStoreToSuspend}
+                  onToggleStoreStatus={handleToggleStoreStatus}
+                />
               )}
 
-                            {/* Tab: Subscriptions */}
+              {/* Tab: Subscriptions */}
               {activeTab === 'subscriptions' && (
-                <div className="space-y-6">
-                  <div className="border-b border-slate-100 pb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                    <div>
-                      <h2 className="text-lg font-black text-slate-900">{t('account.subscriptionsTab')}</h2>
-                      <p className="text-xs text-slate-500 mt-0.5">
-                        {t('account.subscriptionsTabDesc')}
-                      </p>
-                    </div>
-                    <Link
-                      href="/pricing"
-                      className="text-xs font-bold text-slate-900 hover:underline inline-flex items-center gap-1 self-start sm:self-auto"
-                    >
-                      <span>{t('landing.ctaPricing')}</span>
-                      <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
-                    </Link>
-                  </div>
-
-                  {subNotice && (
-                    <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-800 flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                      <span>{subNotice}</span>
-                    </div>
-                  )}
-
-                  {/* Current Active Plan Card */}
-                  <div className="p-5 bg-slate-900 text-white rounded-2xl shadow-sm space-y-4">
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                      <div>
-                        <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                          Поточний статус облікового запису
-                        </div>
-                        <div className="text-2xl font-black mt-0.5">
-                          {user?.subscriptionTier === 'free' && 'Базовий клієнт (Free)'}
-                          {user?.subscriptionTier === 'client_premium' && 'BizX Premium'}
-                          {user?.subscriptionTier === 'business_starter' && 'BizX Business Starter'}
-                          {user?.subscriptionTier === 'business_pro' && 'BizX Business Pro'}
-                          {user?.subscriptionTier === 'business_enterprise' && 'BizX Business Enterprise'}
-                          {!user?.subscriptionTier && 'Базовий'}
-                        </div>
-                      </div>
-
-                      <div className="self-start sm:self-auto px-3 py-1.5 rounded-full text-xs font-bold bg-white/10 text-white border border-white/20">
-                        {user?.subscriptionStatus === 'active' && '🟢 Активна підписка'}
-                        {user?.subscriptionStatus === 'expired' && '🔴 Термін дії минув'}
-                        {user?.subscriptionStatus === 'cancelled' && '🟡 Скасована'}
-                        {(!user?.subscriptionStatus || user?.subscriptionStatus === 'none') && '⚪️ Безкоштовний план'}
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3 border-t border-slate-800 text-xs">
-                      <div className="p-3 rounded-xl bg-slate-800/60 border border-slate-700/60">
-                        <div className="text-[10px] font-bold text-slate-400 uppercase">Днів активності</div>
-                        <div className="text-base font-black mt-0.5 text-white">
-                          {user?.subscriptionDaysLeft ?? 0} днів
-                        </div>
-                      </div>
-
-                      <div className="p-3 rounded-xl bg-slate-800/60 border border-slate-700/60">
-                        <div className="text-[10px] font-bold text-slate-400 uppercase">Діє до</div>
-                        <div className="text-xs font-bold mt-1 text-slate-200">
-                          {user?.subscriptionExpiresAt
-                            ? new Date(user.subscriptionExpiresAt).toLocaleDateString('uk-UA')
-                            : 'Не обмежено'}
-                        </div>
-                      </div>
-
-                      <div className="p-3 rounded-xl bg-slate-800/60 border border-slate-700/60">
-                        <div className="text-[10px] font-bold text-slate-400 uppercase">Ліміт закладів</div>
-                        <div className="text-base font-black mt-0.5 text-white">
-                          {subDetails?.activeStoresCount ?? 0} з {user?.maxAllowedStores ?? 0} бізнесів
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Warning: Exceeded Store Limit */}
-                  {subDetails?.hasExceededStoreLimit && (
-                    <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl space-y-2 text-xs text-amber-900">
-                      <div className="flex items-center gap-2 font-bold text-amber-950">
-                        <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-                        <span>Увага: перевищено ліміт активних закладів для вашого тарифу</span>
-                      </div>
-                      <p className="leading-relaxed">
-                        Ви маєте <strong>{subDetails.activeStoresCount}</strong> активних закладів, тоді як поточний тариф дозволяє максимум <strong>{subDetails.maxAllowedStores}</strong>. Будь ласка, перейдіть у вкладку <strong>«Мої бізнеси та ролі»</strong> та призупиніть зайві заклади, або підвищіть тарифний план нижче.
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Upgrade / Change Plan Cards */}
-                  <div className="space-y-3 pt-2">
-                    <h3 className="text-sm font-bold text-slate-900">Змінити тарифний план</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                      {allPlans
-                        .filter((p) => p.target === 'business')
-                        .map((plan) => {
-                          const isCurrent =
-                            user?.subscriptionTier === plan.id &&
-                            (plan.id === 'free' || user?.subscriptionStatus === 'active');
-                          return (
-                            <div
-                              key={plan.id}
-                              className={`p-4 border rounded-xl flex flex-col justify-between space-y-3 ${
-                                isCurrent
-                                  ? 'border-slate-900 bg-slate-50/70 ring-1 ring-slate-900'
-                                  : 'border-slate-200 bg-white hover:border-slate-300'
-                              }`}
-                            >
-                              <div>
-                                <div className="flex items-center justify-between">
-                                  <span className="text-xs font-bold text-slate-900">{plan.name}</span>
-                                  {plan.badge && (
-                                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-900 text-white uppercase">
-                                      {plan.badge}
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="text-lg font-black text-slate-900 mt-2">
-                                  {plan.priceUah} ₴ <span className="text-[10px] text-slate-400 font-normal">/ міс</span>
-                                </div>
-                                <div className="text-[11px] font-semibold text-slate-600 mt-1">
-                                  Ліміт: {plan.maxStores} {plan.maxStores === 1 ? 'заклад' : 'заклади'}
-                                </div>
-                              </div>
-
-                              <div>
-                                {isCurrent ? (
-                                  <div className="w-full py-1.5 text-center text-xs font-bold text-slate-500 bg-slate-200/60 rounded-lg">
-                                    Поточний план
-                                  </div>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    onClick={() => setSelectedPlanForUpgrade(plan)}
-                                    className="w-full py-2 px-3 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-lg transition-colors shadow-sm"
-                                  >
-                                    Перейти на цей план
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
-                    </div>
-                  </div>
-                </div>
+                <AccountSubscriptions
+                  t={t}
+                  user={user}
+                  subDetails={subDetails}
+                  allPlans={allPlans}
+                  subNotice={subNotice}
+                  onSelectPlanForUpgrade={setSelectedPlanForUpgrade}
+                />
               )}
 
               {activeTab === 'security' && (
