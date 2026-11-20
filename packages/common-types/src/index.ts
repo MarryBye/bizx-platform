@@ -592,8 +592,10 @@ export const storeSchema = z.object({
   ratingCount: z.number().int().optional(),
   autoDiscountBroadcastEnabled: z.boolean().optional(),
   activeStrikesCount: z.number().int().optional(),
+  isOwner: z.boolean().optional(),
   myRoleName: z.string().nullable().optional(),
   myRoleIcon: z.string().nullable().optional(),
+  myPermissions: z.array(z.string()).optional(),
   archivedAt: z.string().datetime().nullable().optional(),
   createdAt: z.string().datetime().optional(),
   updatedAt: z.string().datetime().optional()

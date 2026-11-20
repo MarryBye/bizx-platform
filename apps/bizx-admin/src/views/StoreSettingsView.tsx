@@ -21,15 +21,21 @@ import {
 } from 'lucide-react';
 import { StoreMediaImage } from '../components/StoreMediaImage';
 
-export const StoreSettingsView: React.FC<{ isReadOnly?: boolean; canEdit?: boolean }> = ({
+export const StoreSettingsView: React.FC<{
+  isReadOnly?: boolean;
+  canEdit?: boolean;
+  canManageStatus?: boolean;
+}> = ({
   isReadOnly: isReadOnlyProp,
-  canEdit: canEditProp
+  canEdit: canEditProp,
+  canManageStatus: canManageStatusProp = false
 }) => {
   const { activeStore, uploadStoreMedia, updateStore, fetchStores, isLoading } = useBusinessStore();
   const { hasActiveSubscription } = useAuthStore();
   const { t, locale } = useTranslation();
   const isReadOnly = isReadOnlyProp !== undefined ? isReadOnlyProp : !hasActiveSubscription;
   const canEdit = canEditProp !== undefined ? canEditProp && !isReadOnly : !isReadOnly;
+  const canManageStatus = Boolean(canManageStatusProp && !isReadOnly);
 
   const [name, setName] = useState(activeStore?.name || '');
   const [description, setDescription] = useState(activeStore?.description || '');
@@ -400,7 +406,7 @@ export const StoreSettingsView: React.FC<{ isReadOnly?: boolean; canEdit?: boole
                     />
                   </label>
                   <p className="text-[11px] text-slate-400 mt-1">
-                    Підтримуються формати PNG, JPEG, SVG та WebP до 10 МБ
+                    Підтримуються формати PNG, JPEG та WebP до 10 МБ
                   </p>
                 </div>
               )}
@@ -675,7 +681,7 @@ export const StoreSettingsView: React.FC<{ isReadOnly?: boolean; canEdit?: boole
         </CardContent>
       </Card>
 
-      {activeStore.status === 'draft' && canEdit && (
+      {activeStore.status === 'draft' && canManageStatus && (
         <Card className="border-amber-200 bg-amber-50/50 shadow-sm">
           <CardContent className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="space-y-1">

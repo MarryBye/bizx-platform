@@ -74,8 +74,10 @@ export interface StoreListItem {
   activeStrikesCount?: number;
   createdAt: Date;
   categoryName: string | null;
+  isOwner?: boolean;
   myRoleName?: string | null;
   myRoleIcon?: string | null;
+  myPermissions?: string[];
 }
 
 export interface StoreDetailItem extends StoreListItem {
@@ -448,12 +450,22 @@ export class StoresService {
       }
     }
 
-    return rows.map(({ isCustom, ...rest }) => ({
-      ...rest,
-      ratingAvg: Number((Number(rest.ratingAvg || 0) / 100).toFixed(2)),
-      activeStrikesCount: strikesByStore.get(rest.id) ?? 0,
-      myRoleName: isCustom ? 'Custom' : rest.myRoleName
-    }));
+    const accessList = await Promise.all(
+      rows.map((r) => this.rbacService.getStoreMemberAccess(r.id, userId))
+    );
+
+    return rows.map(({ isCustom, ...rest }, idx) => {
+      const access = accessList[idx];
+      return {
+        ...rest,
+        ratingAvg: Number((Number(rest.ratingAvg || 0) / 100).toFixed(2)),
+        activeStrikesCount: strikesByStore.get(rest.id) ?? 0,
+        isOwner: access.isOwner,
+        myRoleName: access.roleName ?? (isCustom ? 'Custom' : rest.myRoleName),
+        myRoleIcon: access.isOwner ? 'crown' : rest.myRoleIcon,
+        myPermissions: access.permissions
+      };
+    });
   }
 
   async updateStore(

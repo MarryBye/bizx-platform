@@ -791,6 +791,7 @@ export default function AccountPage() {
                 <AccountBusinesses
                   locale={locale}
                   t={t}
+                  currentUserId={user?.id}
                   myStores={myStores}
                   subDetails={subDetails}
                   moderationNotice={moderationNotice}
@@ -799,7 +800,14 @@ export default function AccountPage() {
                     setCreateStoreError(null);
                   }}
                   onSubmitForModeration={handleSubmitForModeration}
-                  onSelectStoreToSuspend={setStoreToSuspend}
+                  onSelectStoreToSuspend={(st) => {
+                    const isOwner = st.isOwner ?? Boolean(user?.id && st.ownerId === user.id);
+                    const canManageStatus =
+                      isOwner || Boolean(st.myPermissions?.includes('store.status.manage'));
+                    if (canManageStatus) {
+                      setStoreToSuspend(st);
+                    }
+                  }}
                   onToggleStoreStatus={handleToggleStoreStatus}
                 />
               )}
