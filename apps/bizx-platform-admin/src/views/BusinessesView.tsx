@@ -1,7 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import type { Store } from '@bizx/common-types';
 import { StatusBadge, Button } from '@bizx/ui';
+import { formatShortDate } from '@bizx/utils';
 import { platformApi } from '../lib/api';
+import { useTranslation } from '../hooks/useTranslation';
 import {
   Building2,
   Search,
@@ -63,6 +65,8 @@ export const BusinessesView: React.FC<BusinessesViewProps> = ({
   onRefresh,
   isLoading
 }) => {
+  const { t, locale } = useTranslation();
+  const isEn = locale === 'en';
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
@@ -115,42 +119,45 @@ export const BusinessesView: React.FC<BusinessesViewProps> = ({
   }, [businesses, searchQuery, statusFilter, categoryFilter, sortBy]);
 
   const getStatusBadge = (b: ExtendedBusiness) => {
+    const label = t(`statuses.store.${b.status}`);
     switch (b.status) {
       case 'draft':
         return (
           <StatusBadge tone="slate" dot>
-            В розробці
+            {label}
           </StatusBadge>
         );
       case 'active':
         return (
           <StatusBadge tone="emerald" dot>
-            Активний
+            {label}
           </StatusBadge>
         );
       case 'pending':
         return (
           <StatusBadge tone="amber" dot>
-            На перевірці
+            {label}
           </StatusBadge>
         );
       case 'suspended':
         return (
           <div className="inline-flex flex-col items-start gap-0.5">
             <StatusBadge tone="rose" dot>
-              Призупинено
+              {label}
             </StatusBadge>
             <span className="text-[10px] text-rose-600/80 font-medium pl-1 whitespace-nowrap">
               {b.suspendedUntil
-                ? `до ${new Date(b.suspendedUntil).toLocaleDateString('uk-UA')}`
-                : 'безстроково'}
+                ? `${isEn ? 'until' : 'до'} ${formatShortDate(b.suspendedUntil, locale)}`
+                : isEn
+                  ? 'indefinite'
+                  : 'безстроково'}
             </span>
           </div>
         );
       case 'archived':
         return (
           <StatusBadge tone="slate" icon={<Archive className="w-3 h-3" />}>
-            В архіві
+            {label}
           </StatusBadge>
         );
       default:
@@ -164,13 +171,13 @@ export const BusinessesView: React.FC<BusinessesViewProps> = ({
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-            База торгових партнерів
+            {isEn ? 'Partner Stores Registry' : 'База торгових партнерів'}
           </span>
           <h1 className="text-2xl font-black tracking-tight text-slate-900 mt-0.5">
-            Усі бізнеси платформи
+            {t('platform.businessesTitle')}
           </h1>
           <p className="text-xs text-slate-500 mt-1">
-            Повний реєстр закладів із фільтрацією, сортуванням, рейтингом та контролем статусу
+            {t('platform.businessesSubtitle')}
           </p>
         </div>
 
@@ -182,7 +189,7 @@ export const BusinessesView: React.FC<BusinessesViewProps> = ({
           className="self-start sm:self-auto"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-          <span>Оновити дані</span>
+          <span>{t('common.refresh')}</span>
         </Button>
       </div>
 
@@ -192,9 +199,11 @@ export const BusinessesView: React.FC<BusinessesViewProps> = ({
           <div className="flex items-center gap-2 text-xs text-amber-900 font-semibold">
             <Clock className="w-4 h-4 text-amber-600 shrink-0" />
             <span>
-              {pendingCount === 1
-                ? '1 новий заклад очікує на підтвердження модератором'
-                : `${pendingCount} нових закладів очікують на підтвердження модератором`}
+              {isEn
+                ? `${pendingCount} store(s) awaiting moderation approval`
+                : pendingCount === 1
+                  ? '1 новий заклад очікує на підтвердження модератором'
+                  : `${pendingCount} нових закладів очікують на підтвердження модератором`}
             </span>
           </div>
           <button
@@ -202,7 +211,7 @@ export const BusinessesView: React.FC<BusinessesViewProps> = ({
             onClick={onOpenPendingQueue}
             className="inline-flex items-center gap-1 text-xs font-black text-amber-900 hover:underline self-start sm:self-auto"
           >
-            <span>Відкрити чергу підтвердження</span>
+            <span>{isEn ? 'Open approval queue' : 'Відкрити чергу підтвердження'}</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </div>
@@ -214,7 +223,11 @@ export const BusinessesView: React.FC<BusinessesViewProps> = ({
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
-            placeholder="Пошук за назвою закладу, адресою або власником..."
+            placeholder={
+              isEn
+                ? 'Search by store name, address or owner...'
+                : 'Пошук за назвою закладу, адресою або власником...'
+            }
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-9 pr-4 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:bg-white focus:border-slate-900 transition-all font-medium"
@@ -227,12 +240,12 @@ export const BusinessesView: React.FC<BusinessesViewProps> = ({
             onChange={(e) => setStatusFilter(e.target.value)}
             className="text-xs font-semibold px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-slate-900 text-slate-700"
           >
-            <option value="all">Всі статуси</option>
-            <option value="active">Активні</option>
-            <option value="pending">На перевірці</option>
-            <option value="draft">В розробці (чернетки)</option>
-            <option value="suspended">Призупинені</option>
-            <option value="archived">В архіві</option>
+            <option value="all">{t('analytics.allStatuses')}</option>
+            <option value="active">{t('statuses.store.active')}</option>
+            <option value="pending">{t('statuses.store.pending')}</option>
+            <option value="draft">{t('statuses.store.draft')}</option>
+            <option value="suspended">{t('statuses.store.suspended')}</option>
+            <option value="archived">{t('statuses.store.archived')}</option>
           </select>
 
           {categories.length > 0 && (
@@ -241,7 +254,7 @@ export const BusinessesView: React.FC<BusinessesViewProps> = ({
               onChange={(e) => setCategoryFilter(e.target.value)}
               className="text-xs font-semibold px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-slate-900 text-slate-700 max-w-[165px] truncate"
             >
-              <option value="all">Всі категорії</option>
+              <option value="all">{t('products.allCategories')}</option>
               {categories.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
@@ -257,13 +270,13 @@ export const BusinessesView: React.FC<BusinessesViewProps> = ({
               onChange={(e) => setSortBy(e.target.value as BusinessSortKey)}
               className="text-xs font-semibold bg-transparent focus:outline-none text-slate-700"
             >
-              <option value="newest">Спочатку новіші</option>
-              <option value="oldest">Спочатку старіші</option>
-              <option value="name_asc">Назва: А → Я</option>
-              <option value="name_desc">Назва: Я → А</option>
-              <option value="rating_desc">Найвищий рейтинг</option>
-              <option value="strikes_desc">Найбільше страйків</option>
-              <option value="status">За статусом</option>
+              <option value="newest">{isEn ? 'Newest first' : 'Спочатку новіші'}</option>
+              <option value="oldest">{isEn ? 'Oldest first' : 'Спочатку старіші'}</option>
+              <option value="name_asc">{isEn ? 'Name: A → Z' : 'Назва: А → Я'}</option>
+              <option value="name_desc">{isEn ? 'Name: Z → A' : 'Назва: Я → А'}</option>
+              <option value="rating_desc">{isEn ? 'Highest rating' : 'Найвищий рейтинг'}</option>
+              <option value="strikes_desc">{isEn ? 'Most strikes' : 'Найбільше страйків'}</option>
+              <option value="status">{isEn ? 'By status' : 'За статусом'}</option>
             </select>
           </div>
         </div>
@@ -275,13 +288,13 @@ export const BusinessesView: React.FC<BusinessesViewProps> = ({
           <table className="w-full text-left text-xs table-fixed min-w-[880px]">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50/70 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                <th className="py-3 px-4 w-[25%]">Торгова точка</th>
-                <th className="py-3 px-4 w-[14%]">Категорія</th>
-                <th className="py-3 px-4 w-[17%]">Власник</th>
-                <th className="py-3 px-4 w-[11%]">Рейтинг</th>
-                <th className="py-3 px-4 w-[13%]">Статус</th>
-                <th className="py-3 px-4 w-[9%]">Дата</th>
-                <th className="py-3 px-4 w-[11%] text-right">Дії</th>
+                <th className="py-3 px-4 w-[25%]">{isEn ? 'Store' : 'Торгова точка'}</th>
+                <th className="py-3 px-4 w-[14%]">{isEn ? 'Category' : 'Категорія'}</th>
+                <th className="py-3 px-4 w-[17%]">{isEn ? 'Owner' : 'Власник'}</th>
+                <th className="py-3 px-4 w-[11%]">{isEn ? 'Rating' : 'Рейтинг'}</th>
+                <th className="py-3 px-4 w-[13%]">{isEn ? 'Status' : 'Статус'}</th>
+                <th className="py-3 px-4 w-[9%]">{isEn ? 'Date' : 'Дата'}</th>
+                <th className="py-3 px-4 w-[11%] text-right">{t('common.actions')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -289,9 +302,13 @@ export const BusinessesView: React.FC<BusinessesViewProps> = ({
                 <tr>
                   <td colSpan={7} className="py-12 text-center text-slate-400">
                     <Building2 className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                    <div className="font-semibold text-xs">Закладів не знайдено</div>
+                    <div className="font-semibold text-xs">
+                      {isEn ? 'No stores found' : 'Закладів не знайдено'}
+                    </div>
                     <div className="text-[11px] text-slate-400 mt-0.5">
-                      Спробуйте змінити пошуковий запит або параметри фільтрації
+                      {isEn
+                        ? 'Try adjusting your search query or filters'
+                        : 'Спробуйте змінити пошуковий запит або параметри фільтрації'}
                     </div>
                   </td>
                 </tr>

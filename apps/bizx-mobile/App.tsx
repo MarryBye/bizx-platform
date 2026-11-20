@@ -24,11 +24,13 @@ import { OrderDetailScreen } from './src/screens/OrderDetailScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
 import { AuthScreen } from './src/screens/AuthScreen';
 import { mobileApi } from './src/lib/api';
+import { useMobileTranslation } from './src/hooks/useMobileTranslation';
 import { formatCompactCount, type Store } from '@bizx/common-types';
 
 type TabType = 'stores' | 'cart' | 'orders' | 'profile';
 
 export default function App() {
+  const { t } = useMobileTranslation();
   const [activeTab, setActiveTab] = useState<TabType>('stores');
   const [selectedStore, setSelectedStore] = useState<Store | null>(null);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
@@ -183,7 +185,7 @@ export default function App() {
             color={activeTab === 'stores' ? '#0f172a' : '#64748b'}
           />
           <Text style={[styles.tabLabel, activeTab === 'stores' && styles.tabLabelActive]}>
-            Магазини
+            {t('mobile.tabStores')}
           </Text>
         </TouchableOpacity>
 
@@ -207,7 +209,7 @@ export default function App() {
             )}
           </View>
           <Text style={[styles.tabLabel, activeTab === 'cart' && styles.tabLabelActive]}>
-            Кошик
+            {t('mobile.tabCart')}
           </Text>
         </TouchableOpacity>
 
@@ -234,7 +236,7 @@ export default function App() {
             )}
           </View>
           <Text style={[styles.tabLabel, activeTab === 'orders' && styles.tabLabelActive]}>
-            Замовлення
+            {t('mobile.tabOrders')}
           </Text>
         </TouchableOpacity>
 
@@ -258,7 +260,7 @@ export default function App() {
             )}
           </View>
           <Text style={[styles.tabLabel, activeTab === 'profile' && styles.tabLabelActive]}>
-            Профіль
+            {t('mobile.tabProfile')}
           </Text>
         </TouchableOpacity>
       </View>

@@ -1,7 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import type { ExtendedBusiness } from './BusinessesView';
 import { StatusBadge, Button, AlertBanner } from '@bizx/ui';
+import { formatShortDate } from '@bizx/utils';
 import { platformApi } from '../lib/api';
+import { useTranslation } from '../hooks/useTranslation';
 import {
   Clock,
   Search,
@@ -30,6 +32,8 @@ export const PendingBusinessesView: React.FC<PendingBusinessesViewProps> = ({
   onRefresh,
   onSelectBusiness
 }) => {
+  const { t, locale } = useTranslation();
+  const isEn = locale === 'en';
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<PendingSortKey>('oldest');
 
@@ -64,13 +68,15 @@ export const PendingBusinessesView: React.FC<PendingBusinessesViewProps> = ({
         <div>
           <span className="text-[11px] font-bold text-amber-600 uppercase tracking-wider flex items-center gap-1.5">
             <Clock className="w-3.5 h-3.5" />
-            <span>Черга модерації</span>
+            <span>{isEn ? 'Moderation Queue' : 'Черга модерації'}</span>
           </span>
           <h1 className="text-2xl font-black tracking-tight text-slate-900 mt-0.5">
-            Очікують підтвердження ({pendingList.length})
+            {t('platform.tabBusinessesPending')} ({pendingList.length})
           </h1>
           <p className="text-xs text-slate-500 mt-1">
-            Натисніть на заявку, щоб відкрити деталі, переглянути вітрину та прийняти рішення
+            {isEn
+              ? 'Click an application to inspect details, preview the storefront, and approve or reject.'
+              : 'Натисніть на заявку, щоб відкрити деталі, переглянути вітрину та прийняти рішення'}
           </p>
         </div>
 
@@ -82,16 +88,18 @@ export const PendingBusinessesView: React.FC<PendingBusinessesViewProps> = ({
           className="self-start sm:self-auto"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-          <span>Оновити</span>
+          <span>{t('common.refresh')}</span>
         </Button>
       </div>
 
       {!canApprove && (
-        <AlertBanner tone="info" title="Режим перегляду">
+        <AlertBanner tone="info" title={isEn ? 'Read-only mode' : 'Режим перегляду'}>
           <span className="inline-flex items-center gap-1.5">
             <Lock className="w-3.5 h-3.5 shrink-0" />
             <span>
-              Ви можете відкривати деталі та превʼю вітрин, але підтвердження чи відхилення потребує права у ролі.
+              {isEn
+                ? 'You can inspect applications and storefront previews, but approval requires the store approval permission.'
+                : 'Ви можете відкривати деталі та превʼю вітрин, але підтвердження чи відхилення потребує права у ролі.'}
             </span>
           </span>
         </AlertBanner>
@@ -103,7 +111,11 @@ export const PendingBusinessesView: React.FC<PendingBusinessesViewProps> = ({
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
-            placeholder="Пошук за назвою, категорією або власником..."
+            placeholder={
+              isEn
+                ? 'Search by name, category or owner...'
+                : 'Пошук за назвою, категорією або власником...'
+            }
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-9 pr-4 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:bg-white focus:border-slate-900 transition-all font-medium"
@@ -117,10 +129,10 @@ export const PendingBusinessesView: React.FC<PendingBusinessesViewProps> = ({
             onChange={(e) => setSortBy(e.target.value as PendingSortKey)}
             className="text-xs font-semibold bg-transparent focus:outline-none text-slate-700 flex-1"
           >
-            <option value="oldest">Спочатку найстаріші</option>
-            <option value="newest">Спочатку найновіші</option>
-            <option value="name_asc">Назва: А → Я</option>
-            <option value="products_desc">Більше товарів</option>
+            <option value="oldest">{isEn ? 'Oldest first' : 'Спочатку найстаріші'}</option>
+            <option value="newest">{isEn ? 'Newest first' : 'Спочатку найновіші'}</option>
+            <option value="name_asc">{isEn ? 'Name: A → Z' : 'Назва: А → Я'}</option>
+            <option value="products_desc">{isEn ? 'Most products' : 'Більше товарів'}</option>
           </select>
         </div>
       </div>
@@ -132,9 +144,13 @@ export const PendingBusinessesView: React.FC<PendingBusinessesViewProps> = ({
             <div className="w-11 h-11 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto mb-3">
               <CheckCircle2 className="w-5 h-5" />
             </div>
-            <h3 className="text-sm font-black text-slate-900">Черга модерації порожня</h3>
+            <h3 className="text-sm font-black text-slate-900">
+              {isEn ? 'Moderation queue is empty' : 'Черга модерації порожня'}
+            </h3>
             <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
-              Наразі немає закладів, що очікують підтвердження. Нові заявки автоматично зʼявляться тут.
+              {isEn
+                ? 'There are no stores awaiting review right now. New applications will appear here automatically.'
+                : 'Наразі немає закладів, що очікують підтвердження. Нові заявки автоматично зʼявляться тут.'}
             </p>
           </div>
         ) : (
@@ -162,7 +178,7 @@ export const PendingBusinessesView: React.FC<PendingBusinessesViewProps> = ({
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-xs font-black text-slate-900 truncate">{b.name}</span>
                         <StatusBadge tone="amber" size="xs" dot>
-                          На перевірці
+                          {t('statuses.store.pending')}
                         </StatusBadge>
                         {b.categoryName && (
                           <StatusBadge tone="slate" size="xs" className="rounded">
@@ -173,24 +189,20 @@ export const PendingBusinessesView: React.FC<PendingBusinessesViewProps> = ({
 
                       <div className="flex items-center gap-2 text-[11px] text-slate-500 flex-wrap">
                         <span className="font-semibold text-slate-700 truncate max-w-[180px]">
-                          {b.ownerName || b.ownerEmail || 'Власник'}
+                          {b.ownerName || b.ownerEmail || (isEn ? 'Owner' : 'Власник')}
                         </span>
                         <span>•</span>
                         <span className="font-mono text-[10px] text-slate-400">/{b.slug}</span>
                         <span>•</span>
                         <span className="inline-flex items-center gap-1 whitespace-nowrap">
                           <Package className="w-3 h-3 text-slate-400" />
-                          <span>{productsCount} тов.</span>
+                          <span>
+                            {productsCount} {isEn ? 'items' : 'тов.'}
+                          </span>
                         </span>
                         <span>•</span>
                         <span className="whitespace-nowrap">
-                          {b.createdAt
-                            ? new Date(b.createdAt).toLocaleDateString('uk-UA', {
-                                day: '2-digit',
-                                month: '2-digit',
-                                year: 'numeric'
-                              })
-                            : '—'}
+                          {formatShortDate(b.createdAt, locale)}
                         </span>
                       </div>
                     </div>
@@ -200,7 +212,7 @@ export const PendingBusinessesView: React.FC<PendingBusinessesViewProps> = ({
                   <div className="flex items-center justify-end shrink-0 pl-2">
                     <Button variant="neutral" size="sm" onClick={() => onSelectBusiness(b)}>
                       <Eye className="w-3.5 h-3.5 shrink-0" />
-                      <span>Розглянути</span>
+                      <span>{isEn ? 'Review' : 'Розглянути'}</span>
                     </Button>
                   </div>
                 </div>
