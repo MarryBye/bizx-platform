@@ -16,6 +16,7 @@ import Link from 'next/link';
 import { api } from '../lib/api';
 import { SiteHeader } from '../components/SiteHeader';
 import { AccountInbox } from './components/AccountInbox';
+import { AccountOrders } from './components/AccountOrders';
 import { useTranslation } from '../hooks/useTranslation';
 import { translateApiError, type SupportedLocale } from '@bizx/utils';
 import type {
@@ -29,22 +30,20 @@ import {
   User,
   Shield,
   Building2,
-  Bell,
-  Plug,
   Lock,
   CheckCircle2,
   ExternalLink,
   Save,
-  Key,
   LogOut,
   AlertCircle,
   CreditCard,
   Store as StoreIcon,
   Mail,
-  Eye
+  Eye,
+  ShoppingBag
 } from 'lucide-react';
 
-type AccountTab = 'profile' | 'inbox' | 'businesses' | 'subscriptions' | 'security' | 'privacy' | 'integrations';
+type AccountTab = 'profile' | 'orders' | 'inbox' | 'businesses' | 'subscriptions' | 'security';
 
 export default function AccountPage() {
   const { t, locale, setLocale } = useTranslation();
@@ -80,17 +79,9 @@ export default function AccountPage() {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [passwordNotice, setPasswordNotice] = useState<string | null>(null);
-
-  // Privacy toggles
-  const [emailOrders, setEmailOrders] = useState(true);
-  const [emailMarketing, setEmailMarketing] = useState(false);
-  const [smsDelivery, setSmsDelivery] = useState(true);
-  const [publicProfile, setPublicProfile] = useState(true);
-
-  // Webhook State
-  const [webhookUrl, setWebhookUrl] = useState('https://crm.mybusiness.ua/api/webhooks/bizx');
-  const [apiKeyVisible, setApiKeyVisible] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
 
   // Stores
   const [myStores, setMyStores] = useState<Store[]>([]);
@@ -175,7 +166,7 @@ export default function AccountPage() {
       const tabParam = new URLSearchParams(window.location.search).get('tab');
       if (
         tabParam &&
-        ['profile', 'inbox', 'businesses', 'subscriptions', 'security', 'privacy', 'integrations'].includes(
+        ['profile', 'orders', 'inbox', 'businesses', 'subscriptions', 'security'].includes(
           tabParam
         )
       ) {
@@ -262,19 +253,49 @@ export default function AccountPage() {
     }
   };
 
-  const handlePasswordSubmit = (e: React.FormEvent) => {
+  const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (newPassword !== confirmPassword) {
-      setPasswordNotice(
-        locale === 'en' ? 'New password and confirmation do not match' : 'Новий пароль та підтвердження не співпадають'
+    setPasswordNotice(null);
+    setPasswordError(null);
+    if (newPassword.length < 6) {
+      setPasswordError(
+        locale === 'en'
+          ? 'New password must be at least 6 characters'
+          : 'Новий пароль має містити щонайменше 6 символів'
       );
       return;
     }
-    setPasswordNotice(locale === 'en' ? 'Password updated successfully' : 'Пароль успішно оновлено');
-    setCurrentPassword('');
-    setNewPassword('');
-    setConfirmPassword('');
-    setTimeout(() => setPasswordNotice(null), 3000);
+    if (newPassword !== confirmPassword) {
+      setPasswordError(
+        locale === 'en'
+          ? 'New password and confirmation do not match'
+          : 'Новий пароль та підтвердження не співпадають'
+      );
+      return;
+    }
+    setIsChangingPassword(true);
+    try {
+      const res = await api.auth.changePassword({ currentPassword, newPassword });
+      if (res.success) {
+        setPasswordNotice(
+          locale === 'en'
+            ? 'Password updated successfully! Other active sessions have been signed out.'
+            : 'Пароль успішно оновлено! Інші активні сесії завершено.'
+        );
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
+      }
+    } catch (err: unknown) {
+      const errObj = err as { data?: { message?: string }; message?: string };
+      setPasswordError(
+        errObj?.data?.message ||
+          errObj?.message ||
+          (locale === 'en' ? 'Failed to update password' : 'Не вдалося змінити пароль')
+      );
+    } finally {
+      setIsChangingPassword(false);
+    }
   };
 
   const handleLogout = async () => {
@@ -417,6 +438,12 @@ export default function AccountPage() {
   const menuItems = [
     { id: 'profile' as const, label: t('account.profileTab'), desc: t('account.profileTabDesc'), icon: User },
     {
+      id: 'orders' as const,
+      label: locale === 'en' ? 'My Orders' : 'Мої замовлення',
+      desc: locale === 'en' ? 'Purchases across all stores' : 'Покупки в усіх закладах',
+      icon: ShoppingBag
+    },
+    {
       id: 'inbox' as const,
       label: locale === 'en' ? 'Inbox' : 'Пошта',
       desc: locale === 'en' ? 'BizX notices, support & ads' : 'Листи BizX, підтримка та реклама',
@@ -424,9 +451,7 @@ export default function AccountPage() {
     },
     { id: 'businesses' as const, label: t('account.businessesTab'), desc: t('account.businessesTabDesc'), icon: Building2 },
     { id: 'subscriptions' as const, label: t('account.subscriptionsTab'), desc: t('account.subscriptionsTabDesc'), icon: CreditCard },
-    { id: 'security' as const, label: t('account.securityTab'), desc: t('account.securityTabDesc'), icon: Shield },
-    { id: 'privacy' as const, label: t('account.privacyTab'), desc: t('account.privacyTabDesc'), icon: Bell },
-    { id: 'integrations' as const, label: t('account.integrationsTab'), desc: t('account.integrationsTabDesc'), icon: Plug }
+    { id: 'security' as const, label: t('account.securityTab'), desc: t('account.securityTabDesc'), icon: Shield }
   ];
 
   return (
@@ -622,6 +647,9 @@ export default function AccountPage() {
 
             {/* Right Main Content Panel */}
             <section className="md:col-span-8 bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
+              {/* Tab: My Orders */}
+              {activeTab === 'orders' && <AccountOrders locale={locale} />}
+
               {/* Tab: Inbox */}
               {activeTab === 'inbox' && (
                 <AccountInbox locale={locale} onUnreadChanged={setInboxUnreadCount} />
@@ -1120,6 +1148,9 @@ export default function AccountPage() {
                     </p>
                   </div>
 
+                  {passwordError && (
+                    <AlertBanner tone="danger">{passwordError}</AlertBanner>
+                  )}
                   {passwordNotice && (
                     <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-800 flex items-center gap-2">
                       <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
@@ -1129,7 +1160,9 @@ export default function AccountPage() {
 
                   <form onSubmit={handlePasswordSubmit} className="space-y-4 max-w-md">
                     <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-700">Поточний пароль</label>
+                      <label className="text-xs font-bold text-slate-700">
+                        {locale === 'en' ? 'Current password' : 'Поточний пароль'}
+                      </label>
                       <input
                         type="password"
                         value={currentPassword}
@@ -1141,12 +1174,15 @@ export default function AccountPage() {
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-700">Новий пароль</label>
+                      <label className="text-xs font-bold text-slate-700">
+                        {locale === 'en' ? 'New password' : 'Новий пароль'}
+                      </label>
                       <input
                         type="password"
                         value={newPassword}
                         onChange={(e) => setNewPassword(e.target.value)}
                         placeholder="••••••••"
+                        minLength={6}
                         className="w-full text-xs px-3 py-2 bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-slate-900"
                         required
                       />
@@ -1154,13 +1190,14 @@ export default function AccountPage() {
 
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-slate-700">
-                        Підтвердження нового пароля
+                        {locale === 'en' ? 'Confirm new password' : 'Підтвердження нового пароля'}
                       </label>
                       <input
                         type="password"
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
                         placeholder="••••••••"
+                        minLength={6}
                         className="w-full text-xs px-3 py-2 bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-slate-900"
                         required
                       />
@@ -1169,157 +1206,20 @@ export default function AccountPage() {
                     <div className="pt-2">
                       <button
                         type="submit"
-                        className="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-lg text-xs font-bold hover:bg-slate-800 transition-colors"
+                        disabled={isChangingPassword}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-lg text-xs font-bold hover:bg-slate-800 transition-colors disabled:opacity-50"
                       >
                         <Lock className="w-4 h-4" />
-                        <span>Оновити пароль</span>
+                        <span>
+                          {isChangingPassword
+                            ? t('common.saving')
+                            : locale === 'en'
+                              ? 'Update password'
+                              : 'Оновити пароль'}
+                        </span>
                       </button>
                     </div>
                   </form>
-                </div>
-              )}
-
-              {/* Tab: Privacy */}
-              {activeTab === 'privacy' && (
-                <div className="space-y-6">
-                  <div className="border-b border-slate-100 pb-4">
-                    <h2 className="text-lg font-black text-slate-900">
-                      {t('account.privacyTab')}
-                    </h2>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      {t('account.privacyTabDesc')}
-                    </p>
-                  </div>
-
-                  <div className="space-y-3">
-                    <label className="flex items-start gap-3 p-3 border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={emailOrders}
-                        onChange={(e) => setEmailOrders(e.target.checked)}
-                        className="mt-0.5 rounded border-slate-300 text-slate-900 focus:ring-slate-900"
-                      />
-                      <div>
-                        <div className="text-xs font-bold text-slate-800">
-                          Email сповіщення про зміну статусів замовлень
-                        </div>
-                        <div className="text-[11px] text-slate-400">
-                          Листи при надходженні замовлення, підтвердженні та завершенні доставки
-                        </div>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start gap-3 p-3 border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={smsDelivery}
-                        onChange={(e) => setSmsDelivery(e.target.checked)}
-                        className="mt-0.5 rounded border-slate-300 text-slate-900 focus:ring-slate-900"
-                      />
-                      <div>
-                        <div className="text-xs font-bold text-slate-800">
-                          SMS / Viber інформування
-                        </div>
-                        <div className="text-[11px] text-slate-400">
-                          Термінові повідомлення про оплати та прибуття курʼєра
-                        </div>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start gap-3 p-3 border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={publicProfile}
-                        onChange={(e) => setPublicProfile(e.target.checked)}
-                        className="mt-0.5 rounded border-slate-300 text-slate-900 focus:ring-slate-900"
-                      />
-                      <div>
-                        <div className="text-xs font-bold text-slate-800">
-                          Видимість контактів у каталозі
-                        </div>
-                        <div className="text-[11px] text-slate-400">
-                          Дозволити клієнтам бачити робочий номер телефону на сторінці магазину
-                        </div>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start gap-3 p-3 border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={emailMarketing}
-                        onChange={(e) => setEmailMarketing(e.target.checked)}
-                        className="mt-0.5 rounded border-slate-300 text-slate-900 focus:ring-slate-900"
-                      />
-                      <div>
-                        <div className="text-xs font-bold text-slate-800">
-                          Новини та дайджести платформи BizX
-                        </div>
-                        <div className="text-[11px] text-slate-400">
-                          Оновлення функціоналу, акції та корисні матеріали для розвитку бізнесу
-                        </div>
-                      </div>
-                    </label>
-                  </div>
-                </div>
-              )}
-
-              {/* Tab: Integrations */}
-              {activeTab === 'integrations' && (
-                <div className="space-y-6">
-                  <div className="border-b border-slate-100 pb-4">
-                    <h2 className="text-lg font-black text-slate-900">{t('account.integrationsTab')}</h2>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      {t('account.integrationsTabDesc')}
-                    </p>
-                  </div>
-
-                  <div className="space-y-4">
-                    <div className="p-4 border border-slate-200 rounded-xl space-y-3">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Plug className="w-4 h-4 text-slate-700" />
-                          <h4 className="text-xs font-bold text-slate-900">
-                            Webhook URL подій магазину
-                          </h4>
-                        </div>
-                        <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded uppercase">
-                          Активно
-                        </span>
-                      </div>
-                      <input
-                        type="url"
-                        value={webhookUrl}
-                        onChange={(e) => setWebhookUrl(e.target.value)}
-                        className="w-full text-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg font-mono focus:outline-none focus:border-slate-900"
-                      />
-                      <p className="text-[11px] text-slate-400">
-                        BizX відправлятиме HTTP POST запити при зміні статусу кожного замовлення.
-                      </p>
-                    </div>
-
-                    <div className="p-4 border border-slate-200 rounded-xl space-y-3">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Key className="w-4 h-4 text-slate-700" />
-                          <h4 className="text-xs font-bold text-slate-900">
-                            Персональний API Token
-                          </h4>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setApiKeyVisible(!apiKeyVisible)}
-                          className="text-[11px] font-bold text-slate-600 hover:text-slate-900"
-                        >
-                          {apiKeyVisible ? 'Приховати' : 'Показати'}
-                        </button>
-                      </div>
-                      <div className="font-mono text-xs bg-slate-50 border border-slate-200 p-2.5 rounded-lg text-slate-700 select-all">
-                        {apiKeyVisible
-                          ? 'bizx_live_sec_89f3a92c4b01e74a88301d'
-                          : '••••••••••••••••••••••••••••••••••••••••'}
-                      </div>
-                    </div>
-                  </div>
                 </div>
               )}
             </section>

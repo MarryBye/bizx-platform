@@ -344,11 +344,14 @@ export default function StorefrontPage() {
   }, [selectedOrderId, loadChat]);
 
   const addToCart = (product: Product) => {
+    const maxStock = Math.max(0, Number(product.inventoryCount ?? 0));
+    if (maxStock <= 0) return;
     setCart((prev) => {
       const existing = prev.find((i) => i.product.id === product.id);
       if (existing) {
+        const nextQty = Math.min(maxStock, existing.quantity + 1);
         return prev.map((i) =>
-          i.product.id === product.id ? { ...i, quantity: i.quantity + 1 } : i
+          i.product.id === product.id ? { ...i, quantity: nextQty } : i
         );
       }
       return [...prev, { product, quantity: 1 }];
@@ -358,9 +361,12 @@ export default function StorefrontPage() {
   const updateCartQty = (productId: string, delta: number) => {
     setCart((prev) =>
       prev
-        .map((i) =>
-          i.product.id === productId ? { ...i, quantity: i.quantity + delta } : i
-        )
+        .map((i) => {
+          if (i.product.id !== productId) return i;
+          const maxStock = Math.max(0, Number(i.product.inventoryCount ?? 0));
+          const nextQty = Math.min(maxStock, i.quantity + delta);
+          return { ...i, quantity: nextQty };
+        })
         .filter((i) => i.quantity > 0)
     );
   };

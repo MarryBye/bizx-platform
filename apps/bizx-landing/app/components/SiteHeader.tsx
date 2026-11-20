@@ -155,6 +155,9 @@ export const SiteHeader: React.FC = () => {
 
           {/* Business-oriented Navigation */}
           <nav className="hidden md:flex items-center gap-7 text-xs font-semibold text-slate-600">
+            <Link href="/stores" className="hover:text-slate-900 transition-colors">
+              {locale === 'en' ? 'Stores' : 'Заклади'}
+            </Link>
             <Link href="/#features" className="hover:text-slate-900 transition-colors">
               {t('nav.features')}
             </Link>

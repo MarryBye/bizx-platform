@@ -22,9 +22,10 @@ export const useCartStore = create<CartState>((set, get) => ({
   storeId: null,
 
   addToCart: (product: Product) => {
+    const maxStock = Math.max(0, Number(product.inventoryCount ?? 0));
+    if (maxStock <= 0) return;
     const { items, storeId } = get();
 
-    // Якщо кошик містить товари іншого магазину, перезавантажуємо кошик під новий магазин
     let currentItems = items;
     if (storeId && storeId !== product.storeId) {
       currentItems = [];
@@ -34,7 +35,10 @@ export const useCartStore = create<CartState>((set, get) => ({
 
     if (existingIndex > -1) {
       const updated = [...currentItems];
-      updated[existingIndex].quantity += 1;
+      updated[existingIndex] = {
+        ...updated[existingIndex],
+        quantity: Math.min(maxStock, updated[existingIndex].quantity + 1)
+      };
       set({ items: updated, storeId: product.storeId });
     } else {
       set({
@@ -57,7 +61,8 @@ export const useCartStore = create<CartState>((set, get) => ({
     const updated = items
       .map((item) => {
         if (item.product.id === productId) {
-          const newQty = item.quantity + delta;
+          const maxStock = Math.max(0, Number(item.product.inventoryCount ?? 0));
+          const newQty = Math.min(maxStock, item.quantity + delta);
           return newQty > 0 ? { ...item, quantity: newQty } : null;
         }
         return item;
