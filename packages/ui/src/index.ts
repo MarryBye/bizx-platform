@@ -21,3 +21,4 @@ export * from './components/permission-matrix';
 export * from './components/roles-manager';
 export * from './components/team-manager';
 export * from './components/order-chat-box';
+export * from './components/analytics-widgets';

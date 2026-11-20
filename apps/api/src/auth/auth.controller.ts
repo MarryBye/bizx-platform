@@ -13,6 +13,7 @@ import {
   UnauthorizedException
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import { AuthService } from './auth.service.js';
 import { StorageService } from '../storage/storage.service.js';
@@ -28,9 +29,11 @@ import {
   registerDtoSchema,
   loginDtoSchema,
   updateUserProfileDtoSchema,
+  changePasswordDtoSchema,
   type RegisterDto,
   type LoginDto,
   type UpdateUserProfileDto,
+  type ChangePasswordDto,
   type RefreshTokenDto,
   type ApiResponse,
   type AuthResponse,
@@ -67,6 +70,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ default: { limit: 6, ttl: 60_000 } })
   @Post('register')
   @UsePipes(new ZodValidationPipe(registerDtoSchema))
   async register(
@@ -92,6 +96,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ default: { limit: 12, ttl: 60_000 } })
   @Post('login')
   @UsePipes(new ZodValidationPipe(loginDtoSchema))
   async login(
@@ -117,6 +122,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Post('refresh')
   async refresh(
     @Body() body: RefreshTokenDto | undefined,
@@ -213,6 +219,21 @@ export class AuthController {
     return {
       success: true,
       data: profile,
+      timestamp: new Date().toISOString()
+    };
+  }
+
+  @Post('change-password')
+  @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { limit: 6, ttl: 60_000 } })
+  async changePassword(
+    @CurrentUser('sub') userId: string,
+    @Body(new ZodValidationPipe(changePasswordDtoSchema)) dto: ChangePasswordDto
+  ): Promise<ApiResponse<{ message: string }>> {
+    const data = await this.authService.changePassword(userId, dto.currentPassword, dto.newPassword);
+    return {
+      success: true,
+      data,
       timestamp: new Date().toISOString()
     };
   }

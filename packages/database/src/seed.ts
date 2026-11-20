@@ -84,7 +84,9 @@ const STORE_PERMISSIONS = [
   { id: 151, code: 'roles.read', scope: 'store', category: 'roles', action: 'read', ownerOnly: false },
   { id: 152, code: 'roles.write', scope: 'store', category: 'roles', action: 'write', ownerOnly: false },
   { id: 153, code: 'roles.edit', scope: 'store', category: 'roles', action: 'edit', ownerOnly: false },
-  { id: 154, code: 'roles.archive', scope: 'store', category: 'roles', action: 'archive', ownerOnly: false }
+  { id: 154, code: 'roles.archive', scope: 'store', category: 'roles', action: 'archive', ownerOnly: false },
+  { id: 161, code: 'marketing.broadcasts.read', scope: 'store', category: 'marketing', action: 'read', ownerOnly: false },
+  { id: 162, code: 'marketing.broadcasts.send', scope: 'store', category: 'marketing', action: 'manage', ownerOnly: false }
 ];
 
 const PLATFORM_PERMISSIONS = [
@@ -113,7 +115,11 @@ const PLATFORM_PERMISSIONS = [
   { id: 251, code: 'platform.disputes.read', scope: 'platform', category: 'platform_disputes', action: 'read', ownerOnly: false },
   { id: 252, code: 'platform.disputes.resolve', scope: 'platform', category: 'platform_disputes', action: 'manage', ownerOnly: false },
   { id: 253, code: 'platform.strikes.revoke', scope: 'platform', category: 'platform_disputes', action: 'manage', ownerOnly: false },
-  { id: 254, code: 'platform.strikes.issue', scope: 'platform', category: 'platform_disputes', action: 'manage', ownerOnly: false }
+  { id: 254, code: 'platform.strikes.issue', scope: 'platform', category: 'platform_disputes', action: 'manage', ownerOnly: false },
+  { id: 261, code: 'platform.broadcasts.read', scope: 'platform', category: 'platform_communications', action: 'read', ownerOnly: false },
+  { id: 262, code: 'platform.broadcasts.send', scope: 'platform', category: 'platform_communications', action: 'manage', ownerOnly: false },
+  { id: 263, code: 'platform.support.read', scope: 'platform', category: 'platform_communications', action: 'read', ownerOnly: false },
+  { id: 264, code: 'platform.support.reply', scope: 'platform', category: 'platform_communications', action: 'manage', ownerOnly: false }
 ];
 
 const ALL_PERMISSIONS = [...STORE_PERMISSIONS, ...PLATFORM_PERMISSIONS];

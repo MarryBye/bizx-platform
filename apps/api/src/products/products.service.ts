@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service.js';
 import { StoresService } from '../stores/stores.service.js';
 import { RbacService } from '../rbac/rbac.service.js';
+import { BroadcastsService } from '../broadcasts/broadcasts.service.js';
 import {
   products,
   productCategories,
@@ -20,6 +21,7 @@ import type {
   UpdateProductDto,
   ProductFilterQuery,
   CreateProductCategoryDto,
+  UpdateProductCategoryDto,
   PaginatedResult
 } from '@bizx/common-types';
 
@@ -50,7 +52,8 @@ export class ProductsService {
   constructor(
     private readonly databaseService: DatabaseService,
     private readonly storesService: StoresService,
-    private readonly rbacService: RbacService
+    private readonly rbacService: RbacService,
+    private readonly broadcastsService: BroadcastsService
   ) {}
 
   private async canInspectUnpublishedStore(storeId: string, callerUserId?: string): Promise<boolean> {
@@ -121,6 +124,36 @@ export class ProductsService {
     return category;
   }
 
+  async updateProductCategory(
+    categoryId: string,
+    userId: string,
+    dto: UpdateProductCategoryDto
+  ): Promise<ProductCategoryRecord> {
+    const [category] = await this.databaseService.db
+      .select()
+      .from(productCategories)
+      .where(and(eq(productCategories.id, categoryId), isNull(productCategories.archivedAt)));
+
+    if (!category) {
+      throw new NotFoundException('Категорію товарів не знайдено');
+    }
+
+    await this.rbacService.assertStorePermission(category.storeId, userId, 'products.edit', {
+      write: true
+    });
+
+    const [updated] = await this.databaseService.db
+      .update(productCategories)
+      .set({
+        ...(dto.name !== undefined ? { name: dto.name } : {}),
+        ...(dto.sortOrder !== undefined ? { sortOrder: dto.sortOrder } : {})
+      })
+      .where(eq(productCategories.id, categoryId))
+      .returning();
+
+    return updated;
+  }
+
   async deleteProductCategory(
     categoryId: string,
     userId: string
@@ -131,7 +164,7 @@ export class ProductsService {
       .where(eq(productCategories.id, categoryId));
 
     if (!category) {
-      throw new NotFoundException('Категория товаров не найдена');
+      throw new NotFoundException('Категорію товарів не знайдено');
     }
 
     await this.rbacService.assertStorePermission(category.storeId, userId, 'products.archive', { write: true });
@@ -168,7 +201,7 @@ export class ProductsService {
         );
 
       if (!category) {
-        throw new NotFoundException('Указанная категория товаров не найдена в данном магазине');
+        throw new NotFoundException('Вказану категорію товарів не знайдено в цьому магазині');
       }
     }
 
@@ -187,6 +220,14 @@ export class ProductsService {
         isActive: dto.isActive ?? true
       })
       .returning();
+
+    void this.broadcastsService.triggerAutoDiscountBroadcastIfEligible({
+      storeId,
+      actorUserId: userId,
+      product: newProduct,
+      previousPrice: null,
+      previousOldPrice: null
+    });
 
     return newProduct;
   }
@@ -290,7 +331,7 @@ export class ProductsService {
       .where(and(eq(products.id, id), isNull(products.archivedAt)));
 
     if (!row) {
-      throw new NotFoundException('Товар не найден');
+      throw new NotFoundException('Товар не знайдено');
     }
 
     const isPubliclyVisible =
@@ -299,7 +340,7 @@ export class ProductsService {
     if (!isPubliclyVisible) {
       const canInspect = await this.canInspectUnpublishedStore(row.storeId, callerUserId);
       if (!canInspect) {
-        throw new NotFoundException('Товар не найден');
+        throw new NotFoundException('Товар не знайдено');
       }
     }
 
@@ -318,7 +359,7 @@ export class ProductsService {
       .where(and(eq(products.id, id), isNull(products.archivedAt)));
 
     if (!product) {
-      throw new NotFoundException('Товар не найден');
+      throw new NotFoundException('Товар не знайдено');
     }
 
     await this.rbacService.assertStorePermission(product.storeId, userId, requiredPerm, { write: true });
@@ -336,7 +377,7 @@ export class ProductsService {
       .where(and(eq(products.id, id), isNull(products.archivedAt)));
 
     if (!existing) {
-      throw new NotFoundException('Товар не найден');
+      throw new NotFoundException('Товар не знайдено');
     }
 
     const hasStatusChange =
@@ -377,7 +418,7 @@ export class ProductsService {
         );
 
       if (!category) {
-        throw new NotFoundException('Указанная категория товаров не найдена в данном магазине');
+        throw new NotFoundException('Вказану категорію товарів не знайдено в цьому магазині');
       }
     }
 
@@ -389,6 +430,14 @@ export class ProductsService {
       })
       .where(eq(products.id, id))
       .returning();
+
+    void this.broadcastsService.triggerAutoDiscountBroadcastIfEligible({
+      storeId: product.storeId,
+      actorUserId: userId,
+      product: updated,
+      previousPrice: existing.price,
+      previousOldPrice: existing.oldPrice
+    });
 
     return updated;
   }

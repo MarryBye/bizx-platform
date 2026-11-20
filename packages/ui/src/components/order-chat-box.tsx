@@ -302,7 +302,7 @@ export const OrderChatBox: React.FC<OrderChatBoxProps> = ({
       {canSend ? (
         <div className="bg-white border-t border-slate-200 p-2.5 space-y-2">
           {error && (
-            <div className="text-[11px] text-red-600 bg-red-50 border border-red-200 rounded-lg px-2.5 py-1.5 flex items-center justify-between">
+            <div className="text-[11px] text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-2.5 py-1.5 flex items-center justify-between">
               <span>{error}</span>
               <button type="button" onClick={() => setError(null)}>
                 <X className="w-3.5 h-3.5" />
@@ -348,7 +348,7 @@ export const OrderChatBox: React.FC<OrderChatBoxProps> = ({
                     onClick={() =>
                       setPendingAttachments((prev) => prev.filter((_, i) => i !== idx))
                     }
-                    className="text-slate-400 hover:text-red-600"
+                    className="text-slate-400 hover:text-rose-600"
                   >
                     <X className="w-3 h-3" />
                   </button>

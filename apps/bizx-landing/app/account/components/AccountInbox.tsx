@@ -27,7 +27,9 @@ import {
   Send,
   RefreshCw,
   ArrowLeft,
-  MessageSquare
+  MessageSquare,
+  BellOff,
+  CheckCircle2
 } from 'lucide-react';
 
 interface AccountInboxProps {
@@ -53,6 +55,25 @@ export const AccountInbox: React.FC<AccountInboxProps> = ({ locale, onUnreadChan
   const [supportBody, setSupportBody] = useState('');
   const [isCreatingSupport, setIsCreatingSupport] = useState(false);
   const [supportError, setSupportError] = useState<string | null>(null);
+  const [unsubscribedStores, setUnsubscribedStores] = useState<Record<string, boolean>>({});
+  const [unsubscribingStoreId, setUnsubscribingStoreId] = useState<string | null>(null);
+
+  const handleUnsubscribePromoStore = async (storeId: string) => {
+    setUnsubscribingStoreId(storeId);
+    try {
+      const res = await api.broadcasts.updateStoreMarketingSubscription(storeId, {
+        subscribed: false,
+        source: 'inbox_unsubscribe'
+      });
+      if (res.success) {
+        setUnsubscribedStores((prev) => ({ ...prev, [storeId]: true }));
+      }
+    } catch {
+      // ignore
+    } finally {
+      setUnsubscribingStoreId(null);
+    }
+  };
 
   const selectedThread = useMemo(
     () => threads.find((t) => t.id === selectedThreadId) || null,
@@ -454,17 +475,47 @@ export const AccountInbox: React.FC<AccountInboxProps> = ({ locale, onUnreadChan
                   onUploadAttachment={selectedThread.canReply ? handleUploadAttachment : undefined}
                   readOnlyNotice={
                     !selectedThread.canReply ? (
-                      <div className="flex items-center justify-center gap-1.5">
-                        <Lock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                        <span>
-                          {selectedThread.senderType === 'promo'
-                            ? locale === 'en'
-                              ? 'Promotional announcement from a partner business — replies are disabled.'
-                              : 'Рекламне повідомлення від закладу — відповіді в цьому діалозі вимкнено.'
-                            : locale === 'en'
-                              ? 'Official BizX platform message — replies are disabled.'
-                              : 'Офіційне повідомлення від платформи BizX — відповіді в цьому діалозі вимкнено.'}
-                        </span>
+                      <div className="flex flex-col sm:flex-row items-center justify-center gap-2">
+                        <div className="flex items-center gap-1.5">
+                          <Lock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          <span>
+                            {selectedThread.senderType === 'promo'
+                              ? locale === 'en'
+                                ? 'Promotional announcement from a partner business — replies are disabled.'
+                                : 'Рекламне повідомлення від закладу — відповіді в цьому діалозі вимкнено.'
+                              : locale === 'en'
+                                ? 'Official BizX platform message — replies are disabled.'
+                                : 'Офіційне повідомлення від платформи BizX — відповіді в цьому діалозі вимкнено.'}
+                          </span>
+                        </div>
+                        {selectedThread.senderType === 'promo' &&
+                          (selectedThread.senderStoreId || selectedThread.relatedStoreId) && (() => {
+                            const targetStoreId = (selectedThread.senderStoreId ||
+                              selectedThread.relatedStoreId) as string;
+                            if (unsubscribedStores[targetStoreId]) {
+                              return (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg">
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                  {locale === 'en' ? 'Unsubscribed' : 'Ви відписалися'}
+                                </span>
+                              );
+                            }
+                            return (
+                              <button
+                                type="button"
+                                disabled={unsubscribingStoreId === targetStoreId}
+                                onClick={() => void handleUnsubscribePromoStore(targetStoreId)}
+                                className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-2.5 py-1 rounded-lg transition-colors disabled:opacity-50 shrink-0"
+                              >
+                                <BellOff className="w-3.5 h-3.5" />
+                                <span>
+                                  {locale === 'en'
+                                    ? 'Unsubscribe from this store'
+                                    : 'Відписатися від закладу'}
+                                </span>
+                              </button>
+                            );
+                          })()}
                       </div>
                     ) : undefined
                   }

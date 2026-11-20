@@ -8,9 +8,10 @@ import { AuthModule } from '../auth/auth.module.js';
 import { StoresModule } from '../stores/stores.module.js';
 import { StorageModule } from '../storage/storage.module.js';
 import { InboxModule } from '../inbox/inbox.module.js';
+import { BroadcastsModule } from '../broadcasts/broadcasts.module.js';
 
 @Module({
-  imports: [DatabaseModule, AuthModule, StoresModule, StorageModule, InboxModule],
+  imports: [DatabaseModule, AuthModule, StoresModule, StorageModule, InboxModule, BroadcastsModule],
   controllers: [OrdersController, DisputesController],
   providers: [OrdersService, DisputesService],
   exports: [OrdersService, DisputesService]

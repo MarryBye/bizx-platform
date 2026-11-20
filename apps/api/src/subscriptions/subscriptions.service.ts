@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service.js';
 import { users, stores, storeMembers, platformMembers, eq, and, isNull, inArray } from '@bizx/database';
 import type {
@@ -174,6 +174,16 @@ export class SubscriptionsService {
     userId: string,
     dto: SubscribeDto
   ): Promise<UserSubscriptionDetails> {
+    if (
+      process.env.NODE_ENV === 'production' &&
+      process.env.ALLOW_MOCK_BILLING !== 'true' &&
+      dto.tier !== 'free'
+    ) {
+      throw new ForbiddenException(
+        'Пряма активація платних тарифів вимкнена в production. Оплатіть підписку через платіжний шлюз.'
+      );
+    }
+
     const [user] = await this.databaseService.db
       .select()
       .from(users)

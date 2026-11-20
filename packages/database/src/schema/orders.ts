@@ -1,55 +1,60 @@
-import { pgTable, uuid, varchar, text, integer, timestamp } from 'drizzle-orm/pg-core';
-import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
+import { pgTable, uuid, varchar, text, integer, timestamp, index } from 'drizzle-orm/pg-core';
 import { users } from './users.js';
 import { stores } from './stores.js';
 import { products } from './products.js';
 
-export const orders = pgTable('orders', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  orderNumber: varchar('order_number', { length: 50 }).notNull().unique(),
-  storeId: uuid('store_id')
-    .references(() => stores.id, { onDelete: 'cascade' })
-    .notNull(),
-  customerId: uuid('customer_id').references(() => users.id, { onDelete: 'set null' }),
-  status: varchar('status', { length: 50 }).default('pending').notNull(),
-  totalAmount: integer('total_amount').notNull(), // в копейках/центах
-  deliveryAddress: text('delivery_address'),
-  contactPhone: varchar('contact_phone', { length: 50 }).notNull(),
-  contactName: varchar('contact_name', { length: 255 }).notNull(),
-  paymentStatus: varchar('payment_status', { length: 50 }).default('pending').notNull(),
-  paymentMethod: varchar('payment_method', { length: 50 }).default('card').notNull(),
-  // Escrow / Payout lifecycle: 'held' | 'released' | 'refunded' | 'clawback'
-  payoutStatus: varchar('payout_status', { length: 30 }).default('held').notNull(),
-  // Business Quick Refund Offer awaiting customer confirmation
-  refundOfferStatus: varchar('refund_offer_status', { length: 30 }),
-  refundOfferAmount: integer('refund_offer_amount'),
-  refundOfferReason: text('refund_offer_reason'),
-  refundOfferedByUserId: uuid('refund_offered_by_user_id').references(() => users.id, {
-    onDelete: 'set null'
-  }),
-  refundOfferedAt: timestamp('refund_offered_at', { withTimezone: true }),
-  notes: text('notes'),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull()
-});
+export const orders = pgTable(
+  'orders',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    orderNumber: varchar('order_number', { length: 50 }).notNull().unique(),
+    storeId: uuid('store_id')
+      .references(() => stores.id, { onDelete: 'cascade' })
+      .notNull(),
+    customerId: uuid('customer_id').references(() => users.id, { onDelete: 'set null' }),
+    status: varchar('status', { length: 50 }).default('pending').notNull(),
+    totalAmount: integer('total_amount').notNull(), // в копейках/центах
+    deliveryAddress: text('delivery_address'),
+    contactPhone: varchar('contact_phone', { length: 50 }).notNull(),
+    contactName: varchar('contact_name', { length: 255 }).notNull(),
+    paymentStatus: varchar('payment_status', { length: 50 }).default('pending').notNull(),
+    paymentMethod: varchar('payment_method', { length: 50 }).default('card').notNull(),
+    // Escrow / Payout lifecycle: 'held' | 'released' | 'refunded' | 'clawback'
+    payoutStatus: varchar('payout_status', { length: 30 }).default('held').notNull(),
+    // Business Quick Refund Offer awaiting customer confirmation
+    refundOfferStatus: varchar('refund_offer_status', { length: 30 }),
+    refundOfferAmount: integer('refund_offer_amount'),
+    refundOfferReason: text('refund_offer_reason'),
+    refundOfferedByUserId: uuid('refund_offered_by_user_id').references(() => users.id, {
+      onDelete: 'set null'
+    }),
+    refundOfferedAt: timestamp('refund_offered_at', { withTimezone: true }),
+    notes: text('notes'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull()
+  },
+  (table) => [
+    index('orders_store_created_idx').on(table.storeId, table.createdAt),
+    index('orders_customer_created_idx').on(table.customerId, table.createdAt)
+  ]
+);
 
-export const orderItems = pgTable('order_items', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  orderId: uuid('order_id')
-    .references(() => orders.id, { onDelete: 'cascade' })
-    .notNull(),
-  productId: uuid('product_id').references(() => products.id, { onDelete: 'set null' }),
-  productName: varchar('product_name', { length: 255 }).notNull(),
-  unitPrice: integer('unit_price').notNull(),
-  quantity: integer('quantity').notNull(),
-  totalPrice: integer('total_price').notNull(),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull()
-});
-
-export const insertOrderSchema = createInsertSchema(orders);
-export const selectOrderSchema = createSelectSchema(orders);
-export const insertOrderItemSchema = createInsertSchema(orderItems);
-export const selectOrderItemSchema = createSelectSchema(orderItems);
+export const orderItems = pgTable(
+  'order_items',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    orderId: uuid('order_id')
+      .references(() => orders.id, { onDelete: 'cascade' })
+      .notNull(),
+    productId: uuid('product_id').references(() => products.id, { onDelete: 'set null' }),
+    productName: varchar('product_name', { length: 255 }).notNull(),
+    unitPrice: integer('unit_price').notNull(),
+    quantity: integer('quantity').notNull(),
+    totalPrice: integer('total_price').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull()
+  },
+  (table) => [index('order_items_order_idx').on(table.orderId)]
+);
 
 export type OrderRecord = typeof orders.$inferSelect;
 export type NewOrderRecord = typeof orders.$inferInsert;

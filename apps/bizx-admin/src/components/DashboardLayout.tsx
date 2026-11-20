@@ -18,19 +18,23 @@ import {
   X,
   ExternalLink,
   AlertTriangle,
-  Lock
+  Lock,
+  Megaphone,
+  UserCheck
 } from 'lucide-react';
 import { AnalyticsView } from '../views/AnalyticsView';
 import { DetailedAnalyticsView } from '../views/DetailedAnalyticsView';
 import { ProductsView } from '../views/ProductsView';
 import { OrdersView } from '../views/OrdersView';
+import { CustomersView } from '../views/CustomersView';
+import { MarketingView } from '../views/MarketingView';
 import { StoreSettingsView } from '../views/StoreSettingsView';
 import { StaffView } from '../views/StaffView';
 import { RolesView } from '../views/RolesView';
 import { PlaceholderView } from '../views/PlaceholderView';
 import { resolveMediaUrl } from '../lib/media';
 
-type TabType = 'overview' | 'analytics' | 'products' | 'orders' | 'settings' | 'staff' | 'roles' | 'payouts';
+type TabType = 'overview' | 'analytics' | 'products' | 'orders' | 'customers' | 'marketing' | 'settings' | 'staff' | 'roles' | 'payouts';
 
 export const DashboardLayout: React.FC = () => {
   const { t, locale, setLocale } = useTranslation();
@@ -129,6 +133,8 @@ export const DashboardLayout: React.FC = () => {
     { id: 'analytics' as const, label: t('admin.detailedAnalytics'), icon: BarChart3, visible: hasPerm('analytics.read') },
     { id: 'products' as const, label: t('admin.products'), icon: Package, visible: hasPerm('products.read') },
     { id: 'orders' as const, label: t('admin.orders'), icon: ShoppingBag, visible: hasPerm('orders.read') },
+    { id: 'customers' as const, label: t('admin.customers'), icon: UserCheck, visible: hasPerm('orders.read') },
+    { id: 'marketing' as const, label: t('admin.marketing'), icon: Megaphone, visible: hasPerm('marketing.broadcasts.read') },
     { id: 'settings' as const, label: t('admin.settings'), icon: Settings, visible: hasPerm('store.read') },
     { id: 'staff' as const, label: t('admin.staff'), icon: Users, visible: hasPerm('staff.read') },
     { id: 'roles' as const, label: t('admin.roles'), icon: ShieldCheck, visible: hasPerm('roles.read') },
@@ -481,6 +487,12 @@ export const DashboardLayout: React.FC = () => {
                 <OrdersView
                   canEdit={!isReadOnly && hasPerm('orders.edit')}
                   canRefund={!isReadOnly && hasPerm('orders.refund')}
+                />
+              )}
+              {currentTab === 'customers' && hasPerm('orders.read') && <CustomersView />}
+              {currentTab === 'marketing' && hasPerm('marketing.broadcasts.read') && (
+                <MarketingView
+                  canSend={!isCatalogLocked && hasPerm('marketing.broadcasts.send')}
                 />
               )}
               {currentTab === 'settings' && hasPerm('store.read') && (

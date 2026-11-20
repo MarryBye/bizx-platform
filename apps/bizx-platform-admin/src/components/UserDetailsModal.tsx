@@ -12,6 +12,7 @@ import {
   AlertBanner,
   Button
 } from '@bizx/ui';
+import { getInitials } from '@bizx/utils';
 import {
   ShieldCheck,
   CheckCircle2,
@@ -125,14 +126,6 @@ export const UserDetailsModal: React.FC<UserDetailsModalProps> = ({
   }, [isOpen, user]);
 
   if (!isOpen || !user) return null;
-
-  const getInitials = (nameVal: string) =>
-    nameVal
-      .split(' ')
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((w) => w[0].toUpperCase())
-      .join('');
 
   const addDaysPreset = (days: number) => {
     const base =

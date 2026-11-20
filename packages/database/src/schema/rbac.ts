@@ -10,7 +10,6 @@ import {
   uniqueIndex,
   index
 } from 'drizzle-orm/pg-core';
-import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
 import { users } from './users.js';
 import { stores } from './stores.js';
 
@@ -103,13 +102,6 @@ export const platformMemberPermissions = pgTable(
   },
   (table) => [primaryKey({ columns: [table.platformMemberId, table.permissionId] })]
 );
-
-export const insertPermissionSchema = createInsertSchema(permissions);
-export const selectPermissionSchema = createSelectSchema(permissions);
-export const insertRoleSchema = createInsertSchema(roles);
-export const selectRoleSchema = createSelectSchema(roles);
-export const insertPlatformMemberSchema = createInsertSchema(platformMembers);
-export const selectPlatformMemberSchema = createSelectSchema(platformMembers);
 
 export type PermissionRecord = typeof permissions.$inferSelect;
 export type RoleRecord = typeof roles.$inferSelect;

@@ -7,5 +7,6 @@ export * from './products.js';
 export * from './orders.js';
 export * from './order-engagement.js';
 export * from './inbox.js';
+export * from './broadcasts.js';
 export * from './rbac.js';
 export * from './store-members.js';

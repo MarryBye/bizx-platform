@@ -142,7 +142,8 @@ export const uk = {
     payment: {
       pending: 'Очікує оплати',
       paid: 'Оплачено',
-      failed: 'Помилка оплати'
+      failed: 'Помилка оплати',
+      refunded: 'Повернено'
     },
     store: {
       draft: 'Чернетка',
@@ -358,6 +359,8 @@ export const uk = {
     detailedAnalytics: 'Детальна аналітика',
     products: 'Товари та меню',
     orders: 'Замовлення',
+    marketing: 'Маркетинг і розсилки',
+    customers: 'Клієнти',
     staff: 'Команда',
     roles: 'Ролі та доступи',
     rolesTitle: 'Ролі та доступи закладу',
@@ -523,6 +526,9 @@ export const uk = {
     tabBusinessesPending: 'Очікують підтвердження',
     tabUsers: 'Користувачі',
     tabDisputes: 'Скарги',
+    tabCommunications: 'Комунікації',
+    tabSupport: 'Звернення підтримки',
+    tabBroadcasts: 'Розсилки BizX',
     tabStaff: 'Команда BizX',
     tabRoles: 'Ролі та доступи',
     rolesTitle: 'Ролі платформи BizX Core',
@@ -632,6 +638,12 @@ export const uk = {
       edit: 'Редагування ролей та зміна пріоритету',
       archive: 'Архівація (видалення) ролей'
     },
+    marketing: {
+      broadcasts: {
+        read: 'Перегляд підписників, лімітів та історії розсилок закладу',
+        send: 'Надсилання акційних розсилок та керування авто-знижками'
+      }
+    },
     platform: {
       admin: 'Адміністратор платформи (повний доступ з урахуванням ієрархії)',
       stores: {
@@ -674,6 +686,14 @@ export const uk = {
       strikes: {
         issue: 'Ручна видача страйків закладам через керування',
         revoke: 'Зняття страйків та дострокове розблокування закладів'
+      },
+      broadcasts: {
+        read: 'Перегляд журналу офіційних та технічних розсилок BizX',
+        send: 'Надсилання офіційних та технічних розсилок користувачам BizX'
+      },
+      support: {
+        read: 'Перегляд звернень користувачів у службу підтримки BizX',
+        reply: 'Відповіді користувачам у тікетах техпідтримки BizX'
       }
     }
   },
@@ -685,13 +705,15 @@ export const uk = {
     store: 'Налаштування закладу',
     staff: 'Команда та працівники',
     roles: 'Ролі та ієрархія',
+    marketing: 'Маркетинг і розсилки',
     platform_admin: 'Адміністрування платформи',
     platform_stores: 'Торгові точки платформи',
     platform_users: 'Користувачі BizX ID',
     platform_analytics: 'Аналітика платформи',
     platform_staff: 'Команда BizX',
     platform_roles: 'Ролі платформи',
-    platform_disputes: 'Скарги та страйки'
+    platform_disputes: 'Скарги та страйки',
+    platform_communications: 'Комунікації, розсилки та підтримка'
   },
   disputes: {
     categories: {
@@ -816,7 +838,8 @@ export const en: typeof uk = {
     payment: {
       pending: 'Awaiting payment',
       paid: 'Paid',
-      failed: 'Payment failed'
+      failed: 'Payment failed',
+      refunded: 'Refunded'
     },
     store: {
       draft: 'Draft',
@@ -1032,6 +1055,8 @@ export const en: typeof uk = {
     detailedAnalytics: 'Detailed Analytics',
     products: 'Products & Menu',
     orders: 'Orders',
+    marketing: 'Marketing & Broadcasts',
+    customers: 'Customers',
     staff: 'Team',
     roles: 'Roles & Permissions',
     rolesTitle: 'Store Roles & Permissions',
@@ -1197,6 +1222,9 @@ export const en: typeof uk = {
     tabBusinessesPending: 'Pending Approval',
     tabUsers: 'Users',
     tabDisputes: 'Disputes',
+    tabCommunications: 'Communications',
+    tabSupport: 'Support Tickets',
+    tabBroadcasts: 'BizX Broadcasts',
     tabStaff: 'BizX Team',
     tabRoles: 'Roles & Permissions',
     rolesTitle: 'BizX Core Platform Roles',
@@ -1306,6 +1334,12 @@ export const en: typeof uk = {
       edit: 'Edit roles & change priority order',
       archive: 'Archive (remove) roles'
     },
+    marketing: {
+      broadcasts: {
+        read: 'View store subscribers, daily quotas & campaign history',
+        send: 'Send promotional broadcasts & manage auto-discount alerts'
+      }
+    },
     platform: {
       admin: 'Platform Administrator (full console access respecting hierarchy)',
       stores: {
@@ -1348,6 +1382,14 @@ export const en: typeof uk = {
       strikes: {
         issue: 'Issue manual strikes to stores',
         revoke: 'Revoke store strikes & lift suspension early'
+      },
+      broadcasts: {
+        read: 'View official & technical BizX broadcast logs',
+        send: 'Send official & technical broadcasts to BizX users'
+      },
+      support: {
+        read: 'View incoming BizX support tickets',
+        reply: 'Reply to users in BizX support tickets'
       }
     }
   },
@@ -1359,13 +1401,15 @@ export const en: typeof uk = {
     store: 'Store Settings',
     staff: 'Team & Staff',
     roles: 'Roles & Hierarchy',
+    marketing: 'Marketing & Broadcasts',
     platform_admin: 'Platform Administration',
     platform_stores: 'Platform Stores',
     platform_users: 'BizX ID Users',
     platform_analytics: 'Platform Analytics',
     platform_staff: 'BizX Staff',
     platform_roles: 'Platform Roles',
-    platform_disputes: 'Disputes & Strikes'
+    platform_disputes: 'Disputes & Strikes',
+    platform_communications: 'Communications, Broadcasts & Support'
   },
   disputes: {
     categories: {
@@ -1527,27 +1571,51 @@ export function translateApiError(rawMessage?: string | null, fallbackKey = 'com
   if (!rawMessage) return i18n.t(fallbackKey);
   const lower = rawMessage.toLowerCase();
 
-  if (lower.includes('номером телефона уже') || lower.includes('phone already')) {
+  if (
+    lower.includes('номером телефона уже') ||
+    lower.includes('номером телефону вже') ||
+    lower.includes('phone already')
+  ) {
     return i18n.t('errors.phoneExists');
   }
-  if (lower.includes('email уже') || lower.includes('email already')) {
+  if (
+    lower.includes('email уже') ||
+    lower.includes('email вже') ||
+    lower.includes('email already')
+  ) {
     return i18n.t('errors.emailExists');
   }
   if (
     lower.includes('неверный email') ||
     lower.includes('неверный логин') ||
     lower.includes('неверный номер телефона') ||
+    lower.includes('невірний email') ||
+    lower.includes('невірний логін') ||
+    lower.includes('невірний номер телефону') ||
     lower.includes('invalid credentials')
   ) {
     return i18n.t('errors.invalidCredentials');
   }
-  if (lower.includes('некорректный номер') || lower.includes('invalid phone')) {
+  if (
+    lower.includes('некорректный номер') ||
+    lower.includes('некоректний номер') ||
+    lower.includes('invalid phone')
+  ) {
     return i18n.t('errors.invalidPhone');
   }
-  if (lower.includes('некорректный email') || lower.includes('invalid email')) {
+  if (
+    lower.includes('некорректный email') ||
+    lower.includes('некоректний email') ||
+    lower.includes('invalid email')
+  ) {
     return i18n.t('errors.invalidEmail');
   }
-  if (lower.includes('пользователь не найден') || lower.includes('user not found')) {
+  if (
+    lower.includes('пользователь не найден') ||
+    lower.includes('користувача не знайдено') ||
+    lower.includes('користувач не знайдений') ||
+    lower.includes('user not found')
+  ) {
     return i18n.t('errors.userNotFound');
   }
   if (lower.includes('unauthorized') || lower.includes('токен')) {
@@ -1568,3 +1636,136 @@ export const translationStore = {
   getSnapshot: () => i18n.getLocale(),
   getServerSnapshot: () => 'uk' as const
 };
+
+/**
+ * ============================================================================
+ * Shared Formatting & Phone Country Helpers (Single Source of Truth)
+ * ============================================================================
+ */
+
+export function formatMoney(
+  kopecks: number,
+  locale: SupportedLocale = 'uk',
+  options?: { withDecimals?: boolean; currencySymbol?: string }
+): string {
+  const withDecimals = options?.withDecimals ?? true;
+  const formatted = ((kopecks || 0) / 100).toLocaleString(locale === 'en' ? 'en-US' : 'uk-UA', {
+    minimumFractionDigits: withDecimals ? 2 : 0,
+    maximumFractionDigits: withDecimals ? 2 : 0
+  });
+  return options?.currencySymbol ? `${formatted} ${options.currencySymbol}` : formatted;
+}
+
+export function getInitials(value?: string | null, fallback = 'U'): string {
+  if (!value || !value.trim()) return fallback;
+  const parts = value.trim().split(/\s+/);
+  if (parts.length >= 2) {
+    return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+  }
+  return value.trim().slice(0, 2).toUpperCase();
+}
+
+export function formatShortDate(
+  date: string | Date | null | undefined,
+  locale: SupportedLocale = 'uk'
+): string {
+  if (!date) return '—';
+  const d = date instanceof Date ? date : new Date(date);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleDateString(locale === 'en' ? 'en-US' : 'uk-UA');
+}
+
+export function formatDateTime(
+  date: string | Date | null | undefined,
+  locale: SupportedLocale = 'uk'
+): string {
+  if (!date) return '—';
+  const d = date instanceof Date ? date : new Date(date);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleString(locale === 'en' ? 'en-US' : 'uk-UA');
+}
+
+export interface SharedPhoneCountry {
+  iso: string;
+  name: string;
+  nameUk: string;
+  dialCode: string;
+  flag: string;
+  placeholder: string;
+  maxDigits: number;
+  groups: number[];
+}
+
+export const SHARED_PHONE_COUNTRIES: SharedPhoneCountry[] = [
+  { iso: 'UA', name: 'Ukraine', nameUk: 'Україна', dialCode: '380', flag: '🇺🇦', placeholder: '(67) 123-45-67', maxDigits: 9, groups: [2, 3, 2, 2] },
+  { iso: 'PL', name: 'Poland', nameUk: 'Польща', dialCode: '48', flag: '🇵🇱', placeholder: '512 345 678', maxDigits: 9, groups: [3, 3, 3] },
+  { iso: 'DE', name: 'Germany', nameUk: 'Німеччина', dialCode: '49', flag: '🇩🇪', placeholder: '151 2345 6789', maxDigits: 11, groups: [3, 4, 4] },
+  { iso: 'GB', name: 'United Kingdom', nameUk: 'Велика Британія', dialCode: '44', flag: '🇬🇧', placeholder: '7700 900123', maxDigits: 10, groups: [4, 6] },
+  { iso: 'US', name: 'United States', nameUk: 'США', dialCode: '1', flag: '🇺🇸', placeholder: '(555) 123-4567', maxDigits: 10, groups: [3, 3, 4] },
+  { iso: 'CA', name: 'Canada', nameUk: 'Канада', dialCode: '1', flag: '🇨🇦', placeholder: '(416) 555-0123', maxDigits: 10, groups: [3, 3, 4] },
+  { iso: 'CZ', name: 'Czechia', nameUk: 'Чехія', dialCode: '420', flag: '🇨🇿', placeholder: '601 123 456', maxDigits: 9, groups: [3, 3, 3] },
+  { iso: 'FR', name: 'France', nameUk: 'Франція', dialCode: '33', flag: '🇫🇷', placeholder: '6 12 34 56 78', maxDigits: 9, groups: [1, 2, 2, 2, 2] },
+  { iso: 'IT', name: 'Italy', nameUk: 'Італія', dialCode: '39', flag: '🇮🇹', placeholder: '312 345 6789', maxDigits: 10, groups: [3, 3, 4] },
+  { iso: 'ES', name: 'Spain', nameUk: 'Іспанія', dialCode: '34', flag: '🇪🇸', placeholder: '612 345 678', maxDigits: 9, groups: [3, 3, 3] },
+  { iso: 'MD', name: 'Moldova', nameUk: 'Молдова', dialCode: '373', flag: '🇲🇩', placeholder: '68 123 456', maxDigits: 8, groups: [2, 3, 3] },
+  { iso: 'RO', name: 'Romania', nameUk: 'Румунія', dialCode: '40', flag: '🇷🇴', placeholder: '712 345 678', maxDigits: 9, groups: [3, 3, 3] },
+  { iso: 'LT', name: 'Lithuania', nameUk: 'Литва', dialCode: '370', flag: '🇱🇹', placeholder: '612 34567', maxDigits: 8, groups: [3, 5] },
+  { iso: 'GE', name: 'Georgia', nameUk: 'Грузія', dialCode: '995', flag: '🇬🇪', placeholder: '555 12 34 56', maxDigits: 9, groups: [3, 2, 2, 2] },
+  { iso: 'TR', name: 'Turkey', nameUk: 'Туреччина', dialCode: '90', flag: '🇹🇷', placeholder: '532 123 45 67', maxDigits: 10, groups: [3, 3, 2, 2] }
+];
+
+export function parseSharedPhoneNumber(
+  rawValue?: string | null,
+  defaultIso = 'UA'
+): { country: SharedPhoneCountry; nationalDigits: string } {
+  const fallback =
+    SHARED_PHONE_COUNTRIES.find((c) => c.iso === defaultIso) || SHARED_PHONE_COUNTRIES[0];
+  if (!rawValue) return { country: fallback, nationalDigits: '' };
+  const digits = rawValue.replace(/\D/g, '');
+  if (!digits) return { country: fallback, nationalDigits: '' };
+
+  const sorted = [...SHARED_PHONE_COUNTRIES].sort((a, b) => b.dialCode.length - a.dialCode.length);
+  for (const c of sorted) {
+    if (digits.startsWith(c.dialCode)) {
+      return {
+        country: c,
+        nationalDigits: digits.slice(c.dialCode.length, c.dialCode.length + c.maxDigits)
+      };
+    }
+  }
+  return { country: fallback, nationalDigits: digits.slice(0, fallback.maxDigits) };
+}
+
+export function formatNationalPhoneNumber(digits: string, country: SharedPhoneCountry): string {
+  const clean = digits.replace(/\D/g, '').slice(0, country.maxDigits);
+  if (!clean) return '';
+
+  if (country.iso === 'UA' || country.iso === 'US' || country.iso === 'CA') {
+    const g0 = country.groups[0];
+    const g1 = country.groups[1];
+    const g2 = country.groups[2];
+    const g3 = country.groups[3];
+    const p0 = clean.slice(0, g0);
+    const p1 = clean.slice(g0, g0 + g1);
+    const p2 = clean.slice(g0 + g1, g0 + g1 + g2);
+    const p3 = g3 ? clean.slice(g0 + g1 + g2, g0 + g1 + g2 + g3) : '';
+
+    let out = `(${p0}`;
+    if (clean.length > g0) out += `) ${p1}`;
+    if (p2) out += `-${p2}`;
+    if (p3) out += `-${p3}`;
+    return out;
+  }
+
+  const parts: string[] = [];
+  let cursor = 0;
+  for (const len of country.groups) {
+    if (cursor >= clean.length) break;
+    parts.push(clean.slice(cursor, cursor + len));
+    cursor += len;
+  }
+  if (cursor < clean.length) {
+    parts.push(clean.slice(cursor));
+  }
+  return parts.join(' ');
+}

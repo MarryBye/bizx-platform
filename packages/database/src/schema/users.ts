@@ -1,6 +1,5 @@
 import { pgTable, uuid, varchar, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
-import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
 
 export const users = pgTable(
   'users',
@@ -28,9 +27,6 @@ export const users = pgTable(
       .where(sql`${table.phone} IS NOT NULL`)
   ]
 );
-
-export const insertUserSchema = createInsertSchema(users);
-export const selectUserSchema = createSelectSchema(users);
 
 export type UserRecord = typeof users.$inferSelect;
 export type NewUserRecord = typeof users.$inferInsert;

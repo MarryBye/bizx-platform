@@ -23,14 +23,18 @@ import { OrdersScreen } from './src/screens/OrdersScreen';
 import { OrderDetailScreen } from './src/screens/OrderDetailScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
 import { AuthScreen } from './src/screens/AuthScreen';
+import { mobileApi } from './src/lib/api';
+import { useMobileTranslation } from './src/hooks/useMobileTranslation';
 import { formatCompactCount, type Store } from '@bizx/common-types';
 
 type TabType = 'stores' | 'cart' | 'orders' | 'profile';
 
 export default function App() {
+  const { t } = useMobileTranslation();
   const [activeTab, setActiveTab] = useState<TabType>('stores');
   const [selectedStore, setSelectedStore] = useState<Store | null>(null);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const [inboxUnreadCount, setInboxUnreadCount] = useState<number>(0);
 
   const { user, isInitialized, init } = useMobileAuthStore();
   const {
@@ -52,10 +56,25 @@ export default function App() {
   }, [init, fetchInitialData]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      setInboxUnreadCount(0);
+      return;
+    }
+    const loadInboxSummary = () => {
+      mobileApi.inbox
+        .getUnreadSummary()
+        .then((res) => {
+          if (res.success && res.data) {
+            setInboxUnreadCount(res.data.totalUnreadMessages || 0);
+          }
+        })
+        .catch(() => {});
+    };
     void fetchUnreadSummary();
+    loadInboxSummary();
     const timer = setInterval(() => {
       void fetchUnreadSummary();
+      loadInboxSummary();
     }, 15000);
     return () => clearInterval(timer);
   }, [user, fetchUnreadSummary]);
@@ -166,7 +185,7 @@ export default function App() {
             color={activeTab === 'stores' ? '#0f172a' : '#64748b'}
           />
           <Text style={[styles.tabLabel, activeTab === 'stores' && styles.tabLabelActive]}>
-            Магазини
+            {t('mobile.tabStores')}
           </Text>
         </TouchableOpacity>
 
@@ -190,7 +209,7 @@ export default function App() {
             )}
           </View>
           <Text style={[styles.tabLabel, activeTab === 'cart' && styles.tabLabelActive]}>
-            Кошик
+            {t('mobile.tabCart')}
           </Text>
         </TouchableOpacity>
 
@@ -217,7 +236,7 @@ export default function App() {
             )}
           </View>
           <Text style={[styles.tabLabel, activeTab === 'orders' && styles.tabLabelActive]}>
-            Замовлення
+            {t('mobile.tabOrders')}
           </Text>
         </TouchableOpacity>
 
@@ -226,13 +245,22 @@ export default function App() {
           activeOpacity={0.7}
           onPress={() => setActiveTab('profile')}
         >
-          <MaterialIcon
-            name="person-outline"
-            size={22}
-            color={activeTab === 'profile' ? '#0f172a' : '#64748b'}
-          />
+          <View style={styles.cartIconWrapper}>
+            <MaterialIcon
+              name="person-outline"
+              size={22}
+              color={activeTab === 'profile' ? '#0f172a' : '#64748b'}
+            />
+            {inboxUnreadCount > 0 && (
+              <View style={[styles.badge, styles.badgeBlue]}>
+                <Text style={styles.badgeText}>
+                  {formatCompactCount(inboxUnreadCount)}
+                </Text>
+              </View>
+            )}
+          </View>
           <Text style={[styles.tabLabel, activeTab === 'profile' && styles.tabLabelActive]}>
-            Профіль
+            {t('mobile.tabProfile')}
           </Text>
         </TouchableOpacity>
       </View>

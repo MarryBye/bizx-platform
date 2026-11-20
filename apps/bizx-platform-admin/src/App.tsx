@@ -18,6 +18,8 @@ import { BusinessesView, type ExtendedBusiness } from './views/BusinessesView';
 import { PendingBusinessesView } from './views/PendingBusinessesView';
 import { UsersView } from './views/UsersView';
 import { DisputesView } from './views/DisputesView';
+import { SupportView } from './views/SupportView';
+import { BroadcastsView } from './views/BroadcastsView';
 import { StaffView } from './views/StaffView';
 import { LoginView } from './views/LoginView';
 import {
@@ -53,6 +55,7 @@ export const App: React.FC = () => {
   const [usersList, setUsersList] = useState<PlatformUserRecord[]>([]);
   const [pendingDisputesCount, setPendingDisputesCount] = useState<number>(0);
   const [pendingStoresCount, setPendingStoresCount] = useState<number>(0);
+  const [unreadSupportCount, setUnreadSupportCount] = useState<number>(0);
   const [newPendingAlert, setNewPendingAlert] = useState<number | null>(null);
   const prevPendingStoresRef = useRef<number | null>(null);
 
@@ -176,6 +179,8 @@ export const App: React.FC = () => {
     }
     if (myAccess.permissions.includes('platform.users.read')) allowedTabs.push('users');
     if (myAccess.permissions.includes('platform.disputes.read')) allowedTabs.push('disputes');
+    if (myAccess.permissions.includes('platform.support.read')) allowedTabs.push('support');
+    if (myAccess.permissions.includes('platform.broadcasts.read')) allowedTabs.push('broadcasts');
     if (myAccess.permissions.includes('platform.staff.read')) allowedTabs.push('staff');
     if (myAccess.permissions.includes('platform.roles.read')) allowedTabs.push('roles');
 
@@ -238,18 +243,36 @@ export const App: React.FC = () => {
       .catch(() => {});
   }, [myAccess]);
 
+  const refreshSupportSummary = useCallback(() => {
+    if (!myAccess?.permissions.includes('platform.support.read')) {
+      setUnreadSupportCount(0);
+      return;
+    }
+    platformApi.broadcasts
+      .getPlatformSupportSummary()
+      .then((res) => {
+        if (res.success && res.data) {
+          setUnreadSupportCount(res.data.unreadThreadsCount);
+        }
+      })
+      .catch(() => {});
+  }, [myAccess]);
+
   useEffect(() => {
     refreshDisputesSummary();
     refreshPendingStoresSummary();
+    refreshSupportSummary();
     const canDisputes = Boolean(myAccess?.permissions.includes('platform.disputes.read'));
     const canStores = Boolean(myAccess?.permissions.includes('platform.stores.read'));
-    if (!canDisputes && !canStores) return;
+    const canSupport = Boolean(myAccess?.permissions.includes('platform.support.read'));
+    if (!canDisputes && !canStores && !canSupport) return;
     const timer = window.setInterval(() => {
       if (canDisputes) refreshDisputesSummary();
       if (canStores) refreshPendingStoresSummary();
+      if (canSupport) refreshSupportSummary();
     }, 15000);
     return () => window.clearInterval(timer);
-  }, [myAccess, refreshDisputesSummary, refreshPendingStoresSummary]);
+  }, [myAccess, refreshDisputesSummary, refreshPendingStoresSummary, refreshSupportSummary]);
 
   // Check auth on mount
   useEffect(() => {
@@ -598,6 +621,7 @@ export const App: React.FC = () => {
       permsLoaded={permsLoaded}
       pendingStoresCount={pendingStoresCount}
       pendingDisputesCount={pendingDisputesCount}
+      unreadSupportCount={unreadSupportCount}
       onLogout={handleLogout}
     >
       {newPendingAlert !== null && newPendingAlert > 0 && (
@@ -728,6 +752,21 @@ export const App: React.FC = () => {
                 refreshDisputesSummary();
                 void loadPlatformData();
               }}
+            />
+          )}
+
+          {activeTab === 'support' && hasPerm('platform.support.read') && (
+            <SupportView
+              canReply={hasPerm('platform.support.reply')}
+              onSupportChanged={refreshSupportSummary}
+            />
+          )}
+
+          {activeTab === 'broadcasts' && hasPerm('platform.broadcasts.read') && (
+            <BroadcastsView
+              canSend={hasPerm('platform.broadcasts.send')}
+              businesses={businesses}
+              usersList={usersList}
             />
           )}
 

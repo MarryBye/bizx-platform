@@ -5,6 +5,7 @@ import {
   Delete,
   Body,
   Param,
+  Query,
   Res,
   UseGuards,
   UsePipes,
@@ -134,13 +135,24 @@ export class StorageController {
   }
 
   /**
-   * Отримання / стримінг медіафайлу з бакету Cloudflare R2
+   * Отримання / стримінг медіафайлу з бакету Cloudflare R2.
+   * Приватні вкладення (order-chat/*, inbox/*) вимагають валідний HMAC-підпис з коротким TTL.
    */
   @Public()
   @Get('file/*key')
-  async getFile(@Param('key') keyParam: string | string[], @Res() res: Response): Promise<void> {
+  async getFile(
+    @Param('key') keyParam: string | string[],
+    @Res() res: Response,
+    @Query('exp') exp?: string,
+    @Query('sig') sig?: string
+  ): Promise<void> {
     const rawKey = Array.isArray(keyParam) ? keyParam.join('/') : keyParam;
     const fileKey = rawKey.replace(/^file\//, '').replace(/^\/+/, '');
+    const isPrivate = this.storageService.isPrivateKey(fileKey);
+
+    if (isPrivate && !this.storageService.verifyPrivateSignature(fileKey, exp, sig)) {
+      throw new ForbiddenException('Посилання на приватне вкладення недійсне або термін його дії вичерпано');
+    }
 
     const { stream, contentType, contentLength } = await this.storageService.getFileStream(fileKey);
 
@@ -153,7 +165,7 @@ export class StorageController {
     if (contentLength) {
       res.setHeader('Content-Length', contentLength);
     }
-    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.setHeader('Cache-Control', isPrivate ? 'private, max-age=300' : 'public, max-age=86400');
 
     // Стримимо файл клієнту
     (stream as NodeJS.ReadableStream).pipe(res);

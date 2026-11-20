@@ -111,9 +111,9 @@ export const SidebarAccountMenu: React.FC<SidebarAccountMenuProps> = ({
                 setIsOpen(false);
                 onLogout();
               }}
-              className="w-full flex items-center gap-2.5 px-3 py-2 text-red-600 hover:bg-red-50 transition-colors font-semibold text-left"
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-rose-600 hover:bg-rose-50 transition-colors font-semibold text-left"
             >
-              <LogOut className="w-3.5 h-3.5 text-red-500 shrink-0" />
+              <LogOut className="w-3.5 h-3.5 text-rose-500 shrink-0" />
               <span className="truncate">{logoutLabel}</span>
             </button>
           </div>

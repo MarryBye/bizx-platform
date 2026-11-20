@@ -9,6 +9,7 @@ import { DatabaseService } from '../database/database.service.js';
 import { StoresService } from '../stores/stores.service.js';
 import { RbacService } from '../rbac/rbac.service.js';
 import { StorageService } from '../storage/storage.service.js';
+import { BroadcastsService } from '../broadcasts/broadcasts.service.js';
 import { validateChatAttachmentFile, type UploadedFileDto } from '../common/file-upload.utils.js';
 import {
   orders,
@@ -16,6 +17,7 @@ import {
   orderMessages,
   orderDisputes,
   storeReviews,
+  storeMarketingSubscriptions,
   products,
   stores,
   users,
@@ -45,7 +47,8 @@ import type {
   OrderDisputeItem,
   DisputeCategory,
   DisputeStatus,
-  OrderMessageSenderType
+  OrderMessageSenderType,
+  StoreCustomerSummaryItem
 } from '@bizx/common-types';
 
 export interface EnrichedOrder extends OrderRecord {
@@ -85,7 +88,8 @@ export class OrdersService {
     private readonly databaseService: DatabaseService,
     private readonly storesService: StoresService,
     private readonly rbacService: RbacService,
-    private readonly storageService: StorageService
+    private readonly storageService: StorageService,
+    private readonly broadcastsService: BroadcastsService
   ) {}
 
   private generateOrderNumber(): string {
@@ -360,6 +364,17 @@ export class OrdersService {
         review: null
       };
     });
+
+    // Фіксуємо вибір маркетингової підписки на 1-му замовленні (Strict Opt-In, не ламає замовлення при помилці)
+    try {
+      await this.broadcastsService.recordFirstOrderCheckoutConsent(
+        dto.storeId,
+        customerId,
+        dto.subscribeToStoreMarketing
+      );
+    } catch {
+      // ignore non-critical marketing preference write failure
+    }
 
     return created;
   }
@@ -730,7 +745,9 @@ export class OrdersService {
             : senderName || null,
       senderType: msg.senderType as OrderMessageSenderType,
       body: msg.body,
-      attachments: (msg.attachments || []) as OrderMessageAttachmentDto[],
+      attachments: this.storageService.signAttachments(
+        (msg.attachments || []) as OrderMessageAttachmentDto[]
+      ),
       readByCustomerAt: msg.readByCustomerAt ? msg.readByCustomerAt.toISOString() : null,
       readByStoreAt: msg.readByStoreAt ? msg.readByStoreAt.toISOString() : null,
       createdAt: msg.createdAt.toISOString()
@@ -744,6 +761,9 @@ export class OrdersService {
   ): Promise<OrderMessageItem> {
     const { actorType } = await this.assertOrderChatAccess(orderId, userId, 'write');
     const now = new Date();
+    const cleanAttachments = this.storageService.stripAttachmentsSignatures(
+      (dto.attachments || []) as OrderMessageAttachmentDto[]
+    );
 
     const [inserted] = await this.databaseService.db
       .insert(orderMessages)
@@ -752,7 +772,7 @@ export class OrdersService {
         senderId: userId,
         senderType: actorType,
         body: dto.body?.trim() || null,
-        attachments: (dto.attachments || []) as OrderMessageAttachmentDto[],
+        attachments: cleanAttachments,
         readByCustomerAt: actorType === 'customer' ? now : null,
         readByStoreAt: actorType === 'store' ? now : null
       })
@@ -770,7 +790,9 @@ export class OrdersService {
       senderName: sender?.name || null,
       senderType: inserted.senderType as OrderMessageSenderType,
       body: inserted.body,
-      attachments: (inserted.attachments || []) as OrderMessageAttachmentDto[],
+      attachments: this.storageService.signAttachments(
+        (inserted.attachments || []) as OrderMessageAttachmentDto[]
+      ),
       readByCustomerAt: inserted.readByCustomerAt ? inserted.readByCustomerAt.toISOString() : null,
       readByStoreAt: inserted.readByStoreAt ? inserted.readByStoreAt.toISOString() : null,
       createdAt: inserted.createdAt.toISOString()
@@ -824,7 +846,7 @@ export class OrdersService {
     const publicUrl = await this.storageService.uploadBuffer(fileKey, file.buffer, file.mimetype);
 
     return {
-      url: publicUrl,
+      url: this.storageService.signPrivateUrl(publicUrl),
       fileName: file.originalname,
       mimeType: file.mimetype,
       size: file.size
@@ -1082,5 +1104,70 @@ export class OrdersService {
       comment: created.comment,
       createdAt: created.createdAt.toISOString()
     };
+  }
+
+  async getStoreCustomers(storeId: string, userId: string): Promise<StoreCustomerSummaryItem[]> {
+    await this.rbacService.assertStorePermission(storeId, userId, 'orders.read', {
+      allowPlatformPermission: 'platform.stores.read',
+      allowWhenSuspended: true
+    });
+
+    const [orderRows, subRows] = await Promise.all([
+      this.databaseService.db
+        .select({
+          customerId: orders.customerId,
+          contactName: orders.contactName,
+          contactPhone: orders.contactPhone,
+          totalAmount: orders.totalAmount,
+          status: orders.status,
+          createdAt: orders.createdAt,
+          userName: users.name,
+          userEmail: users.email,
+          userPhone: users.phone
+        })
+        .from(orders)
+        .leftJoin(users, eq(orders.customerId, users.id))
+        .where(eq(orders.storeId, storeId))
+        .orderBy(desc(orders.createdAt)),
+      this.databaseService.db
+        .select({
+          userId: storeMarketingSubscriptions.userId,
+          status: storeMarketingSubscriptions.status
+        })
+        .from(storeMarketingSubscriptions)
+        .where(eq(storeMarketingSubscriptions.storeId, storeId))
+    ]);
+
+    const subMap = new Map<string, boolean>();
+    for (const s of subRows) {
+      subMap.set(s.userId, s.status === 'subscribed');
+    }
+
+    const byCustomer = new Map<string, StoreCustomerSummaryItem>();
+    for (const r of orderRows) {
+      const key = r.customerId || `guest:${r.contactPhone}`;
+      const existing = byCustomer.get(key);
+      const isCancelled = r.status === 'cancelled';
+      if (!existing) {
+        byCustomer.set(key, {
+          customerId: r.customerId || key,
+          name: r.userName || r.contactName || 'Покупець',
+          email: r.userEmail ?? null,
+          phone: r.userPhone || r.contactPhone || null,
+          ordersCount: 1,
+          totalSpent: isCancelled ? 0 : r.totalAmount,
+          lastOrderAt: r.createdAt.toISOString(),
+          marketingSubscribed: r.customerId ? Boolean(subMap.get(r.customerId)) : false
+        });
+      } else {
+        existing.ordersCount += 1;
+        if (!isCancelled) existing.totalSpent += r.totalAmount;
+        if (r.createdAt.toISOString() > existing.lastOrderAt) {
+          existing.lastOrderAt = r.createdAt.toISOString();
+        }
+      }
+    }
+
+    return Array.from(byCustomer.values()).sort((a, b) => b.totalSpent - a.totalSpent);
   }
 }

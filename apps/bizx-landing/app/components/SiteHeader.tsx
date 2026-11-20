@@ -6,6 +6,7 @@ import { api } from '../lib/api';
 import { useTranslation } from '../hooks/useTranslation';
 import type { UserProfile, Store } from '@bizx/common-types';
 import { LanguageSelector, CountBadge } from '@bizx/ui';
+import { getInitials } from '@bizx/utils';
 import { AuthModal } from './AuthModal';
 import {
   ChevronDown,
@@ -132,15 +133,6 @@ export const SiteHeader: React.FC = () => {
   const isBusinessUser = Boolean(user?.hasStoreAccess || user?.isBusinessOwner || stores.length > 0);
   const isPlatformStaff = Boolean(user?.isPlatformStaff);
 
-  const getInitials = (name?: string) => {
-    if (!name) return 'U';
-    const parts = name.trim().split(/\s+/);
-    if (parts.length >= 2) {
-      return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
-    }
-    return name.slice(0, 2).toUpperCase();
-  };
-
   return (
     <>
       <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-sm border-b border-slate-200">
@@ -155,6 +147,9 @@ export const SiteHeader: React.FC = () => {
 
           {/* Business-oriented Navigation */}
           <nav className="hidden md:flex items-center gap-7 text-xs font-semibold text-slate-600">
+            <Link href="/stores" className="hover:text-slate-900 transition-colors">
+              {locale === 'en' ? 'Stores' : 'Заклади'}
+            </Link>
             <Link href="/#features" className="hover:text-slate-900 transition-colors">
               {t('nav.features')}
             </Link>

@@ -36,10 +36,12 @@ import {
   updateProductDtoSchema,
   productFilterQuerySchema,
   createProductCategoryDtoSchema,
+  updateProductCategoryDtoSchema,
   type CreateProductDto,
   type UpdateProductDto,
   type ProductFilterQuery,
   type CreateProductCategoryDto,
+  type UpdateProductCategoryDto,
   type ApiResponse,
   type PaginatedResult
 } from '@bizx/common-types';
@@ -95,6 +97,20 @@ export class ProductsController {
     @Body() dto: CreateProductCategoryDto
   ): Promise<ApiResponse<ProductCategoryRecord>> {
     const category = await this.productsService.createProductCategory(storeId, userId, dto);
+    return {
+      success: true,
+      data: category,
+      timestamp: new Date().toISOString()
+    };
+  }
+
+  @Patch('categories/:id')
+  async updateCategory(
+    @Param('id') id: string,
+    @CurrentUser('sub') userId: string,
+    @Body(new ZodValidationPipe(updateProductCategoryDtoSchema)) dto: UpdateProductCategoryDto
+  ): Promise<ApiResponse<ProductCategoryRecord>> {
+    const category = await this.productsService.updateProductCategory(id, userId, dto);
     return {
       success: true,
       data: category,
