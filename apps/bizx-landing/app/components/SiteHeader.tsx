@@ -244,9 +244,13 @@ export const SiteHeader: React.FC = () => {
                         <span className="inline-flex items-center h-5 px-2 rounded text-[10px] font-bold leading-none bg-blue-100 text-blue-800 border border-blue-200">
                           {t('roles.platformAdmin')}
                         </span>
-                      ) : isBusinessUser ? (
+                      ) : user.isBusinessOwner ? (
                         <span className="inline-flex items-center h-5 px-2 rounded text-[10px] font-bold leading-none bg-emerald-100 text-emerald-800 border border-emerald-200">
                           {t('roles.businessPartner')}
+                        </span>
+                      ) : isBusinessUser ? (
+                        <span className="inline-flex items-center h-5 px-2 rounded text-[10px] font-bold leading-none bg-sky-100 text-sky-800 border border-sky-200">
+                          {locale === 'en' ? 'Business Staff' : 'Співробітник бізнесу'}
                         </span>
                       ) : (
                         <span className="inline-flex items-center h-5 px-2 rounded text-[10px] font-bold leading-none bg-slate-100 text-slate-700 border border-slate-200">
