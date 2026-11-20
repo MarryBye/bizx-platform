@@ -271,15 +271,15 @@ export const TeamManager: React.FC<TeamManagerProps> = ({
       )}
 
       {actionError && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-800 flex items-center justify-between gap-2">
+        <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
             <span>{actionError}</span>
           </div>
           <button
             type="button"
             onClick={() => setActionError(null)}
-            className="text-red-500 hover:text-red-700"
+            className="text-rose-500 hover:text-rose-700"
           >
             <X className="w-3.5 h-3.5" />
           </button>
@@ -397,7 +397,7 @@ export const TeamManager: React.FC<TeamManagerProps> = ({
                               type="button"
                               onClick={() => setArchivingMember(m)}
                               title={locale === 'en' ? 'Archive member' : 'Архівувати працівника'}
-                              className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors"
+                              className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 transition-colors"
                             >
                               <Archive className="w-3.5 h-3.5" />
                             </button>
@@ -447,8 +447,8 @@ export const TeamManager: React.FC<TeamManagerProps> = ({
       >
         <form onSubmit={handleSubmit} className="space-y-4">
               {modalError && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
                   <span>{modalError}</span>
                 </div>
               )}

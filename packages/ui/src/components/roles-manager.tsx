@@ -258,8 +258,8 @@ export const RolesManager: React.FC<RolesManagerProps> = ({
       </div>
 
       {actionError && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 flex items-center gap-2">
-          <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
+        <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
           <span>{actionError}</span>
         </div>
       )}
@@ -461,8 +461,8 @@ export const RolesManager: React.FC<RolesManagerProps> = ({
       >
         <form onSubmit={handleSave} className="space-y-5">
               {modalError && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
                   <span>{modalError}</span>
                 </div>
               )}
@@ -577,14 +577,14 @@ export const RolesManager: React.FC<RolesManagerProps> = ({
                   {editingRole && !editingRole.isSystem && allowArchive && (
                     confirmArchive ? (
                       <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-red-700">
+                        <span className="text-xs font-bold text-rose-700">
                           {locale === 'en' ? 'Archive this role?' : 'Архівувати роль?'}
                         </span>
                         <button
                           type="button"
                           disabled={isSaving}
                           onClick={handleArchive}
-                          className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-lg"
+                          className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-lg"
                         >
                           {locale === 'en' ? 'Confirm' : 'Так, архівувати'}
                         </button>
@@ -600,7 +600,7 @@ export const RolesManager: React.FC<RolesManagerProps> = ({
                       <button
                         type="button"
                         onClick={() => setConfirmArchive(true)}
-                        className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
                       >
                         <Archive className="w-3.5 h-3.5" />
                         <span>{locale === 'en' ? 'Archive role' : 'Архівувати роль'}</span>

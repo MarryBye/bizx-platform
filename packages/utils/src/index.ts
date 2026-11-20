@@ -1690,28 +1690,51 @@ export interface SharedPhoneCountry {
   name: string;
   nameUk: string;
   dialCode: string;
+  flag: string;
   placeholder: string;
   maxDigits: number;
   groups: number[];
 }
 
 export const SHARED_PHONE_COUNTRIES: SharedPhoneCountry[] = [
-  { iso: 'UA', name: 'Ukraine', nameUk: 'Україна', dialCode: '380', placeholder: '(67) 123-45-67', maxDigits: 9, groups: [2, 3, 2, 2] },
-  { iso: 'PL', name: 'Poland', nameUk: 'Польща', dialCode: '48', placeholder: '512 345 678', maxDigits: 9, groups: [3, 3, 3] },
-  { iso: 'DE', name: 'Germany', nameUk: 'Німеччина', dialCode: '49', placeholder: '151 2345 6789', maxDigits: 11, groups: [3, 4, 4] },
-  { iso: 'GB', name: 'United Kingdom', nameUk: 'Велика Британія', dialCode: '44', placeholder: '7700 900123', maxDigits: 10, groups: [4, 6] },
-  { iso: 'US', name: 'United States', nameUk: 'США', dialCode: '1', placeholder: '(555) 123-4567', maxDigits: 10, groups: [3, 3, 4] },
-  { iso: 'CA', name: 'Canada', nameUk: 'Канада', dialCode: '1', placeholder: '(416) 555-0123', maxDigits: 10, groups: [3, 3, 4] },
-  { iso: 'CZ', name: 'Czechia', nameUk: 'Чехія', dialCode: '420', placeholder: '601 123 456', maxDigits: 9, groups: [3, 3, 3] },
-  { iso: 'FR', name: 'France', nameUk: 'Франція', dialCode: '33', placeholder: '6 12 34 56 78', maxDigits: 9, groups: [1, 2, 2, 2, 2] },
-  { iso: 'IT', name: 'Italy', nameUk: 'Італія', dialCode: '39', placeholder: '312 345 6789', maxDigits: 10, groups: [3, 3, 4] },
-  { iso: 'ES', name: 'Spain', nameUk: 'Іспанія', dialCode: '34', placeholder: '612 345 678', maxDigits: 9, groups: [3, 3, 3] },
-  { iso: 'MD', name: 'Moldova', nameUk: 'Молдова', dialCode: '373', placeholder: '68 123 456', maxDigits: 8, groups: [2, 3, 3] },
-  { iso: 'RO', name: 'Romania', nameUk: 'Румунія', dialCode: '40', placeholder: '712 345 678', maxDigits: 9, groups: [3, 3, 3] },
-  { iso: 'LT', name: 'Lithuania', nameUk: 'Литва', dialCode: '370', placeholder: '612 34567', maxDigits: 8, groups: [3, 5] },
-  { iso: 'GE', name: 'Georgia', nameUk: 'Грузія', dialCode: '995', placeholder: '555 12 34 56', maxDigits: 9, groups: [3, 2, 2, 2] },
-  { iso: 'TR', name: 'Turkey', nameUk: 'Туреччина', dialCode: '90', placeholder: '532 123 45 67', maxDigits: 10, groups: [3, 3, 2, 2] }
+  { iso: 'UA', name: 'Ukraine', nameUk: 'Україна', dialCode: '380', flag: '🇺🇦', placeholder: '(67) 123-45-67', maxDigits: 9, groups: [2, 3, 2, 2] },
+  { iso: 'PL', name: 'Poland', nameUk: 'Польща', dialCode: '48', flag: '🇵🇱', placeholder: '512 345 678', maxDigits: 9, groups: [3, 3, 3] },
+  { iso: 'DE', name: 'Germany', nameUk: 'Німеччина', dialCode: '49', flag: '🇩🇪', placeholder: '151 2345 6789', maxDigits: 11, groups: [3, 4, 4] },
+  { iso: 'GB', name: 'United Kingdom', nameUk: 'Велика Британія', dialCode: '44', flag: '🇬🇧', placeholder: '7700 900123', maxDigits: 10, groups: [4, 6] },
+  { iso: 'US', name: 'United States', nameUk: 'США', dialCode: '1', flag: '🇺🇸', placeholder: '(555) 123-4567', maxDigits: 10, groups: [3, 3, 4] },
+  { iso: 'CA', name: 'Canada', nameUk: 'Канада', dialCode: '1', flag: '🇨🇦', placeholder: '(416) 555-0123', maxDigits: 10, groups: [3, 3, 4] },
+  { iso: 'CZ', name: 'Czechia', nameUk: 'Чехія', dialCode: '420', flag: '🇨🇿', placeholder: '601 123 456', maxDigits: 9, groups: [3, 3, 3] },
+  { iso: 'FR', name: 'France', nameUk: 'Франція', dialCode: '33', flag: '🇫🇷', placeholder: '6 12 34 56 78', maxDigits: 9, groups: [1, 2, 2, 2, 2] },
+  { iso: 'IT', name: 'Italy', nameUk: 'Італія', dialCode: '39', flag: '🇮🇹', placeholder: '312 345 6789', maxDigits: 10, groups: [3, 3, 4] },
+  { iso: 'ES', name: 'Spain', nameUk: 'Іспанія', dialCode: '34', flag: '🇪🇸', placeholder: '612 345 678', maxDigits: 9, groups: [3, 3, 3] },
+  { iso: 'MD', name: 'Moldova', nameUk: 'Молдова', dialCode: '373', flag: '🇲🇩', placeholder: '68 123 456', maxDigits: 8, groups: [2, 3, 3] },
+  { iso: 'RO', name: 'Romania', nameUk: 'Румунія', dialCode: '40', flag: '🇷🇴', placeholder: '712 345 678', maxDigits: 9, groups: [3, 3, 3] },
+  { iso: 'LT', name: 'Lithuania', nameUk: 'Литва', dialCode: '370', flag: '🇱🇹', placeholder: '612 34567', maxDigits: 8, groups: [3, 5] },
+  { iso: 'GE', name: 'Georgia', nameUk: 'Грузія', dialCode: '995', flag: '🇬🇪', placeholder: '555 12 34 56', maxDigits: 9, groups: [3, 2, 2, 2] },
+  { iso: 'TR', name: 'Turkey', nameUk: 'Туреччина', dialCode: '90', flag: '🇹🇷', placeholder: '532 123 45 67', maxDigits: 10, groups: [3, 3, 2, 2] }
 ];
+
+export function parseSharedPhoneNumber(
+  rawValue?: string | null,
+  defaultIso = 'UA'
+): { country: SharedPhoneCountry; nationalDigits: string } {
+  const fallback =
+    SHARED_PHONE_COUNTRIES.find((c) => c.iso === defaultIso) || SHARED_PHONE_COUNTRIES[0];
+  if (!rawValue) return { country: fallback, nationalDigits: '' };
+  const digits = rawValue.replace(/\D/g, '');
+  if (!digits) return { country: fallback, nationalDigits: '' };
+
+  const sorted = [...SHARED_PHONE_COUNTRIES].sort((a, b) => b.dialCode.length - a.dialCode.length);
+  for (const c of sorted) {
+    if (digits.startsWith(c.dialCode)) {
+      return {
+        country: c,
+        nationalDigits: digits.slice(c.dialCode.length, c.dialCode.length + c.maxDigits)
+      };
+    }
+  }
+  return { country: fallback, nationalDigits: digits.slice(0, fallback.maxDigits) };
+}
 
 export function formatNationalPhoneNumber(digits: string, country: SharedPhoneCountry): string {
   const clean = digits.replace(/\D/g, '').slice(0, country.maxDigits);

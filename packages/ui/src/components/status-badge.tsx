@@ -80,7 +80,7 @@ export interface CountBadgeProps {
 
 const COUNT_TONE_CLASSES = {
   blue: 'bg-blue-600 text-white',
-  red: 'bg-red-600 text-white',
+  red: 'bg-rose-600 text-white',
   amber: 'bg-amber-500 text-white',
   slate: 'bg-slate-900 text-white'
 };
