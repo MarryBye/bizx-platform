@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import type { PlatformUserRecord } from '../components/UserDetailsModal';
 import { useTranslation } from '../hooks/useTranslation';
 import { StatusBadge, Button } from '@bizx/ui';
+import { getInitials } from '@bizx/utils';
 import {
   Users,
   Search,
@@ -46,15 +47,6 @@ export const UsersView: React.FC<UsersViewProps> = ({ users, onSelectUser, isLoa
 
     return matchesSearch && matchesRole && matchesStatus;
   });
-
-  const getInitials = (nameVal: string) => {
-    return nameVal
-      .split(' ')
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((w) => w[0].toUpperCase())
-      .join('');
-  };
 
   const getAccountTypeBadge = (u: PlatformUserRecord) => {
     if (u.isPlatformStaff) {

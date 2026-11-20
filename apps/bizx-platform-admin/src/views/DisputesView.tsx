@@ -15,6 +15,7 @@ import {
   AlertBanner,
   Button
 } from '@bizx/ui';
+import { formatMoney as formatMoneyShared } from '@bizx/utils';
 import {
   Scale,
   AlertTriangle,
@@ -121,11 +122,7 @@ export const DisputesView: React.FC<DisputesViewProps> = ({
     return () => window.clearInterval(timer);
   }, [selectedId, loadDetail]);
 
-  const formatMoney = (kopecks: number) =>
-    (kopecks / 100).toLocaleString(locale === 'en' ? 'en-US' : 'uk-UA', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    });
+  const formatMoney = (kopecks: number) => formatMoneyShared(kopecks, locale);
 
   const executeResolution = async (
     decision: 'business' | 'customer',
