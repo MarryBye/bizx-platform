@@ -8,6 +8,7 @@ import { AuthModal } from '../components/AuthModal';
 import { useTranslation } from '../hooks/useTranslation';
 import { translateApiError } from '@bizx/utils';
 import type { UserProfile, SubscriptionPlan, SubscriptionTier } from '@bizx/common-types';
+import { ConfirmModal, AlertBanner } from '@bizx/ui';
 import {
   Check,
   Zap,
@@ -17,8 +18,7 @@ import {
   ArrowRight,
   HelpCircle,
   CheckCircle2,
-  AlertCircle,
-  X
+  CreditCard
 } from 'lucide-react';
 
 export default function PricingPage() {
@@ -164,7 +164,9 @@ export default function PricingPage() {
           }`}
         >
           {filteredPlans.map((plan) => {
-            const isCurrent = user?.subscriptionTier === plan.id;
+            const isCurrent =
+              user?.subscriptionTier === plan.id &&
+              (plan.id === 'free' || user?.subscriptionStatus === 'active');
             const isPopular = plan.popular;
 
             return (
@@ -309,93 +311,59 @@ export default function PricingPage() {
         </div>
       </main>
 
-      {/* Confirmation Modal */}
-      {selectedPlanForModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
-          <div className="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden">
-            <div className="px-6 py-4 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="px-2 py-0.5 rounded bg-slate-900 text-white font-black text-[10px] tracking-wider uppercase">
-                  BIZX PAY
+      {/* Confirmation Modal — Unified Light ConfirmModal */}
+      <ConfirmModal
+        isOpen={Boolean(selectedPlanForModal)}
+        onClose={() => setSelectedPlanForModal(null)}
+        onConfirm={handleConfirmSubscribe}
+        nested={false}
+        tone="info"
+        icon={<CreditCard className="w-4 h-4" />}
+        title={t('pricing.activate30Days')}
+        subtitle="BIZX PAY"
+        confirmLabel={t('common.confirm')}
+        cancelLabel={t('common.cancel')}
+        confirmVariant="primary"
+        isLoading={isSubscribing}
+        error={subscribeError}
+      >
+        {selectedPlanForModal && (
+          <>
+            <div className="border border-slate-200 rounded-xl p-4 bg-slate-50/50 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-600">
+                  {t('subscriptions.currentPlan')}:
                 </span>
-                <span className="text-xs font-bold text-slate-700">
-                  {t('pricing.activate30Days')}
+                <span className="text-sm font-black text-slate-900">
+                  {selectedPlanForModal.name}
                 </span>
               </div>
-              <button
-                type="button"
-                onClick={() => setSelectedPlanForModal(null)}
-                className="text-slate-400 hover:text-slate-700 p-1 rounded-md hover:bg-slate-200/60 transition-colors"
-                aria-label={t('common.close')}
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="p-6 space-y-4">
-              {subscribeError && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700 flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
-                  <span>{subscribeError}</span>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-600">{t('common.price')}:</span>
+                <span className="text-base font-black text-slate-900">
+                  {selectedPlanForModal.priceUah === 0
+                    ? '0 ₴'
+                    : `${selectedPlanForModal.priceUah} ₴ / ${t('pricing.perMonth')}`}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-xs text-slate-500">
+                <span>{locale === 'en' ? 'Duration:' : 'Термін дії:'}</span>
+                <span className="font-semibold text-slate-700">30 {t('common.days')}</span>
+              </div>
+              {selectedPlanForModal.target === 'business' && (
+                <div className="flex items-center justify-between text-xs text-slate-500">
+                  <span>{locale === 'en' ? 'Store limit:' : 'Ліміт закладів:'}</span>
+                  <span className="font-semibold text-slate-700">
+                    {selectedPlanForModal.maxStores}
+                  </span>
                 </div>
               )}
-
-              <div className="border border-slate-200 rounded-xl p-4 bg-slate-50/50 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-600">
-                    {t('subscriptions.currentPlan')}:
-                  </span>
-                  <span className="text-sm font-black text-slate-900">
-                    {selectedPlanForModal.name}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-600">{t('common.price')}:</span>
-                  <span className="text-base font-black text-slate-900">
-                    {selectedPlanForModal.priceUah === 0
-                      ? '0 ₴'
-                      : `${selectedPlanForModal.priceUah} ₴ / ${t('pricing.perMonth')}`}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-xs text-slate-500">
-                  <span>{locale === 'en' ? 'Duration:' : 'Термін дії:'}</span>
-                  <span className="font-semibold text-slate-700">30 {t('common.days')}</span>
-                </div>
-                {selectedPlanForModal.target === 'business' && (
-                  <div className="flex items-center justify-between text-xs text-slate-500">
-                    <span>{locale === 'en' ? 'Store limit:' : 'Ліміт закладів:'}</span>
-                    <span className="font-semibold text-slate-700">
-                      {selectedPlanForModal.maxStores}
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-[11px] text-blue-900 leading-relaxed">
-                {t('pricing.noCardNeeded')}
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setSelectedPlanForModal(null)}
-                  className="px-3 py-2 border border-slate-200 text-xs font-semibold text-slate-700 rounded-lg hover:bg-slate-50"
-                >
-                  {t('common.cancel')}
-                </button>
-                <button
-                  type="button"
-                  disabled={isSubscribing}
-                  onClick={handleConfirmSubscribe}
-                  className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-lg disabled:opacity-50 transition-colors shadow-sm"
-                >
-                  {isSubscribing ? t('common.loading') : t('common.confirm')}
-                </button>
-              </div>
             </div>
-          </div>
-        </div>
-      )}
+
+            <AlertBanner tone="info">{t('pricing.noCardNeeded')}</AlertBanner>
+          </>
+        )}
+      </ConfirmModal>
 
       {/* Auth Modal for Guests */}
       <AuthModal

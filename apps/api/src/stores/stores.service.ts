@@ -81,7 +81,7 @@ export interface StoreListItem {
 export interface StoreDetailItem extends StoreListItem {
   updatedAt: Date;
   ownerName: string | null;
-  ownerEmail: string | null;
+  ownerEmail?: string | null;
 }
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -366,13 +366,12 @@ export class StoresService {
         createdAt: stores.createdAt,
         updatedAt: stores.updatedAt,
         categoryName: storeCategories.name,
-        ownerName: users.name,
-        ownerEmail: users.email
+        ownerName: users.name
       })
       .from(stores)
       .leftJoin(storeCategories, eq(stores.categoryId, storeCategories.id))
       .leftJoin(users, eq(stores.ownerId, users.id))
-      .where(condition);
+      .where(and(condition, isNull(stores.archivedAt)));
 
     if (!store || store.status !== 'active') {
       throw new NotFoundException('Магазин не знайдено або ще не опубліковано');
@@ -498,6 +497,7 @@ export class StoresService {
         'store.status.manage',
         {
           write: true,
+          allowWhenSuspended: true,
           allowPlatformPermission: 'platform.stores.moderate'
         }
       );
@@ -515,43 +515,107 @@ export class StoresService {
       await this.rbacService.assertStorePermission(storeId, userId, 'store.edit', { write: true });
     }
 
-    // Підтвердження нової заявки (pending -> active) вимагає окремого права platform.stores.approve
-    if (store.status === 'pending' && dto?.status === 'active') {
-      await this.rbacService.assertPlatformPermission(userId, 'platform.stores.approve');
-    }
+    const nowCheck = new Date();
+    const isActuallyChangingStatus = Boolean(dto?.status && dto.status !== store.status);
 
-    // Блокування дострокового виходу із суспенду через 3 страйки без права platform.strikes.revoke
-    if (dto?.status && ['active', 'pending'].includes(dto.status) && store.status === 'suspended') {
-      const now = new Date();
-      const [strikeRes] = await this.databaseService.db
-        .select({ cnt: count() })
-        .from(storeStrikes)
-        .where(
-          and(
-            eq(storeStrikes.storeId, storeId),
-            isNull(storeStrikes.revokedAt),
-            or(isNull(storeStrikes.expiresAt), gt(storeStrikes.expiresAt, now))
-          )
-        );
-      const activeStrikesCount = Number(strikeRes?.cnt || 0);
-      const stillLockedByTime = Boolean(store.suspendedUntil && store.suspendedUntil > now);
-      if (activeStrikesCount >= 3 || stillLockedByTime) {
-        const platAccess = await this.rbacService.getPlatformMemberAccess(userId);
-        if (!platAccess.permissions.includes('platform.strikes.revoke')) {
+    // Строга матриця переходів статусів (захист від багатоступеневого обходу прав!)
+    if (isActuallyChangingStatus && dto?.status) {
+      const fromStatus = store.status;
+      const toStatus = dto.status;
+
+      // 1. Будь-який вихід з 'archived' (в активний, чернетку, перевірку тощо) — виключно платформа з правом unblock/archive
+      if (fromStatus === 'archived' || store.archivedAt) {
+        if (!viaPlatform) {
           throw new ForbiddenException(
-            'Заклад заблоковано через 3 активні страйки. Достроково зняти блокування може лише уповноважений співробітник BizX із правом зняття страйків.'
+            'Архівований заклад не може бути відновлений власником. Зверніться до адміністрації BizX.'
+          );
+        }
+        const platAccess = await this.rbacService.getPlatformMemberAccess(userId);
+        const canRestore =
+          platAccess.permissions.includes('platform.stores.unblock') ||
+          platAccess.permissions.includes('platform.stores.archive');
+        if (!canRestore) {
+          throw new ForbiddenException(
+            'Відновлення архівованого закладу вимагає права розблокування або архівації закладів.'
+          );
+        }
+      }
+
+      // 2. Будь-який перехід у 'active' (з pending, draft чи closed) — вимагає platform.stores.approve
+      if (toStatus === 'active' && ['pending', 'draft', 'closed'].includes(fromStatus)) {
+        await this.rbacService.assertPlatformPermission(userId, 'platform.stores.approve');
+      }
+
+      // 3. Будь-який вихід із 'suspended' (у active, pending, draft, closed — НЕ тільки active/pending!)
+      if (fromStatus === 'suspended' && toStatus !== 'archived') {
+        const [strikeRes] = await this.databaseService.db
+          .select({ cnt: count() })
+          .from(storeStrikes)
+          .where(
+            and(
+              eq(storeStrikes.storeId, storeId),
+              isNull(storeStrikes.revokedAt),
+              or(isNull(storeStrikes.expiresAt), gt(storeStrikes.expiresAt, nowCheck))
+            )
+          );
+        const activeStrikesCount = Number(strikeRes?.cnt || 0);
+        const stillLockedByTime = Boolean(store.suspendedUntil && store.suspendedUntil > nowCheck);
+        const isPlatformLock = Boolean(store.suspensionReason || stillLockedByTime);
+        const platAccess = await this.rbacService.getPlatformMemberAccess(userId);
+
+        if (activeStrikesCount >= 3) {
+          if (!platAccess.permissions.includes('platform.strikes.revoke')) {
+            throw new ForbiddenException(
+              'Заклад заблоковано через 3 активні страйки. Достроково зняти блокування може лише уповноважений співробітник BizX із правом зняття страйків.'
+            );
+          }
+        } else if (viaPlatform || isPlatformLock) {
+          const canUnblock =
+            platAccess.permissions.includes('platform.stores.unblock') ||
+            platAccess.permissions.includes('platform.strikes.revoke');
+          if (!canUnblock) {
+            throw new ForbiddenException(
+              'Дострокове розблокування призупиненого закладу доступне лише співробітнику BizX із правом розблокування закладів.'
+            );
+          }
+        } else if (!viaPlatform && toStatus !== 'pending') {
+          throw new ForbiddenException(
+            'Призупинений заклад можна перевести лише на повторну модерацію BizX'
+          );
+        }
+      }
+
+      // 4. Власнику дозволені лише явні переходи: draft->pending, active->suspended/closed, closed->draft, self-suspended->pending
+      if (!viaPlatform) {
+        if (toStatus === 'active') {
+          throw new ForbiddenException(
+            'Активація магазину можлива лише після схвалення адміністраторами платформи BizX'
+          );
+        }
+        const allowedOwnerTransitions: Record<string, string[]> = {
+          draft: ['pending'],
+          active: ['suspended', 'closed'],
+          closed: ['draft'],
+          suspended: ['pending']
+        };
+        if (!(allowedOwnerTransitions[fromStatus] || []).includes(toStatus)) {
+          throw new ForbiddenException(
+            `Недопустимий перехід статусу закладу з «${fromStatus}» у «${toStatus}»`
           );
         }
       }
     }
 
-    if (dto?.status && !viaPlatform) {
-      if (dto.status === 'active') {
-        throw new ForbiddenException(
-          'Активація магазину можлива лише після схвалення адміністраторами платформи BizX'
+    if (dto?.status === 'suspended' && viaPlatform) {
+      const reason = dto.suspensionReason?.trim();
+      if (!reason || reason.length < 5) {
+        throw new BadRequestException(
+          'Вкажіть причину призупинення закладу (мінімум 5 символів)'
         );
       }
+    }
 
+    if (dto?.status && !viaPlatform) {
       if (dto.status === 'pending' && store.status !== 'pending') {
         const { maxAllowedStores, isStaff } = await this.reconcileOwnerStores(store.ownerId);
         if (!isStaff) {
@@ -590,27 +654,63 @@ export class StoresService {
       const [category] = await this.databaseService.db
         .select({ id: storeCategories.id })
         .from(storeCategories)
-        .where(eq(storeCategories.id, dto.categoryId));
+        .where(and(eq(storeCategories.id, dto.categoryId), isNull(storeCategories.archivedAt)));
 
       if (!category) {
         throw new NotFoundException('Указанная категория магазина не найдена');
       }
     }
 
+    const { suspensionDays, suspensionReason, ...storeFields } = dto ?? {};
+    const nowUpdate = new Date();
+
+    const suspensionPatch: {
+      suspendedUntil?: Date | null;
+      suspensionReason?: string | null;
+    } = {};
+
+    if (dto?.status === 'suspended') {
+      suspensionPatch.suspendedUntil =
+        viaPlatform && typeof suspensionDays === 'number' && suspensionDays > 0
+          ? new Date(nowUpdate.getTime() + suspensionDays * 24 * 60 * 60 * 1000)
+          : null;
+      suspensionPatch.suspensionReason = viaPlatform ? suspensionReason?.trim() || null : null;
+    } else if (isActuallyChangingStatus) {
+      suspensionPatch.suspendedUntil = null;
+      suspensionPatch.suspensionReason = null;
+    }
+
     const [updated] = await this.databaseService.db
       .update(stores)
       .set({
-        ...dto,
-        slug: dto?.slug ? dto.slug.toLowerCase() : undefined,
+        ...storeFields,
+        ...suspensionPatch,
+        slug: storeFields.slug ? storeFields.slug.toLowerCase() : undefined,
         ...(dto?.status === 'archived'
-          ? { archivedAt: new Date() }
+          ? { archivedAt: nowUpdate }
           : dto?.status !== undefined
             ? { archivedAt: null }
             : {}),
-        updatedAt: new Date()
+        updatedAt: nowUpdate
       })
       .where(eq(stores.id, storeId))
       .returning();
+
+    if (viaPlatform && dto?.status === 'suspended' && store.status !== 'suspended') {
+      const durationLabel = suspensionPatch.suspendedUntil
+        ? `на ${suspensionDays} дн. (до ${suspensionPatch.suspendedUntil.toLocaleDateString('uk-UA')})`
+        : 'безстроково (до ручного зняття модератором)';
+      await this.inboxService
+        .sendOfficialBizxMessage({
+          userId: store.ownerId,
+          senderName: 'BizX Модерація',
+          subject: `Роботу закладу «${store.name}» призупинено`,
+          body: `Модератор BizX призупинив роботу закладу «${store.name}» ${durationLabel}.\n\nПричина:\n${suspensionPatch.suspensionReason || 'Порушення правил платформи'}\n\nЯкщо ви вважаєте це помилкою, зверніться до підтримки BizX.`,
+          relatedStoreId: store.id,
+          canReply: false
+        })
+        .catch(() => {});
+    }
 
     if (!viaPlatform && dto?.status === 'pending' && store.status !== 'pending') {
       await this.inboxService
@@ -635,14 +735,19 @@ export class StoresService {
     // Видалення (архівація) магазину заборонено для бізнес-ролей — доступно лише за правом platform.stores.archive
     await this.rbacService.assertPlatformPermission(userId, 'platform.stores.archive');
 
-    await this.databaseService.db
+    const [archived] = await this.databaseService.db
       .update(stores)
       .set({
         status: 'archived',
         archivedAt: new Date(),
         updatedAt: new Date()
       })
-      .where(eq(stores.id, storeId));
+      .where(eq(stores.id, storeId))
+      .returning({ id: stores.id });
+
+    if (!archived) {
+      throw new NotFoundException('Магазин не знайдено');
+    }
 
     return { message: 'Магазин успішно архівовано' };
   }
@@ -802,12 +907,22 @@ export class StoresService {
   async getStoreReviews(storeIdOrSlug: string): Promise<StoreReviewsResponse> {
     const isUuid = UUID_REGEX.test(storeIdOrSlug);
     const [store] = await this.databaseService.db
-      .select({ id: stores.id, ratingAvg: stores.ratingAvg, ratingCount: stores.ratingCount })
+      .select({
+        id: stores.id,
+        status: stores.status,
+        ratingAvg: stores.ratingAvg,
+        ratingCount: stores.ratingCount
+      })
       .from(stores)
-      .where(isUuid ? eq(stores.id, storeIdOrSlug) : eq(stores.slug, storeIdOrSlug.toLowerCase()));
+      .where(
+        and(
+          isUuid ? eq(stores.id, storeIdOrSlug) : eq(stores.slug, storeIdOrSlug.toLowerCase()),
+          isNull(stores.archivedAt)
+        )
+      );
 
-    if (!store) {
-      throw new NotFoundException('Магазин не знайдено');
+    if (!store || store.status !== 'active') {
+      throw new NotFoundException('Магазин не знайдено або ще не опубліковано');
     }
 
     const rows = await this.databaseService.db
@@ -1003,9 +1118,10 @@ export class StoresService {
       throw new ForbiddenException('Немає прав на попередній перегляд цього закладу');
     }
 
+    const previewSecret = `${process.env.JWT_SECRET || 'bizx-jwt-dev-secret-key-32chars-min!'}:store_preview`;
     const previewToken = this.jwtService.sign(
-      { type: 'store_preview', storeId: store.id, sub: userId },
-      { expiresIn: '15m' }
+      { type: 'store_preview', storeId: store.id, actorId: userId },
+      { secret: previewSecret, expiresIn: '15m' }
     );
 
     return {
@@ -1058,11 +1174,12 @@ export class StoresService {
 
     if (options.previewToken) {
       try {
+        const previewSecret = `${process.env.JWT_SECRET || 'bizx-jwt-dev-secret-key-32chars-min!'}:store_preview`;
         const decoded = this.jwtService.verify<{
           type?: string;
           storeId?: string;
-          sub?: string;
-        }>(options.previewToken);
+          actorId?: string;
+        }>(options.previewToken, { secret: previewSecret });
         if (decoded?.type === 'store_preview' && decoded?.storeId === storeRow.id) {
           authorized = true;
         }
@@ -1074,8 +1191,8 @@ export class StoresService {
     if (!authorized && options.authHeader && options.authHeader.startsWith('Bearer ')) {
       try {
         const bearer = options.authHeader.slice(7).trim();
-        const decoded = this.jwtService.verify<{ sub?: string }>(bearer);
-        if (decoded?.sub) {
+        const decoded = this.jwtService.verify<{ sub?: string; tokenType?: string }>(bearer);
+        if (decoded?.tokenType === 'access' && decoded?.sub) {
           authorized = await this.canUserPreviewStore(storeRow.id, decoded.sub);
         }
       } catch {

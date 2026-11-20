@@ -10,7 +10,9 @@ import type {
   UpdateStoreMemberDto,
   PlatformMember,
   AddPlatformMemberDto,
-  UpdatePlatformMemberDto
+  UpdatePlatformMemberDto,
+  UpdatePlatformUserStatusDto,
+  UpdatePlatformUserSubscriptionDto
 } from '@bizx/common-types';
 
 export interface PlatformUserListItem {
@@ -23,8 +25,11 @@ export interface PlatformUserListItem {
   isBusinessOwner: boolean;
   storesCount: number;
   status: 'active' | 'suspended' | 'archived';
+  suspendedUntil?: string | null;
+  suspensionReason?: string | null;
   subscriptionTier: string;
   subscriptionStatus: string;
+  subscriptionExpiresAt?: string | null;
   createdAt: string;
 }
 
@@ -188,11 +193,44 @@ export class RbacModule {
 
   async updatePlatformUserStatus(
     userId: string,
-    status: 'active' | 'suspended' | 'archived'
-  ): Promise<ApiResponse<{ id: string; status: string }>> {
-    return this.client.patch<ApiResponse<{ id: string; status: string }>>(
-      `/platform/users/${userId}/status`,
-      { status }
-    );
+    statusOrDto: 'active' | 'suspended' | 'archived' | UpdatePlatformUserStatusDto
+  ): Promise<
+    ApiResponse<{
+      id: string;
+      status: string;
+      suspendedUntil: string | null;
+      suspensionReason: string | null;
+    }>
+  > {
+    const payload = typeof statusOrDto === 'string' ? { status: statusOrDto } : statusOrDto;
+    return this.client.patch<
+      ApiResponse<{
+        id: string;
+        status: string;
+        suspendedUntil: string | null;
+        suspensionReason: string | null;
+      }>
+    >(`/platform/users/${userId}/status`, payload);
+  }
+
+  async updatePlatformUserSubscription(
+    userId: string,
+    dto: UpdatePlatformUserSubscriptionDto
+  ): Promise<
+    ApiResponse<{
+      id: string;
+      subscriptionTier: string;
+      subscriptionStatus: string;
+      subscriptionExpiresAt: string | null;
+    }>
+  > {
+    return this.client.patch<
+      ApiResponse<{
+        id: string;
+        subscriptionTier: string;
+        subscriptionStatus: string;
+        subscriptionExpiresAt: string | null;
+      }>
+    >(`/platform/users/${userId}/subscription`, dto);
   }
 }

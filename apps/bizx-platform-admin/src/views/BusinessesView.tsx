@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import type { Store } from '@bizx/common-types';
+import { StatusBadge, Button } from '@bizx/ui';
 import { platformApi } from '../lib/api';
 import {
   Building2,
@@ -113,49 +114,47 @@ export const BusinessesView: React.FC<BusinessesViewProps> = ({
     });
   }, [businesses, searchQuery, statusFilter, categoryFilter, sortBy]);
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
+  const getStatusBadge = (b: ExtendedBusiness) => {
+    switch (b.status) {
       case 'draft':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-300">
-            <span className="w-1.5 h-1.5 rounded-full bg-slate-500" />
-            <span>В розробці</span>
-          </span>
+          <StatusBadge tone="slate" dot>
+            В розробці
+          </StatusBadge>
         );
       case 'active':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-            <span>Активний</span>
-          </span>
+          <StatusBadge tone="emerald" dot>
+            Активний
+          </StatusBadge>
         );
       case 'pending':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-            <span>На перевірці</span>
-          </span>
+          <StatusBadge tone="amber" dot>
+            На перевірці
+          </StatusBadge>
         );
       case 'suspended':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
-            <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-            <span>Призупинено</span>
-          </span>
+          <div className="inline-flex flex-col items-start gap-0.5">
+            <StatusBadge tone="rose" dot>
+              Призупинено
+            </StatusBadge>
+            <span className="text-[10px] text-rose-600/80 font-medium pl-1 whitespace-nowrap">
+              {b.suspendedUntil
+                ? `до ${new Date(b.suspendedUntil).toLocaleDateString('uk-UA')}`
+                : 'безстроково'}
+            </span>
+          </div>
         );
       case 'archived':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-500 border border-slate-200">
-            <Archive className="w-3 h-3" />
-            <span>В архіві</span>
-          </span>
+          <StatusBadge tone="slate" icon={<Archive className="w-3 h-3" />}>
+            В архіві
+          </StatusBadge>
         );
       default:
-        return (
-          <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-700">
-            {status}
-          </span>
-        );
+        return <StatusBadge tone="slate">{b.status}</StatusBadge>;
     }
   };
 
@@ -175,15 +174,16 @@ export const BusinessesView: React.FC<BusinessesViewProps> = ({
           </p>
         </div>
 
-        <button
-          type="button"
+        <Button
+          variant="outline"
+          size="sm"
           onClick={onRefresh}
           disabled={isLoading}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 hover:border-slate-300 rounded-lg text-xs font-bold text-slate-700 transition-colors shadow-sm self-start sm:self-auto"
+          className="self-start sm:self-auto"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
           <span>Оновити дані</span>
-        </button>
+        </Button>
       </div>
 
       {/* Pending shortcut banner */}
@@ -210,7 +210,6 @@ export const BusinessesView: React.FC<BusinessesViewProps> = ({
 
       {/* Filter, Sort & Search Bar */}
       <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm flex flex-col lg:flex-row items-center gap-3">
-        {/* Search Input */}
         <div className="relative flex-1 w-full">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
@@ -222,7 +221,6 @@ export const BusinessesView: React.FC<BusinessesViewProps> = ({
           />
         </div>
 
-        {/* Filters & Sorting */}
         <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
           <select
             value={statusFilter}
@@ -271,19 +269,19 @@ export const BusinessesView: React.FC<BusinessesViewProps> = ({
         </div>
       </div>
 
-      {/* Table */}
+      {/* Table with Stable Column Widths (prevents badge shifting on status change) */}
       <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
+          <table className="w-full text-left text-xs table-fixed min-w-[880px]">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50/70 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                <th className="py-3 px-4">Торгова точка</th>
-                <th className="py-3 px-4">Категорія</th>
-                <th className="py-3 px-4">Власник</th>
-                <th className="py-3 px-4">Рейтинг / Страйки</th>
-                <th className="py-3 px-4">Статус</th>
-                <th className="py-3 px-4">Реєстрація</th>
-                <th className="py-3 px-4 text-right">Дії</th>
+                <th className="py-3 px-4 w-[25%]">Торгова точка</th>
+                <th className="py-3 px-4 w-[14%]">Категорія</th>
+                <th className="py-3 px-4 w-[17%]">Власник</th>
+                <th className="py-3 px-4 w-[11%]">Рейтинг</th>
+                <th className="py-3 px-4 w-[13%]">Статус</th>
+                <th className="py-3 px-4 w-[9%]">Дата</th>
+                <th className="py-3 px-4 w-[11%] text-right">Дії</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -303,10 +301,10 @@ export const BusinessesView: React.FC<BusinessesViewProps> = ({
                   const strikes = b.activeStrikesCount ?? 0;
 
                   return (
-                    <tr key={b.id} className="hover:bg-slate-50/80 transition-colors group">
+                    <tr key={b.id} className="hover:bg-slate-50/80 transition-colors">
                       {/* Store Title */}
-                      <td className="py-3.5 px-4 font-medium">
-                        <div className="flex items-center gap-3">
+                      <td className="py-3.5 px-4 font-medium align-middle">
+                        <div className="flex items-center gap-3 min-w-0">
                           <div className="w-9 h-9 rounded-xl bg-slate-900 text-white font-bold flex items-center justify-center text-xs shrink-0 shadow-sm overflow-hidden">
                             {logoSrc ? (
                               <img
@@ -318,11 +316,9 @@ export const BusinessesView: React.FC<BusinessesViewProps> = ({
                               b.name.slice(0, 2).toUpperCase()
                             )}
                           </div>
-                          <div>
-                            <div className="font-black text-slate-900 text-xs flex items-center gap-1.5">
-                              <span>{b.name}</span>
-                            </div>
-                            <div className="text-[10px] text-slate-400 font-mono">
+                          <div className="min-w-0">
+                            <div className="font-black text-slate-900 text-xs truncate">{b.name}</div>
+                            <div className="text-[10px] text-slate-400 font-mono truncate">
                               /{b.slug}
                               {typeof b.productsCount === 'number' && ` · ${b.productsCount} тов.`}
                             </div>
@@ -331,75 +327,74 @@ export const BusinessesView: React.FC<BusinessesViewProps> = ({
                       </td>
 
                       {/* Category */}
-                      <td className="py-3.5 px-4 text-slate-600 font-medium">
-                        <span className="inline-block px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-[11px]">
+                      <td className="py-3.5 px-4 text-slate-600 font-medium align-middle">
+                        <span className="inline-block px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-[11px] truncate max-w-full">
                           {b.categoryName || 'Торгівля'}
                         </span>
                       </td>
 
                       {/* Owner */}
-                      <td className="py-3.5 px-4">
-                        <div className="text-slate-900 font-semibold text-xs">
+                      <td className="py-3.5 px-4 align-middle">
+                        <div className="text-slate-900 font-semibold text-xs truncate">
                           {b.ownerName || 'Партнер BizX'}
                         </div>
                         {b.ownerEmail && (
-                          <div className="text-[10px] text-slate-400 font-mono truncate max-w-[150px]">
+                          <div className="text-[10px] text-slate-400 font-mono truncate">
                             {b.ownerEmail}
                           </div>
                         )}
                       </td>
 
                       {/* Rating & Strikes */}
-                      <td className="py-3.5 px-4">
-                        <div className="flex items-center gap-2">
+                      <td className="py-3.5 px-4 align-middle whitespace-nowrap">
+                        <div className="flex items-center gap-1.5">
                           <span className="inline-flex items-center gap-1 text-xs font-bold text-slate-700">
-                            <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-400" />
+                            <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-400 shrink-0" />
                             <span>{(b.ratingAvg ?? 0).toFixed(1)}</span>
                           </span>
                           {strikes > 0 && (
-                            <span
-                              className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold border ${
-                                strikes >= 2
-                                  ? 'bg-rose-50 text-rose-700 border-rose-200'
-                                  : 'bg-amber-50 text-amber-700 border-amber-200'
-                              }`}
+                            <StatusBadge
+                              tone={strikes >= 2 ? 'rose' : 'amber'}
+                              size="xs"
+                              icon={<Zap className="w-2.5 h-2.5" />}
                             >
-                              <Zap className="w-2.5 h-2.5" />
-                              <span>{strikes}/3</span>
-                            </span>
+                              {strikes}/3
+                            </StatusBadge>
                           )}
                         </div>
                       </td>
 
                       {/* Status */}
-                      <td className="py-3.5 px-4">{getStatusBadge(b.status)}</td>
+                      <td className="py-3.5 px-4 align-middle whitespace-nowrap">
+                        {getStatusBadge(b)}
+                      </td>
 
                       {/* Created At */}
-                      <td className="py-3.5 px-4 text-slate-500 font-mono text-[11px]">
+                      <td className="py-3.5 px-4 text-slate-500 font-mono text-[11px] align-middle whitespace-nowrap">
                         {b.createdAt ? new Date(b.createdAt).toLocaleDateString('uk-UA') : '—'}
                       </td>
 
                       {/* Actions */}
-                      <td className="py-3.5 px-4 text-right">
+                      <td className="py-3.5 px-4 text-right align-middle whitespace-nowrap">
                         <div className="inline-flex items-center gap-1.5">
                           {onPreviewStore && (
-                            <button
-                              type="button"
+                            <Button
+                              variant="outline"
+                              size="icon"
                               title="Попередній перегляд вітрини"
                               onClick={() => onPreviewStore(b)}
-                              className="inline-flex items-center justify-center p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-blue-50 hover:border-blue-300 text-slate-600 hover:text-blue-700 transition-all"
                             >
                               <Eye className="w-3.5 h-3.5" />
-                            </button>
+                            </Button>
                           )}
-                          <button
-                            type="button"
+                          <Button
+                            variant="neutral"
+                            size="icon"
+                            title="Керування закладом"
                             onClick={() => onSelectBusiness(b)}
-                            className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-900 hover:text-white hover:border-slate-900 text-slate-700 font-bold text-xs transition-all shadow-sm"
                           >
                             <SlidersHorizontal className="w-3.5 h-3.5" />
-                            <span>Керування</span>
-                          </button>
+                          </Button>
                         </div>
                       </td>
                     </tr>

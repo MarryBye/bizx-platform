@@ -156,11 +156,11 @@ export const StoreSettingsView: React.FC<{ isReadOnly?: boolean; canEdit?: boole
     setStatusMessage(null);
 
     const ok = await updateStore({
-      name,
-      description,
-      address,
-      phone,
-      email
+      name: name.trim(),
+      description: description.trim() || undefined,
+      address: address.trim() || undefined,
+      phone: phone.trim() || undefined,
+      email: email.trim() || undefined
     });
 
     if (ok) {
@@ -168,6 +168,28 @@ export const StoreSettingsView: React.FC<{ isReadOnly?: boolean; canEdit?: boole
     } else {
       setStatusMessage({ text: 'Помилка збереження даних магазину', isError: true });
     }
+  };
+
+  const handleOpenStorefront = async () => {
+    if (!activeStore) return;
+    if (activeStore.status === 'active') {
+      window.open(`http://localhost:3100/store/${activeStore.slug}`, '_blank', 'noopener,noreferrer');
+      return;
+    }
+    try {
+      const res = await api.stores.createPreviewToken(activeStore.id);
+      if (res.success && res.data?.previewToken) {
+        window.open(
+          `http://localhost:3100/store/${activeStore.slug}?preview=${encodeURIComponent(res.data.previewToken)}`,
+          '_blank',
+          'noopener,noreferrer'
+        );
+        return;
+      }
+    } catch {
+      // fallback
+    }
+    window.open(`http://localhost:3100/store/${activeStore.slug}`, '_blank', 'noopener,noreferrer');
   };
 
   const handleSaveDomain = async (e: React.FormEvent) => {
@@ -426,15 +448,22 @@ export const StoreSettingsView: React.FC<{ isReadOnly?: boolean; canEdit?: boole
                   : 'Веб-вітрина та власний домен'}
               </span>
             </span>
-            <a
-              href={`http://localhost:3100/store/${activeStore.slug}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-600 hover:text-blue-800"
+            <button
+              type="button"
+              onClick={() => void handleOpenStorefront()}
+              className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-600 hover:text-blue-800 cursor-pointer"
             >
-              <span>{locale === 'en' ? 'Open storefront' : 'Відкрити веб-сайт закладу'}</span>
+              <span>
+                {activeStore.status === 'active'
+                  ? locale === 'en'
+                    ? 'Open storefront'
+                    : 'Відкрити веб-сайт закладу'
+                  : locale === 'en'
+                    ? 'Preview storefront'
+                    : 'Попередній перегляд вітрини'}
+              </span>
               <ExternalLink className="w-3.5 h-3.5" />
-            </a>
+            </button>
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">

@@ -1,6 +1,15 @@
 'use client';
 
-import { AuthCard, LanguageSelector, PhoneInput } from '@bizx/ui';
+import {
+  AuthCard,
+  LanguageSelector,
+  PhoneInput,
+  Modal,
+  ConfirmModal,
+  CountBadge,
+  AlertBanner,
+  Button
+} from '@bizx/ui';
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
@@ -9,13 +18,12 @@ import { SiteHeader } from '../components/SiteHeader';
 import { AccountInbox } from './components/AccountInbox';
 import { useTranslation } from '../hooks/useTranslation';
 import { translateApiError, type SupportedLocale } from '@bizx/utils';
-import {
-  formatCompactCount,
-  type UserProfile,
-  type Store,
-  type SubscriptionPlan,
-  type UserSubscriptionDetails,
-  type SubscriptionTier
+import type {
+  UserProfile,
+  Store,
+  SubscriptionPlan,
+  UserSubscriptionDetails,
+  SubscriptionTier
 } from '@bizx/common-types';
 import {
   User,
@@ -33,8 +41,7 @@ import {
   CreditCard,
   Store as StoreIcon,
   Mail,
-  Eye,
-  X
+  Eye
 } from 'lucide-react';
 
 type AccountTab = 'profile' | 'inbox' | 'businesses' | 'subscriptions' | 'security' | 'privacy' | 'integrations';
@@ -561,14 +568,8 @@ export default function AccountPage() {
                           </div>
                         </div>
                       </div>
-                      {item.id === 'inbox' && inboxUnreadCount > 0 && (
-                        <span
-                          className={`shrink-0 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-black ${
-                            isActive ? 'bg-white text-slate-900' : 'bg-blue-600 text-white'
-                          }`}
-                        >
-                          {formatCompactCount(inboxUnreadCount)}
-                        </span>
+                      {item.id === 'inbox' && (
+                        <CountBadge count={inboxUnreadCount} tone="blue" inverted={isActive} />
                       )}
                       {showBusinessAlert && (
                         <span className="shrink-0 px-1.5 py-0.5 rounded-full text-[10px] font-black bg-amber-500 text-white">
@@ -1058,7 +1059,9 @@ export default function AccountPage() {
                       {allPlans
                         .filter((p) => p.target === 'business')
                         .map((plan) => {
-                          const isCurrent = user?.subscriptionTier === plan.id;
+                          const isCurrent =
+                            user?.subscriptionTier === plan.id &&
+                            (plan.id === 'free' || user?.subscriptionStatus === 'active');
                           return (
                             <div
                               key={plan.id}
@@ -1323,250 +1326,178 @@ export default function AccountPage() {
           </div>
         )}
 
-      {/* Modal: Create Business */}
-      {showCreateStoreModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
-          <div className="w-full max-w-lg bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden">
-            <div className="px-6 py-4 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="px-2 py-0.5 rounded bg-slate-900 text-white font-extrabold text-[11px] uppercase tracking-wider">
-                  BIZX BUSINESS
-                </span>
-                <span className="text-xs font-bold text-slate-700">Створення нового закладу</span>
+      {/* Modal: Create Business — Unified Light Modal */}
+      <Modal
+        isOpen={showCreateStoreModal}
+        onClose={() => setShowCreateStoreModal(false)}
+        size="lg"
+        icon={<StoreIcon className="w-4 h-4" />}
+        title="Створення нового закладу"
+        subtitle="BIZX BUSINESS"
+      >
+        <form onSubmit={handleCreateStore} className="space-y-4">
+          {createStoreError && <AlertBanner tone="danger">{createStoreError}</AlertBanner>}
+
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-slate-700">Назва закладу / бізнесу *</label>
+            <input
+              type="text"
+              required
+              value={newStoreName}
+              onChange={(e) => {
+                const val = e.target.value;
+                setNewStoreName(val);
+                if (!newStoreSlug || newStoreSlug === newStoreName.toLowerCase().replace(/[^a-z0-9]+/g, '-')) {
+                  setNewStoreSlug(val.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''));
+                }
+              }}
+              placeholder="Кав'ярня 'Аромат'"
+              className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:border-slate-900"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-slate-700">Адреса сторінки *</label>
+            <input
+              type="text"
+              required
+              pattern="[a-z0-9-]+"
+              value={newStoreSlug}
+              onChange={(e) => setNewStoreSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+              placeholder="aromat-cafe"
+              className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:border-slate-900 font-mono"
+            />
+            <p className="text-[10px] text-slate-400">Тільки малі латинські літери, цифри та дефіси</p>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-slate-700">Короткий опис</label>
+            <textarea
+              rows={2}
+              value={newStoreDesc}
+              onChange={(e) => setNewStoreDesc(e.target.value)}
+              placeholder="Свіжообсмажена кава, випічка та десерти"
+              className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:border-slate-900"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-slate-700">{t('account.storePhoneLabel')}</label>
+              <PhoneInput
+                value={newStorePhone}
+                onChange={setNewStorePhone}
+                locale={locale}
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-slate-700">Контактний Email</label>
+              <input
+                type="email"
+                value={newStoreEmail}
+                onChange={(e) => setNewStoreEmail(e.target.value)}
+                placeholder="contact@business.ua"
+                className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:border-slate-900"
+              />
+            </div>
+          </div>
+
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-[11px] text-slate-600">
+            Створений бізнес спочатку буде збережено в статусі чернетки <strong>«В розробці»</strong>. Ви зможете налаштувати каталог та відправити заклад на модерацію BizX у будь-який зручний момент.
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+            <Button variant="outline" onClick={() => setShowCreateStoreModal(false)}>
+              Скасувати
+            </Button>
+            <Button type="submit" variant="primary" disabled={isCreatingStore}>
+              {isCreatingStore ? 'Створення...' : 'Зареєструвати заклад'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Modal: Upgrade Subscription — Unified Light ConfirmModal */}
+      <ConfirmModal
+        isOpen={Boolean(selectedPlanForUpgrade)}
+        onClose={() => setSelectedPlanForUpgrade(null)}
+        onConfirm={handleConfirmSubscriptionChange}
+        nested={false}
+        tone="info"
+        icon={<CreditCard className="w-4 h-4" />}
+        title="Зміна тарифного плану"
+        subtitle="BIZX PAY"
+        confirmLabel="Підтвердити зміну тарифу"
+        cancelLabel="Скасувати"
+        confirmVariant="primary"
+        isLoading={isActivatingSub}
+      >
+        {selectedPlanForUpgrade && (
+          <>
+            <div className="border border-slate-200 rounded-xl p-4 bg-slate-50/50 space-y-2 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-slate-600">Новий тариф:</span>
+                <span className="font-black text-slate-900">{selectedPlanForUpgrade.name}</span>
               </div>
-              <button
-                type="button"
-                onClick={() => setShowCreateStoreModal(false)}
-                className="text-slate-400 hover:text-slate-700 text-sm font-bold p-1"
-              >
-                ✕
-              </button>
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-slate-600">Вартість:</span>
+                <span className="font-black text-slate-900">{selectedPlanForUpgrade.priceUah} ₴ / міс</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-slate-600">Термін:</span>
+                <span className="font-semibold text-slate-700">30 днів</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-slate-600">Ліміт закладів:</span>
+                <span className="font-semibold text-slate-700">До {selectedPlanForUpgrade.maxStores} закладів</span>
+              </div>
             </div>
 
-            <form onSubmit={handleCreateStore} className="p-6 space-y-4">
-              {createStoreError && (
-                <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg">
-                  {createStoreError}
-                </div>
+            <AlertBanner tone="info">
+              Підписку буде активовано одразу після підтвердження на 30 днів.
+            </AlertBanner>
+          </>
+        )}
+      </ConfirmModal>
+
+      {/* Modal: Confirm Suspend Store — Unified Light ConfirmModal */}
+      <ConfirmModal
+        isOpen={Boolean(storeToSuspend)}
+        onClose={() => setStoreToSuspend(null)}
+        onConfirm={handleConfirmSuspendStore}
+        nested={false}
+        tone="danger"
+        icon={<AlertCircle className="w-4 h-4" />}
+        title={locale === 'en' ? 'Suspend store?' : 'Призупинити роботу закладу?'}
+        subtitle={storeToSuspend?.name}
+        confirmLabel={t('subscriptions.suspendStore')}
+        cancelLabel={t('common.cancel')}
+        confirmVariant="destructive"
+        isLoading={isSuspendingStore}
+      >
+        {storeToSuspend && (
+          <>
+            <p className="leading-relaxed text-slate-700">
+              {locale === 'en' ? (
+                <>
+                  You are about to pause <strong>{storeToSuspend.name}</strong>. It will be
+                  immediately hidden from customers.
+                </>
+              ) : (
+                <>
+                  Ви збираєтесь призупинити роботу закладу <strong>«{storeToSuspend.name}»</strong>.
+                  Він буде миттєво прихований від покупців.
+                </>
               )}
-
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700">Назва закладу / бізнесу *</label>
-                <input
-                  type="text"
-                  required
-                  value={newStoreName}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setNewStoreName(val);
-                    if (!newStoreSlug || newStoreSlug === newStoreName.toLowerCase().replace(/[^a-z0-9]+/g, '-')) {
-                      setNewStoreSlug(val.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''));
-                    }
-                  }}
-                  placeholder="Кав'ярня 'Аромат'"
-                  className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:border-slate-900"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700">URL-ідентифікатор (Slug) *</label>
-                <input
-                  type="text"
-                  required
-                  pattern="[a-z0-9-]+"
-                  value={newStoreSlug}
-                  onChange={(e) => setNewStoreSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
-                  placeholder="aromat-cafe"
-                  className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:border-slate-900 font-mono"
-                />
-                <p className="text-[10px] text-slate-400">Тільки малі латинські літери, цифри та дефіси</p>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700">Короткий опис</label>
-                <textarea
-                  rows={2}
-                  value={newStoreDesc}
-                  onChange={(e) => setNewStoreDesc(e.target.value)}
-                  placeholder="Свіжообсмажена кава, випічка та десерти"
-                  className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:border-slate-900"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700">{t('account.storePhoneLabel')}</label>
-                  <PhoneInput
-                    value={newStorePhone}
-                    onChange={setNewStorePhone}
-                    locale={locale}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700">Контактний Email</label>
-                  <input
-                    type="email"
-                    value={newStoreEmail}
-                    onChange={(e) => setNewStoreEmail(e.target.value)}
-                    placeholder="contact@business.ua"
-                    className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:border-slate-900"
-                  />
-                </div>
-              </div>
-
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-[11px] text-slate-600">
-                Створений бізнес спочатку буде збережено в статусі чернетки <strong>«В розробці»</strong>. Ви зможете налаштувати каталог та відправити заклад на модерацію BizX у будь-який зручний момент.
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowCreateStoreModal(false)}
-                  className="px-3 py-2 border border-slate-200 text-xs font-semibold text-slate-700 rounded-lg hover:bg-slate-50"
-                >
-                  Скасувати
-                </button>
-                <button
-                  type="submit"
-                  disabled={isCreatingStore}
-                  className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-lg disabled:opacity-50 transition-colors shadow-sm"
-                >
-                  {isCreatingStore ? 'Створення...' : 'Зареєструвати заклад'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Modal: Upgrade Subscription */}
-      {selectedPlanForUpgrade && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
-          <div className="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden">
-            <div className="px-6 py-4 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="px-2 py-0.5 rounded bg-slate-900 text-white font-black text-[10px] tracking-wider uppercase">
-                  BIZX PAY
-                </span>
-                <span className="text-xs font-bold text-slate-700">Зміна тарифного плану</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSelectedPlanForUpgrade(null)}
-                className="text-slate-400 hover:text-slate-700 text-sm font-bold p-1"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="p-6 space-y-4">
-              <div className="border border-slate-200 rounded-xl p-4 bg-slate-50/50 space-y-2 text-xs">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-slate-600">Новий тариф:</span>
-                  <span className="font-black text-slate-900">{selectedPlanForUpgrade.name}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-slate-600">Вартість:</span>
-                  <span className="font-black text-slate-900">{selectedPlanForUpgrade.priceUah} ₴ / міс</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-slate-600">Термін:</span>
-                  <span className="font-semibold text-slate-700">30 днів (тестова активація)</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-slate-600">Ліміт закладів:</span>
-                  <span className="font-semibold text-slate-700">До {selectedPlanForUpgrade.maxStores} закладів</span>
-                </div>
-              </div>
-
-              <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-[11px] text-blue-900 leading-relaxed">
-                ℹ️ <strong>Тестова оплата:</strong> Справжні кошти не знімаються. Підписку буде миттєво активовано на 30 днів.
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setSelectedPlanForUpgrade(null)}
-                  className="px-3 py-2 border border-slate-200 text-xs font-semibold text-slate-700 rounded-lg hover:bg-slate-50"
-                >
-                  Скасувати
-                </button>
-                <button
-                  type="button"
-                  disabled={isActivatingSub}
-                  onClick={handleConfirmSubscriptionChange}
-                  className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-lg disabled:opacity-50 transition-colors shadow-sm"
-                >
-                  {isActivatingSub ? 'Активація...' : 'Підтвердити зміну тарифу'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal: Confirm Suspend Store */}
-      {storeToSuspend && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
-          <div className="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden">
-            <div className="px-6 py-4 bg-red-50 border-b border-red-100 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
-                <span className="text-xs font-bold text-red-900">
-                  {locale === 'en' ? 'Suspend store?' : 'Призупинити роботу закладу?'}
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setStoreToSuspend(null)}
-                className="text-red-400 hover:text-red-700 p-1"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <div className="p-6 space-y-4 text-xs text-slate-700">
-              <p className="leading-relaxed">
-                {locale === 'en' ? (
-                  <>
-                    You are about to pause <strong>{storeToSuspend.name}</strong>. It will be
-                    immediately hidden from customers.
-                  </>
-                ) : (
-                  <>
-                    Ви збираєтесь призупинити роботу закладу <strong>«{storeToSuspend.name}»</strong>.
-                    Він буде миттєво прихований від покупців.
-                  </>
-                )}
-              </p>
-              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-900 leading-relaxed">
-                <strong>{locale === 'en' ? 'Important:' : 'Важливо:'}</strong>{' '}
-                {locale === 'en'
-                  ? 'You cannot reactivate the store yourself. To turn it back on later, it must be submitted for BizX moderation review.'
-                  : 'Самостійно повернути заклад в активний стан неможливо — для повторного запуску заклад обов’язково проходитиме перевірку модераторами BizX.'}
-              </div>
-              <div className="flex items-center justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setStoreToSuspend(null)}
-                  className="px-3.5 py-2 border border-slate-200 rounded-lg font-semibold text-slate-700 hover:bg-slate-50"
-                >
-                  {t('common.cancel')}
-                </button>
-                <button
-                  type="button"
-                  disabled={isSuspendingStore}
-                  onClick={handleConfirmSuspendStore}
-                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold disabled:opacity-50 transition-colors"
-                >
-                  {isSuspendingStore
-                    ? t('common.saving')
-                    : t('subscriptions.suspendStore')}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+            </p>
+            <AlertBanner tone="warning" title={locale === 'en' ? 'Important' : 'Важливо'}>
+              {locale === 'en'
+                ? 'You cannot reactivate the store yourself. To turn it back on later, it must be submitted for BizX moderation review.'
+                : 'Самостійно повернути заклад в активний стан неможливо — для повторного запуску заклад обов’язково проходитиме перевірку модераторами BizX.'}
+            </AlertBanner>
+          </>
+        )}
+      </ConfirmModal>
 
       </main>
 

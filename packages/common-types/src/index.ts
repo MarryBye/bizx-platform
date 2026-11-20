@@ -22,7 +22,7 @@ export type SubscriptionStatus = z.infer<typeof subscriptionStatusSchema>;
 
 export const subscribeDtoSchema = z.object({
   tier: subscriptionTierSchema,
-  periodDays: z.number().int().positive().default(30).optional()
+  periodDays: z.number().int().min(1).max(365).default(30).optional()
 });
 export type SubscribeDto = z.infer<typeof subscribeDtoSchema>;
 
@@ -192,12 +192,15 @@ export const PLATFORM_PERMISSIONS: PermissionDefinition[] = [
   { id: 201, code: 'platform.stores.read', scope: 'platform', category: 'platform_stores', action: 'read', ownerOnly: false },
   { id: 202, code: 'platform.stores.moderate', scope: 'platform', category: 'platform_stores', action: 'manage', ownerOnly: false },
   { id: 205, code: 'platform.stores.approve', scope: 'platform', category: 'platform_stores', action: 'manage', ownerOnly: false },
+  { id: 206, code: 'platform.stores.unblock', scope: 'platform', category: 'platform_stores', action: 'manage', ownerOnly: false },
   { id: 203, code: 'platform.categories.manage', scope: 'platform', category: 'platform_stores', action: 'edit', ownerOnly: false },
   { id: 204, code: 'platform.stores.archive', scope: 'platform', category: 'platform_stores', action: 'archive', ownerOnly: false },
   // Користувачі BizX
   { id: 211, code: 'platform.users.read', scope: 'platform', category: 'platform_users', action: 'read', ownerOnly: false },
   { id: 212, code: 'platform.users.edit', scope: 'platform', category: 'platform_users', action: 'edit', ownerOnly: false },
   { id: 213, code: 'platform.users.archive', scope: 'platform', category: 'platform_users', action: 'archive', ownerOnly: false },
+  { id: 214, code: 'platform.users.unblock', scope: 'platform', category: 'platform_users', action: 'manage', ownerOnly: false },
+  { id: 215, code: 'platform.users.subscriptions', scope: 'platform', category: 'platform_users', action: 'manage', ownerOnly: false },
   // Аналітика платформи
   { id: 221, code: 'platform.analytics.read', scope: 'platform', category: 'platform_analytics', action: 'read', ownerOnly: false },
   { id: 222, code: 'platform.analytics.export', scope: 'platform', category: 'platform_analytics', action: 'export', ownerOnly: false },
@@ -214,7 +217,8 @@ export const PLATFORM_PERMISSIONS: PermissionDefinition[] = [
   // Скарги та арбітраж
   { id: 251, code: 'platform.disputes.read', scope: 'platform', category: 'platform_disputes', action: 'read', ownerOnly: false },
   { id: 252, code: 'platform.disputes.resolve', scope: 'platform', category: 'platform_disputes', action: 'manage', ownerOnly: false },
-  { id: 253, code: 'platform.strikes.revoke', scope: 'platform', category: 'platform_disputes', action: 'manage', ownerOnly: false }
+  { id: 253, code: 'platform.strikes.revoke', scope: 'platform', category: 'platform_disputes', action: 'manage', ownerOnly: false },
+  { id: 254, code: 'platform.strikes.issue', scope: 'platform', category: 'platform_disputes', action: 'manage', ownerOnly: false }
 ];
 
 export const ALL_PERMISSIONS: PermissionDefinition[] = [
@@ -251,11 +255,14 @@ export type PlatformPermissionCode =
   | 'platform.stores.read'
   | 'platform.stores.moderate'
   | 'platform.stores.approve'
+  | 'platform.stores.unblock'
   | 'platform.categories.manage'
   | 'platform.stores.archive'
   | 'platform.users.read'
   | 'platform.users.edit'
   | 'platform.users.archive'
+  | 'platform.users.unblock'
+  | 'platform.users.subscriptions'
   | 'platform.analytics.read'
   | 'platform.analytics.export'
   | 'platform.staff.read'
@@ -268,7 +275,8 @@ export type PlatformPermissionCode =
   | 'platform.roles.archive'
   | 'platform.disputes.read'
   | 'platform.disputes.resolve'
-  | 'platform.strikes.revoke';
+  | 'platform.strikes.revoke'
+  | 'platform.strikes.issue';
 
 export const OWNER_ROLE_PRIORITY = 10000;
 
@@ -585,7 +593,9 @@ export const createStoreDtoSchema = z.object({
 export type CreateStoreDto = z.infer<typeof createStoreDtoSchema>;
 
 export const updateStoreDtoSchema = createStoreDtoSchema.partial().extend({
-  status: storeStatusSchema.optional()
+  status: storeStatusSchema.optional(),
+  suspensionDays: z.number().int().min(1).max(3650).nullable().optional(),
+  suspensionReason: z.string().trim().max(1500).nullable().optional()
 });
 export type UpdateStoreDto = z.infer<typeof updateStoreDtoSchema>;
 
@@ -638,15 +648,26 @@ export const productSchema = z.object({
 });
 export type Product = z.infer<typeof productSchema>;
 
+const safeMediaUrlSchema = z
+  .string()
+  .trim()
+  .refine(
+    (v) =>
+      v === '' ||
+      v.startsWith('/storage/') ||
+      /^https?:\/\/[^\s]+$/i.test(v),
+    { message: 'Недопустимий формат посилання' }
+  );
+
 export const createProductDtoSchema = z.object({
-  name: z.string().min(2, 'Название товара должно быть не короче 2 символов'),
-  categoryId: z.string().uuid().optional(),
-  sku: z.string().optional(),
-  description: z.string().optional(),
-  price: z.number().int().positive('Цена должна быть больше нуля (в копейках)'),
-  oldPrice: z.number().int().positive().optional(),
-  imageUrl: z.string().optional(),
-  inventoryCount: z.number().int().nonnegative().optional().default(0),
+  name: z.string().trim().min(2, 'Название товара должно быть не короче 2 символов'),
+  categoryId: z.string().uuid().nullable().optional(),
+  sku: z.string().trim().max(120).nullable().optional(),
+  description: z.string().trim().max(4000).nullable().optional(),
+  price: z.number().int().positive('Цена должна быть больше нуля (в копейках)').max(2_000_000_000),
+  oldPrice: z.number().int().positive().max(2_000_000_000).nullable().optional(),
+  imageUrl: safeMediaUrlSchema.nullable().optional(),
+  inventoryCount: z.number().int().nonnegative().max(10_000_000).optional().default(0),
   isActive: z.boolean().optional().default(true)
 });
 export type CreateProductDto = z.infer<typeof createProductDtoSchema>;
@@ -658,7 +679,10 @@ export const productFilterQuerySchema = z.object({
   storeId: z.string().uuid().optional(),
   categoryId: z.string().uuid().optional(),
   search: z.string().optional(),
-  isActive: z.coerce.boolean().optional(),
+  isActive: z.preprocess(
+    (v) => (v === 'true' || v === true ? true : v === 'false' || v === false ? false : undefined),
+    z.boolean().optional()
+  ),
   page: z.coerce.number().int().positive().default(1),
   pageSize: z.coerce.number().int().positive().max(100).default(20)
 });
@@ -682,18 +706,18 @@ export type PaymentStatus = z.infer<typeof paymentStatusSchema>;
 
 export const createOrderItemDtoSchema = z.object({
   productId: z.string().uuid('Некорректный ID товара'),
-  quantity: z.number().int().positive('Количество должно быть не менее 1')
+  quantity: z.number().int().positive('Количество должно быть не менее 1').max(10_000)
 });
 export type CreateOrderItemDto = z.infer<typeof createOrderItemDtoSchema>;
 
 export const createOrderDtoSchema = z.object({
   storeId: z.string().uuid('Некорректный ID магазина'),
-  contactName: z.string().min(2, 'Укажите контактное имя'),
-  contactPhone: z.string().min(5, 'Укажите контактный телефон'),
-  deliveryAddress: z.string().optional(),
+  contactName: z.string().trim().min(2, 'Укажите контактное имя').max(200),
+  contactPhone: z.string().trim().min(5, 'Укажите контактный телефон').max(40),
+  deliveryAddress: z.string().trim().max(500).optional(),
   paymentMethod: z.enum(['card', 'cash', 'online']).default('card'),
-  notes: z.string().optional(),
-  items: z.array(createOrderItemDtoSchema).min(1, 'Корзина не может быть пустой')
+  notes: z.string().trim().max(2000).optional(),
+  items: z.array(createOrderItemDtoSchema).min(1, 'Корзина не может быть пустой').max(100)
 });
 export type CreateOrderDto = z.infer<typeof createOrderDtoSchema>;
 
@@ -745,13 +769,17 @@ export type OrderResponse = z.infer<typeof orderResponseSchema>;
 export const analyticsPeriodSchema = z.enum(['day', 'week', 'month', 'year', 'all']);
 export type AnalyticsPeriod = z.infer<typeof analyticsPeriodSchema>;
 
+const validDateStringSchema = z
+  .string()
+  .refine((s) => !Number.isNaN(Date.parse(s)), { message: 'Некоректний формат дати' });
+
 export const analyticsQuerySchema = z.object({
   period: analyticsPeriodSchema.default('month'),
-  startDate: z.string().optional(),
-  endDate: z.string().optional(),
+  startDate: validDateStringSchema.optional(),
+  endDate: validDateStringSchema.optional(),
   status: orderStatusSchema.optional(),
-  minAmount: z.coerce.number().int().nonnegative().optional(),
-  maxAmount: z.coerce.number().int().nonnegative().optional(),
+  minAmount: z.coerce.number().int().nonnegative().max(2_000_000_000).optional(),
+  maxAmount: z.coerce.number().int().nonnegative().max(2_000_000_000).optional(),
   storeId: z.string().uuid().optional(),
   topLimit: z.coerce.number().int().min(1).max(500).optional()
 });
@@ -809,8 +837,8 @@ export interface PlatformAnalytics {
  */
 export const presignedUploadDtoSchema = z.object({
   folder: z.enum(['avatars', 'stores/logos', 'stores/banners', 'products']),
-  fileName: z.string().min(1, 'Имя файла обязательно'),
-  contentType: z.enum(['image/jpeg', 'image/png', 'image/webp', 'image/svg+xml', 'image/gif'])
+  fileName: z.string().trim().min(1, 'Имя файла обязательно').max(255),
+  contentType: z.enum(['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
 });
 export type PresignedUploadDto = z.infer<typeof presignedUploadDtoSchema>;
 
@@ -862,10 +890,16 @@ export function formatCompactCount(count: number): string {
 }
 
 export const orderMessageAttachmentSchema = z.object({
-  url: z.string().min(1),
-  fileName: z.string().min(1).max(255),
-  mimeType: z.string().min(1).max(120),
-  size: z.number().int().nonnegative().optional()
+  url: z
+    .string()
+    .trim()
+    .min(1)
+    .refine((v) => v.startsWith('/storage/') || /^https?:\/\/[^\s]+$/i.test(v), {
+      message: 'Недопустиме посилання на вкладення'
+    }),
+  fileName: z.string().trim().min(1).max(255),
+  mimeType: z.string().trim().min(1).max(120),
+  size: z.number().int().nonnegative().max(15 * 1024 * 1024).optional()
 });
 export type OrderMessageAttachmentDto = z.infer<typeof orderMessageAttachmentSchema>;
 
@@ -948,11 +982,11 @@ export type EscalateDisputeDto = z.infer<typeof escalateDisputeDtoSchema>;
 
 export const resolveDisputeDtoSchema = z.object({
   decision: z.enum(['business', 'customer']),
-  resolutionNote: z.string().min(3, 'Вкажіть обґрунтування рішення').max(2000),
+  resolutionNote: z.string().trim().min(3, 'Вкажіть обґрунтування рішення').max(2000),
   issueStrike: z.boolean().optional(),
-  strikeReason: z.string().max(1000).optional(),
+  strikeReason: z.string().trim().max(1000).optional(),
   /** Кількість днів блокування при 3-му страйку (null або 0 = до ручного зняття) */
-  suspensionDays: z.number().int().min(1).max(365).nullable().optional()
+  suspensionDays: z.number().int().min(1).max(3650).nullable().optional()
 });
 export type ResolveDisputeDto = z.infer<typeof resolveDisputeDtoSchema>;
 
@@ -1196,3 +1230,28 @@ export const createSupportThreadDtoSchema = z.object({
   body: z.string().trim().min(5, 'Опишіть ваше питання (мін. 5 символів)').max(4000)
 });
 export type CreateSupportThreadDto = z.infer<typeof createSupportThreadDtoSchema>;
+
+export const issueStoreStrikeDtoSchema = z.object({
+  reason: z.string().trim().min(5, 'Вкажіть причину видачі страйку (мін. 5 символів)').max(1500),
+  /** Кількість днів блокування при досягненні 3-го страйку (null = до ручного зняття) */
+  suspensionDays: z.number().int().min(1).max(3650).nullable().optional()
+});
+export type IssueStoreStrikeDto = z.infer<typeof issueStoreStrikeDtoSchema>;
+
+export const updatePlatformUserStatusDtoSchema = z.object({
+  status: z.enum(['active', 'suspended', 'archived']),
+  /** Кількість днів блокування (null = назавжди / до ручного розблокування) */
+  suspensionDays: z.number().int().min(1).max(3650).nullable().optional(),
+  suspensionReason: z.string().trim().max(1500).nullable().optional()
+});
+export type UpdatePlatformUserStatusDto = z.infer<typeof updatePlatformUserStatusDtoSchema>;
+
+export const updatePlatformUserSubscriptionDtoSchema = z.object({
+  subscriptionTier: subscriptionTierSchema,
+  subscriptionStatus: z.enum(['none', 'active', 'expired', 'cancelled']),
+  subscriptionExpiresAt: z.string().datetime().nullable().optional(),
+  note: z.string().trim().max(1000).optional()
+});
+export type UpdatePlatformUserSubscriptionDto = z.infer<
+  typeof updatePlatformUserSubscriptionDtoSchema
+>;

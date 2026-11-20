@@ -7,12 +7,15 @@ import {
   Body,
   Param,
   Query,
+  Req,
   UseGuards,
   UsePipes,
   UseInterceptors,
   UploadedFile
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { JwtService } from '@nestjs/jwt';
+import type { Request } from 'express';
 import {
   ProductsService,
   type ProductListItem,
@@ -22,7 +25,11 @@ import { StorageService } from '../storage/storage.service.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import { CurrentUser, Public } from '../auth/decorators/auth.decorators.js';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
-import { validateImageFile, type UploadedFileDto } from '../common/file-upload.utils.js';
+import {
+  validateImageFile,
+  MAX_IMAGE_FILE_SIZE,
+  type UploadedFileDto
+} from '../common/file-upload.utils.js';
 import type { ProductRecord, ProductCategoryRecord } from '@bizx/database';
 import {
   createProductDtoSchema,
@@ -42,17 +49,37 @@ import {
 export class ProductsController {
   constructor(
     private readonly productsService: ProductsService,
-    private readonly storageService: StorageService
+    private readonly storageService: StorageService,
+    private readonly jwtService: JwtService
   ) {}
+
+  private async extractOptionalUserId(req: Request): Promise<string | undefined> {
+    const authHeader = req.headers.authorization;
+    const token =
+      (authHeader?.startsWith('Bearer ') ? authHeader.slice(7).trim() : undefined) ||
+      req.cookies?.['access_token'];
+    if (!token) return undefined;
+    try {
+      const payload = await this.jwtService.verifyAsync<{ sub?: string; tokenType?: string }>(token);
+      if (payload?.tokenType === 'access' && typeof payload.sub === 'string') {
+        return payload.sub;
+      }
+    } catch {
+      // ignore invalid optional token on public route
+    }
+    return undefined;
+  }
 
   // ==================== КАТЕГОРИИ ТОВАРОВ ====================
 
   @Public()
   @Get('store/:storeId/categories')
   async getCategories(
-    @Param('storeId') storeId: string
+    @Param('storeId') storeId: string,
+    @Req() req: Request
   ): Promise<ApiResponse<ProductCategoryRecord[]>> {
-    const categories = await this.productsService.getProductCategories(storeId);
+    const callerUserId = await this.extractOptionalUserId(req);
+    const categories = await this.productsService.getProductCategories(storeId, callerUserId);
     return {
       success: true,
       data: categories,
@@ -95,9 +122,11 @@ export class ProductsController {
   async getStoreProducts(
     @Param('storeId') storeId: string,
     @Query(new ZodValidationPipe(productFilterQuerySchema))
-    query: ProductFilterQuery
+    query: ProductFilterQuery,
+    @Req() req: Request
   ): Promise<ApiResponse<PaginatedResult<ProductListItem>>> {
-    const result = await this.productsService.getStoreProducts(storeId, query);
+    const callerUserId = await this.extractOptionalUserId(req);
+    const result = await this.productsService.getStoreProducts(storeId, query, callerUserId);
     return {
       success: true,
       data: result,
@@ -107,8 +136,12 @@ export class ProductsController {
 
   @Public()
   @Get(':id')
-  async getProductById(@Param('id') id: string): Promise<ApiResponse<ProductDetailItem>> {
-    const product = await this.productsService.getProductById(id);
+  async getProductById(
+    @Param('id') id: string,
+    @Req() req: Request
+  ): Promise<ApiResponse<ProductDetailItem>> {
+    const callerUserId = await this.extractOptionalUserId(req);
+    const product = await this.productsService.getProductById(id, callerUserId);
     return {
       success: true,
       data: product,
@@ -147,7 +180,7 @@ export class ProductsController {
   }
 
   @Post(':id/image')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_IMAGE_FILE_SIZE } }))
   async uploadProductImage(
     @Param('id') id: string,
     @CurrentUser('sub') userId: string,

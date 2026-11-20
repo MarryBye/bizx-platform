@@ -1,4 +1,4 @@
-import { pgTable, uuid, varchar, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
 
@@ -13,6 +13,8 @@ export const users = pgTable(
     avatarUrl: varchar('avatar_url', { length: 500 }),
     preferredLanguage: varchar('preferred_language', { length: 10 }).default('uk').notNull(),
     status: varchar('status', { length: 50 }).default('active').notNull(), // 'active' | 'suspended' | 'archived'
+    suspendedUntil: timestamp('suspended_until', { withTimezone: true }),
+    suspensionReason: text('suspension_reason'),
     subscriptionTier: varchar('subscription_tier', { length: 50 }).default('free').notNull(), // 'free' | 'client_premium' | 'business_starter' | 'business_pro' | 'business_enterprise'
     subscriptionStatus: varchar('subscription_status', { length: 50 }).default('none').notNull(), // 'none' | 'active' | 'expired' | 'cancelled'
     subscriptionExpiresAt: timestamp('subscription_expires_at', { withTimezone: true }),

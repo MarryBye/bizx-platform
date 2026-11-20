@@ -20,7 +20,11 @@ import { RbacService } from '../rbac/rbac.service.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import { CurrentUser, Public } from '../auth/decorators/auth.decorators.js';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
-import { validateImageFile, type UploadedFileDto } from '../common/file-upload.utils.js';
+import {
+  validateImageFile,
+  MAX_IMAGE_FILE_SIZE,
+  type UploadedFileDto
+} from '../common/file-upload.utils.js';
 import type { StoreRecord, StoreCategoryRecord } from '@bizx/database';
 import {
   createStoreCategoryDtoSchema,
@@ -290,7 +294,7 @@ export class StoresController {
   }
 
   @Post(':id/logo')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_IMAGE_FILE_SIZE } }))
   async uploadStoreLogo(
     @Param('id') id: string,
     @CurrentUser('sub') userId: string,
@@ -310,7 +314,7 @@ export class StoresController {
   }
 
   @Post(':id/banner')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_IMAGE_FILE_SIZE } }))
   async uploadStoreBanner(
     @Param('id') id: string,
     @CurrentUser('sub') userId: string,

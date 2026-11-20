@@ -3,6 +3,9 @@ import { cn } from '../lib/utils';
 import { PhoneInput } from './phone-input';
 import { PermissionMatrix, type PermissionDef } from './permission-matrix';
 import { RoleIcon } from './role-icon';
+import { Modal } from './modal';
+import { ConfirmModal } from './confirm-modal';
+import { Button } from './button';
 import type { RbacRole, RbacActorAccess } from './roles-manager';
 import {
   Users,
@@ -417,50 +420,32 @@ export const TeamManager: React.FC<TeamManagerProps> = ({
         )}
       </div>
 
-      {/* Add / Edit Member Modal */}
-      {isModalOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm"
-          onClick={() => setIsModalOpen(false)}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className={cn(
-              'w-full max-h-[90vh] bg-white border border-slate-200 rounded-2xl shadow-2xl flex flex-col overflow-hidden transition-all',
-              selectedRoleKey === CUSTOM_ROLE_KEY ? 'max-w-4xl' : 'max-w-lg'
-            )}
-          >
-            <div className="px-6 py-4 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
-              <div>
-                <h2 className="text-sm font-black text-slate-900">
-                  {editingMember
-                    ? locale === 'en'
-                      ? `Edit member: ${editingMember.userName || editingMember.userEmail}`
-                      : `Редагувати працівника: ${editingMember.userName || editingMember.userEmail}`
-                    : locale === 'en'
-                      ? 'Add team member'
-                      : 'Додати працівника до команди'}
-                </h2>
-                <p className="text-[11px] text-slate-500">
-                  {editingMember
-                    ? locale === 'en'
-                      ? 'Assign a role below your rank or configure individual permissions'
-                      : 'Оберіть роль нижче вашого рівня або налаштуйте індивідуальні доступи'
-                    : locale === 'en'
-                      ? 'Find a BizX user by email or phone number and assign access'
-                      : 'Знайдіть користувача BizX за email або телефоном та призначте доступи'}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsModalOpen(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200/60"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-4">
+      {/* Add / Edit Member Modal — Unified Light Modal */}
+      <Modal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        size={selectedRoleKey === CUSTOM_ROLE_KEY ? '4xl' : 'lg'}
+        icon={<UserPlus className="w-4 h-4" />}
+        title={
+          editingMember
+            ? locale === 'en'
+              ? `Edit member: ${editingMember.userName || editingMember.userEmail}`
+              : `Редагувати працівника: ${editingMember.userName || editingMember.userEmail}`
+            : locale === 'en'
+              ? 'Add team member'
+              : 'Додати працівника до команди'
+        }
+        subtitle={
+          editingMember
+            ? locale === 'en'
+              ? 'Assign a role below your rank or configure individual permissions'
+              : 'Оберіть роль нижче вашого рівня або налаштуйте індивідуальні доступи'
+            : locale === 'en'
+              ? 'Find a BizX user by email or phone number and assign access'
+              : 'Знайдіть користувача BizX за email або телефоном та призначте доступи'
+        }
+      >
+        <form onSubmit={handleSubmit} className="space-y-4">
               {modalError && (
                 <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 flex items-center gap-2">
                   <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
@@ -593,18 +578,10 @@ export const TeamManager: React.FC<TeamManagerProps> = ({
 
               {/* Footer */}
               <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 border border-slate-200 text-xs font-bold text-slate-700 rounded-lg hover:bg-slate-50"
-                >
+                <Button variant="outline" onClick={() => setIsModalOpen(false)}>
                   {locale === 'en' ? 'Cancel' : 'Скасувати'}
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-lg shadow-sm disabled:opacity-50"
-                >
+                </Button>
+                <Button type="submit" variant="primary" disabled={isSubmitting}>
                   {isSubmitting
                     ? locale === 'en'
                       ? 'Saving...'
@@ -616,77 +593,43 @@ export const TeamManager: React.FC<TeamManagerProps> = ({
                       : locale === 'en'
                         ? 'Add member'
                         : 'Додати працівника'}
-                </button>
+                </Button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+      </Modal>
 
-      {/* Archive Member Confirm Modal */}
-      {archivingMember && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm"
-          onClick={() => setArchivingMember(null)}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden"
-          >
-            <div className="px-6 py-4 bg-red-50 border-b border-red-100 flex items-center justify-between">
-              <span className="text-xs font-bold text-red-900">
-                {locale === 'en' ? 'Archive team member?' : 'Архівувати працівника?'}
-              </span>
-              <button
-                type="button"
-                onClick={() => setArchivingMember(null)}
-                className="text-red-400 hover:text-red-700 p-1"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <div className="p-6 space-y-4 text-xs text-slate-700">
-              <p className="leading-relaxed">
-                {locale === 'en' ? (
-                  <>
-                    Remove <strong>{archivingMember.userName || archivingMember.userEmail}</strong>{' '}
-                    from the active team? Their access will be revoked and history preserved in archive.
-                  </>
-                ) : (
-                  <>
-                    Ви дійсно хочете архівувати працівника{' '}
-                    <strong>{archivingMember.userName || archivingMember.userEmail}</strong>? Доступ
-                    буде відкликано, історія збережеться в архіві.
-                  </>
-                )}
-              </p>
-              <div className="flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setArchivingMember(null)}
-                  className="px-3.5 py-2 border border-slate-200 rounded-lg font-bold text-slate-700 hover:bg-slate-50"
-                >
-                  {locale === 'en' ? 'Cancel' : 'Скасувати'}
-                </button>
-                <button
-                  type="button"
-                  disabled={isArchiving}
-                  onClick={handleConfirmArchive}
-                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold disabled:opacity-50"
-                >
-                  {isArchiving
-                    ? locale === 'en'
-                      ? 'Archiving...'
-                      : 'Архівація...'
-                    : locale === 'en'
-                      ? 'Archive'
-                      : 'Архівувати'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Archive Member Confirm Modal — Unified ConfirmModal */}
+      <ConfirmModal
+        isOpen={Boolean(archivingMember)}
+        onClose={() => setArchivingMember(null)}
+        onConfirm={handleConfirmArchive}
+        nested={false}
+        tone="danger"
+        icon={<Archive className="w-4 h-4" />}
+        title={locale === 'en' ? 'Archive team member?' : 'Архівувати працівника?'}
+        subtitle={archivingMember?.userName || archivingMember?.userEmail}
+        confirmLabel={locale === 'en' ? 'Archive' : 'Архівувати'}
+        cancelLabel={locale === 'en' ? 'Cancel' : 'Скасувати'}
+        confirmVariant="destructive"
+        isLoading={isArchiving}
+      >
+        {archivingMember && (
+          <p className="leading-relaxed text-slate-700">
+            {locale === 'en' ? (
+              <>
+                Remove <strong>{archivingMember.userName || archivingMember.userEmail}</strong>{' '}
+                from the active team? Their access will be revoked and history preserved in archive.
+              </>
+            ) : (
+              <>
+                Ви дійсно хочете архівувати працівника{' '}
+                <strong>{archivingMember.userName || archivingMember.userEmail}</strong>? Доступ
+                буде відкликано, історія збережеться в архіві.
+              </>
+            )}
+          </p>
+        )}
+      </ConfirmModal>
     </div>
   );
 };

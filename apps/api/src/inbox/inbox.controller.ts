@@ -18,6 +18,7 @@ import { CurrentUser } from '../auth/decorators/auth.decorators.js';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
 import {
   validateChatAttachmentFile,
+  MAX_IMAGE_FILE_SIZE,
   type UploadedFileDto
 } from '../common/file-upload.utils.js';
 import {
@@ -117,7 +118,7 @@ export class InboxController {
   }
 
   @Post('threads/:threadId/upload')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_IMAGE_FILE_SIZE } }))
   async uploadAttachment(
     @Param('threadId') threadId: string,
     @CurrentUser('sub') userId: string,

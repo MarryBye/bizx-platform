@@ -8,7 +8,6 @@ import { useTranslation } from '../../hooks/useTranslation';
 import { AuthModal } from '../../components/AuthModal';
 import type { EnrichedOrderResponse } from '@bizx/api-client';
 import {
-  formatCompactCount,
   DISPUTE_CATEGORIES,
   CUSTOMER_QUICK_REPLIES,
   type Store,
@@ -21,7 +20,17 @@ import {
   type StoreReviewsResponse,
   type StorePreviewReadiness
 } from '@bizx/common-types';
-import { LanguageSelector, OrderChatBox, PhoneInput } from '@bizx/ui';
+import {
+  LanguageSelector,
+  OrderChatBox,
+  PhoneInput,
+  Modal,
+  ConfirmModal,
+  StatusBadge,
+  CountBadge,
+  AlertBanner,
+  Button
+} from '@bizx/ui';
 import {
   Store as StoreIcon,
   ShoppingCart,
@@ -350,8 +359,7 @@ export default function StorefrontPage() {
     }
   };
 
-  const handleOpenDispute = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleOpenDispute = async () => {
     if (!selectedOrder || disputeDescription.trim().length < 5) return;
     setIsSubmittingDispute(true);
     setOrderNotice(null);
@@ -404,8 +412,7 @@ export default function StorefrontPage() {
     }
   };
 
-  const handleEscalateDispute = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleEscalateDispute = async () => {
     if (!selectedOrder?.activeDispute) return;
     setIsSubmittingDispute(true);
     setOrderNotice(null);
@@ -711,11 +718,7 @@ export default function StorefrontPage() {
               >
                 <ShoppingCart className="w-3.5 h-3.5" />
                 <span>{t('nav.cart')}</span>
-                {cartCount > 0 && (
-                  <span className="px-1.5 py-0.2 rounded-full bg-slate-900 text-white text-[10px]">
-                    {cartCount}
-                  </span>
-                )}
+                <CountBadge count={cartCount} tone="slate" />
               </button>
 
               <button
@@ -732,11 +735,7 @@ export default function StorefrontPage() {
               >
                 <ShoppingBag className="w-3.5 h-3.5" />
                 <span>{t('nav.orders')}</span>
-                {unreadTotal > 0 && (
-                  <span className="px-1.5 py-0.2 rounded-full bg-blue-600 text-white text-[10px]">
-                    {formatCompactCount(unreadTotal)}
-                  </span>
-                )}
+                <CountBadge count={unreadTotal} tone="blue" />
               </button>
 
               <button
@@ -1028,26 +1027,47 @@ export default function StorefrontPage() {
                         <span className="font-mono font-bold text-xs text-slate-900">
                           {ord.orderNumber}
                         </span>
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700">
+                        <StatusBadge
+                          tone={
+                            ord.status === 'delivered'
+                              ? 'emerald'
+                              : ord.status === 'cancelled'
+                                ? 'rose'
+                                : ord.status === 'pending'
+                                  ? 'amber'
+                                  : 'blue'
+                          }
+                          size="xs"
+                          dot
+                        >
                           {t(`statuses.order.${ord.status}`)}
-                        </span>
+                        </StatusBadge>
                         {ord.activeDispute && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-800 border border-red-200">
-                            <AlertTriangle className="w-3 h-3" />
+                          <StatusBadge
+                            tone="rose"
+                            size="xs"
+                            icon={<AlertTriangle className="w-3 h-3" />}
+                          >
                             {t(`disputes.statuses.${ord.activeDispute.status}`)}
-                          </span>
+                          </StatusBadge>
                         )}
                         {ord.refundOfferStatus === 'pending_customer' && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-200">
-                            <RotateCcw className="w-3 h-3" />
+                          <StatusBadge
+                            tone="amber"
+                            size="xs"
+                            icon={<RotateCcw className="w-3 h-3" />}
+                          >
                             {locale === 'en' ? 'Confirm Refund' : 'Підтвердіть повернення'}
-                          </span>
+                          </StatusBadge>
                         )}
                         {ord.review && (
-                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
-                            <Star className="w-3 h-3 fill-amber-400 text-amber-500" />
+                          <StatusBadge
+                            tone="amber"
+                            size="xs"
+                            icon={<Star className="w-3 h-3 fill-amber-400 text-amber-500" />}
+                          >
                             {ord.review.rating}
-                          </span>
+                          </StatusBadge>
                         )}
                       </div>
                       <p className="text-[11px] text-slate-500">
@@ -1060,20 +1080,19 @@ export default function StorefrontPage() {
                       <span className="font-black text-sm text-slate-900">
                         {formatMoney(ord.totalAmount)} ₴
                       </span>
-                      {(ord.unreadCount || 0) > 0 && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-600 text-white text-[10px] font-bold">
-                          <MessageSquare className="w-3 h-3" />
-                          {formatCompactCount(ord.unreadCount || 0)}
-                        </span>
-                      )}
-                      <button
-                        type="button"
+                      <CountBadge
+                        count={ord.unreadCount || 0}
+                        tone="blue"
+                        icon={<MessageSquare className="w-3 h-3" />}
+                      />
+                      <Button
+                        variant="primary"
+                        size="sm"
                         onClick={() => setSelectedOrderId(ord.id)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold"
                       >
                         <Eye className="w-3.5 h-3.5" />
                         <span>{locale === 'en' ? 'Chat & Details' : 'Чат та деталі'}</span>
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 ))}
@@ -1143,125 +1162,117 @@ export default function StorefrontPage() {
         )}
       </main>
 
-      {/* ORDER DETAIL + CHAT + THREE-DOTS DISPUTE MENU MODAL */}
-      {selectedOrder && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-900/60 backdrop-blur-sm"
-          onClick={() => setSelectedOrderId(null)}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-3xl max-h-[92vh] bg-white border border-slate-200 rounded-2xl shadow-2xl flex flex-col overflow-hidden"
-          >
-            {/* Header with (...) Dispute Menu */}
-            <div className="px-5 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between gap-3 shrink-0">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h2 className="text-base font-black text-slate-900 font-mono">
-                    {selectedOrder.orderNumber}
-                  </h2>
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-200 text-slate-800">
-                    {t(`statuses.order.${selectedOrder.status}`)}
-                  </span>
-                </div>
-                <p className="text-[11px] text-slate-500 mt-0.5">
-                  {formatMoney(selectedOrder.totalAmount)} ₴ •{' '}
-                  {new Date(selectedOrder.createdAt).toLocaleString(locale === 'en' ? 'en-US' : 'uk-UA')}
-                </p>
-              </div>
+      {/* ORDER DETAIL + CHAT + THREE-DOTS DISPUTE MENU MODAL — Unified Light Modal */}
+      <Modal
+        isOpen={Boolean(selectedOrder)}
+        onClose={() => setSelectedOrderId(null)}
+        size="3xl"
+        tone={selectedOrder?.activeDispute ? 'danger' : 'default'}
+        icon={<ShoppingBag className="w-4 h-4" />}
+        title={selectedOrder ? <span className="font-mono">{selectedOrder.orderNumber}</span> : undefined}
+        badge={
+          selectedOrder ? (
+            <StatusBadge
+              tone={
+                selectedOrder.status === 'delivered'
+                  ? 'emerald'
+                  : selectedOrder.status === 'cancelled'
+                    ? 'rose'
+                    : selectedOrder.status === 'pending'
+                      ? 'amber'
+                      : 'blue'
+              }
+              size="xs"
+              dot
+            >
+              {t(`statuses.order.${selectedOrder.status}`)}
+            </StatusBadge>
+          ) : undefined
+        }
+        subtitle={
+          selectedOrder
+            ? `${formatMoney(selectedOrder.totalAmount)} ₴ • ${new Date(
+                selectedOrder.createdAt
+              ).toLocaleString(locale === 'en' ? 'en-US' : 'uk-UA')}`
+            : undefined
+        }
+        headerActions={
+          selectedOrder &&
+          !(selectedOrder.status === 'cancelled' && selectedOrder.paymentStatus === 'refunded') ? (
+            <div ref={actionsMenuRef} className="relative">
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setIsActionsMenuOpen((prev) => !prev)}
+                aria-label="Order options"
+              >
+                <MoreVertical className="w-4 h-4" />
+              </Button>
 
-              <div className="flex items-center gap-1.5 shrink-0">
-                {/* 3-Dots Submenu for Dispute / Withdraw / Escalate */}
-                {!(selectedOrder.status === 'cancelled' && selectedOrder.paymentStatus === 'refunded') && (
-                  <div ref={actionsMenuRef} className="relative">
+              {isActionsMenuOpen && (
+                <div className="absolute right-0 top-full mt-1.5 w-64 bg-white border border-slate-200 rounded-xl shadow-xl py-1.5 z-50 text-xs">
+                  {!selectedOrder.activeDispute ? (
                     <button
                       type="button"
-                      onClick={() => setIsActionsMenuOpen((prev) => !prev)}
-                      aria-label="Order options"
-                      className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+                      onClick={() => {
+                        setIsActionsMenuOpen(false);
+                        setShowOpenDisputeModal(true);
+                      }}
+                      className="w-full px-3.5 py-2 text-left text-rose-700 hover:bg-rose-50 font-bold flex items-center gap-2 cursor-pointer"
                     >
-                      <MoreVertical className="w-4 h-4" />
+                      <AlertTriangle className="w-4 h-4 shrink-0" />
+                      <span>
+                        {locale === 'en'
+                          ? 'Open a dispute / report issue'
+                          : 'Відкрити спір / поскаржитись'}
+                      </span>
                     </button>
-
-                    {isActionsMenuOpen && (
-                      <div className="absolute right-0 top-full mt-1.5 w-64 bg-white border border-slate-200 rounded-xl shadow-xl py-1.5 z-50 text-xs">
-                        {!selectedOrder.activeDispute ? (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setIsActionsMenuOpen(false);
-                              setShowOpenDisputeModal(true);
-                            }}
-                            className="w-full px-3.5 py-2 text-left text-rose-700 hover:bg-rose-50 font-bold flex items-center gap-2"
-                          >
-                            <AlertTriangle className="w-4 h-4 shrink-0" />
-                            <span>
-                              {locale === 'en'
-                                ? 'Open a dispute / report issue'
-                                : 'Відкрити спір / поскаржитись'}
-                            </span>
-                          </button>
-                        ) : (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => void handleWithdrawDispute()}
-                              className="w-full px-3.5 py-2 text-left text-emerald-700 hover:bg-emerald-50 font-bold flex items-center gap-2"
-                            >
-                              <CheckCircle2 className="w-4 h-4 shrink-0" />
-                              <span>
-                                {locale === 'en'
-                                  ? 'Issue resolved — withdraw dispute'
-                                  : 'Питання вирішено — відкликати скаргу'}
-                              </span>
-                            </button>
-                            {selectedOrder.activeDispute.status === 'open_store' && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setIsActionsMenuOpen(false);
-                                  setShowEscalateModal(true);
-                                }}
-                                className="w-full px-3.5 py-2 text-left text-rose-700 hover:bg-rose-50 font-bold flex items-center gap-2 border-t border-slate-100"
-                              >
-                                <ShieldAlert className="w-4 h-4 shrink-0" />
-                                <span>
-                                  {locale === 'en'
-                                    ? 'Not resolved — escalate to BizX'
-                                    : 'Питання не вирішено — передати в BizX'}
-                                </span>
-                              </button>
-                            )}
-                          </>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                <button
-                  type="button"
-                  onClick={() => setSelectedOrderId(null)}
-                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-800 hover:bg-slate-200/60"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-5 space-y-4">
-              {orderNotice && (
-                <div
-                  className={`p-3 rounded-xl text-xs border flex items-center gap-2 ${
-                    orderNotice.isError
-                      ? 'bg-red-50 border-red-200 text-red-700'
-                      : 'bg-emerald-50 border-emerald-200 text-emerald-800'
-                  }`}
-                >
-                  <CheckCircle2 className="w-4 h-4 shrink-0" />
-                  <span>{orderNotice.text}</span>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => void handleWithdrawDispute()}
+                        className="w-full px-3.5 py-2 text-left text-emerald-700 hover:bg-emerald-50 font-bold flex items-center gap-2 cursor-pointer"
+                      >
+                        <CheckCircle2 className="w-4 h-4 shrink-0" />
+                        <span>
+                          {locale === 'en'
+                            ? 'Issue resolved — withdraw dispute'
+                            : 'Питання вирішено — відкликати скаргу'}
+                        </span>
+                      </button>
+                      {selectedOrder.activeDispute.status === 'open_store' && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsActionsMenuOpen(false);
+                            setShowEscalateModal(true);
+                          }}
+                          className="w-full px-3.5 py-2 text-left text-rose-700 hover:bg-rose-50 font-bold flex items-center gap-2 border-t border-slate-100 cursor-pointer"
+                        >
+                          <ShieldAlert className="w-4 h-4 shrink-0" />
+                          <span>
+                            {locale === 'en'
+                              ? 'Not resolved — escalate to BizX'
+                              : 'Питання не вирішено — передати в BizX'}
+                          </span>
+                        </button>
+                      )}
+                    </>
+                  )}
                 </div>
               )}
+            </div>
+          ) : undefined
+        }
+      >
+        {selectedOrder && (
+          <div className="space-y-4">
+            {orderNotice && (
+              <AlertBanner tone={orderNotice.isError ? 'danger' : 'success'}>
+                {orderNotice.text}
+              </AlertBanner>
+            )}
 
               {/* Quick Refund Offer Confirmation Card */}
               {selectedOrder.refundOfferStatus === 'pending_customer' && (
@@ -1434,157 +1445,97 @@ export default function StorefrontPage() {
                   }}
                 />
               </div>
-            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Open Dispute Modal — Unified Light ConfirmModal */}
+      <ConfirmModal
+        isOpen={Boolean(showOpenDisputeModal && selectedOrder)}
+        onClose={() => setShowOpenDisputeModal(false)}
+        onConfirm={handleOpenDispute}
+        tone="danger"
+        icon={<AlertTriangle className="w-4 h-4" />}
+        title={locale === 'en' ? 'Open a Dispute' : 'Відкрити спір по замовленню'}
+        subtitle={selectedOrder?.orderNumber}
+        confirmLabel={locale === 'en' ? 'Submit Dispute' : 'Відкрити спір'}
+        cancelLabel={t('common.cancel')}
+        confirmVariant="destructive"
+        isLoading={isSubmittingDispute}
+      >
+        <div className="space-y-1.5">
+          <label className="font-bold text-slate-800 block">
+            {locale === 'en' ? 'Select issue category:' : 'Оберіть причину скарги:'}
+          </label>
+          <div className="space-y-1.5">
+            {DISPUTE_CATEGORIES.map((cat) => (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => setDisputeCategory(cat)}
+                className={`w-full px-3 py-2 rounded-xl border text-left font-semibold transition-all cursor-pointer ${
+                  disputeCategory === cat
+                    ? 'border-slate-900 bg-slate-900 text-white'
+                    : 'border-slate-200 text-slate-700 hover:bg-slate-50'
+                }`}
+              >
+                {t(`disputes.categories.${cat}`)}
+              </button>
+            ))}
           </div>
         </div>
-      )}
 
-      {/* Open Dispute Modal */}
-      {showOpenDisputeModal && selectedOrder && (
-        <div
-          className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm"
-          onClick={() => setShowOpenDisputeModal(false)}
-        >
-          <form
-            onSubmit={handleOpenDispute}
-            onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden"
-          >
-            <div className="px-5 py-4 bg-rose-50 border-b border-rose-100 flex items-center justify-between">
-              <h3 className="text-sm font-black text-rose-950">
-                {locale === 'en' ? 'Open a Dispute' : 'Відкрити спір по замовленню'}
-              </h3>
-              <button type="button" onClick={() => setShowOpenDisputeModal(false)}>
-                <X className="w-4 h-4 text-rose-600" />
-              </button>
-            </div>
-            <div className="p-5 space-y-4 text-xs">
-              <div className="space-y-1.5">
-                <label className="font-bold text-slate-800 block">
-                  {locale === 'en' ? 'Select issue category:' : 'Оберіть причину скарги:'}
-                </label>
-                <div className="space-y-1.5">
-                  {DISPUTE_CATEGORIES.map((cat) => (
-                    <button
-                      key={cat}
-                      type="button"
-                      onClick={() => setDisputeCategory(cat)}
-                      className={`w-full px-3 py-2 rounded-xl border text-left font-semibold transition-all ${
-                        disputeCategory === cat
-                          ? 'border-rose-600 bg-rose-50 text-rose-900'
-                          : 'border-slate-200 text-slate-700 hover:bg-slate-50'
-                      }`}
-                    >
-                      {t(`disputes.categories.${cat}`)}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <label className="font-bold text-slate-800 block">
-                  {locale === 'en' ? 'Describe the problem *' : 'Опишіть проблему детальніше *'}
-                </label>
-                <textarea
-                  required
-                  minLength={5}
-                  rows={3}
-                  value={disputeDescription}
-                  onChange={(e) => setDisputeDescription(e.target.value)}
-                  placeholder={
-                    locale === 'en'
-                      ? 'What went wrong with your order? You can also attach photos in the chat.'
-                      : 'Що саме сталось? Фото-докази можна додати прямо у чаті замовлення.'
-                  }
-                  className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:outline-none focus:border-slate-900"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowOpenDisputeModal(false)}
-                  className="px-4 py-2 rounded-lg border border-slate-200 font-bold text-slate-600"
-                >
-                  {t('common.cancel')}
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmittingDispute}
-                  className="px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold disabled:opacity-50"
-                >
-                  {isSubmittingDispute
-                    ? t('common.loading')
-                    : locale === 'en'
-                      ? 'Submit Dispute'
-                      : 'Відкрити спір'}
-                </button>
-              </div>
-            </div>
-          </form>
+        <div className="space-y-1">
+          <label className="font-bold text-slate-800 block">
+            {locale === 'en' ? 'Describe the problem *' : 'Опишіть проблему детальніше *'}
+          </label>
+          <textarea
+            required
+            minLength={5}
+            rows={3}
+            value={disputeDescription}
+            onChange={(e) => setDisputeDescription(e.target.value)}
+            placeholder={
+              locale === 'en'
+                ? 'What went wrong with your order? You can also attach photos in the chat.'
+                : 'Що саме сталось? Фото-докази можна додати прямо у чаті замовлення.'
+            }
+            className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:outline-none focus:border-slate-900"
+          />
         </div>
-      )}
+      </ConfirmModal>
 
-      {/* Escalate to BizX Modal */}
-      {showEscalateModal && selectedOrder?.activeDispute && (
-        <div
-          className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm"
-          onClick={() => setShowEscalateModal(false)}
-        >
-          <form
-            onSubmit={handleEscalateDispute}
-            onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden"
-          >
-            <div className="px-5 py-4 bg-slate-900 text-white flex items-center justify-between">
-              <h3 className="text-sm font-black">
-                {locale === 'en' ? 'Escalate to BizX Arbitration' : 'Передати скаргу в BizX'}
-              </h3>
-              <button type="button" onClick={() => setShowEscalateModal(false)}>
-                <X className="w-4 h-4 text-white/80" />
-              </button>
-            </div>
-            <div className="p-5 space-y-4 text-xs">
-              <p className="text-slate-600 leading-relaxed">
-                {locale === 'en'
-                  ? 'BizX staff will gain access to this order, full chat history, and attachments to make a fair decision and process a refund if needed.'
-                  : 'Співробітники BizX отримають доступ до цього замовлення, повної переписки та фото, щоб об’єктивно розглянути ситуацію і повернути кошти в разі порушення з боку закладу.'}
-              </p>
-              <textarea
-                rows={3}
-                value={escalateReason}
-                onChange={(e) => setEscalateReason(e.target.value)}
-                placeholder={
-                  locale === 'en'
-                    ? 'Optional comment for BizX team...'
-                    : 'Додатковий коментар для команди BizX (необов’язково)...'
-                }
-                className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:outline-none focus:border-slate-900"
-              />
-              <div className="flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowEscalateModal(false)}
-                  className="px-4 py-2 rounded-lg border border-slate-200 font-bold text-slate-600"
-                >
-                  {t('common.cancel')}
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmittingDispute}
-                  className="px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold disabled:opacity-50"
-                >
-                  {isSubmittingDispute
-                    ? t('common.loading')
-                    : locale === 'en'
-                      ? 'Confirm Escalation'
-                      : 'Передати в BizX'}
-                </button>
-              </div>
-            </div>
-          </form>
-        </div>
-      )}
+      {/* Escalate to BizX Modal — Unified Light ConfirmModal (NO dark header bar!) */}
+      <ConfirmModal
+        isOpen={Boolean(showEscalateModal && selectedOrder?.activeDispute)}
+        onClose={() => setShowEscalateModal(false)}
+        onConfirm={handleEscalateDispute}
+        tone="danger"
+        icon={<ShieldAlert className="w-4 h-4" />}
+        title={locale === 'en' ? 'Escalate to BizX Arbitration' : 'Передати скаргу в BizX'}
+        subtitle={selectedOrder?.orderNumber}
+        confirmLabel={locale === 'en' ? 'Confirm Escalation' : 'Передати в BizX'}
+        cancelLabel={t('common.cancel')}
+        confirmVariant="destructive"
+        isLoading={isSubmittingDispute}
+      >
+        <p className="text-slate-600 leading-relaxed">
+          {locale === 'en'
+            ? 'BizX staff will gain access to this order, full chat history, and attachments to make a fair decision and process a refund if needed.'
+            : 'Співробітники BizX отримають доступ до цього замовлення, повної переписки та фото, щоб об’єктивно розглянути ситуацію і повернути кошти в разі порушення з боку закладу.'}
+        </p>
+        <textarea
+          rows={3}
+          value={escalateReason}
+          onChange={(e) => setEscalateReason(e.target.value)}
+          placeholder={
+            locale === 'en'
+              ? 'Optional comment for BizX team...'
+              : 'Додатковий коментар для команди BizX (необов’язково)...'
+          }
+          className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:outline-none focus:border-slate-900"
+        />
+      </ConfirmModal>
 
       <AuthModal
         isOpen={isAuthOpen}

@@ -71,6 +71,13 @@
       "when": 1795110000000,
       "tag": "0009_account_inbox_messenger",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1795120000000,
+      "tag": "0010_user_suspension_fields",
+      "breakpoints": true
     }
   ]
 }

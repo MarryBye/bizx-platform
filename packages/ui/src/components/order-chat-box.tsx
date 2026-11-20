@@ -36,6 +36,7 @@ export interface OrderChatBoxProps {
   messages: OrderChatMessage[];
   viewerRole: 'customer' | 'store' | 'platform';
   canSend?: boolean;
+  readOnlyNotice?: React.ReactNode;
   quickReplies?: readonly string[];
   locale?: 'uk' | 'en';
   isLoading?: boolean;
@@ -49,6 +50,7 @@ export const OrderChatBox: React.FC<OrderChatBoxProps> = ({
   messages,
   viewerRole,
   canSend = true,
+  readOnlyNotice,
   quickReplies = [],
   locale = 'uk',
   isLoading = false,
@@ -297,7 +299,7 @@ export const OrderChatBox: React.FC<OrderChatBoxProps> = ({
       </div>
 
       {/* Composer */}
-      {canSend && (
+      {canSend ? (
         <div className="bg-white border-t border-slate-200 p-2.5 space-y-2">
           {error && (
             <div className="text-[11px] text-red-600 bg-red-50 border border-red-200 rounded-lg px-2.5 py-1.5 flex items-center justify-between">
@@ -406,7 +408,11 @@ export const OrderChatBox: React.FC<OrderChatBoxProps> = ({
             </button>
           </form>
         </div>
-      )}
+      ) : readOnlyNotice ? (
+        <div className="px-4 py-3 border-t border-slate-100 bg-slate-50/80 text-[11px] text-slate-500 flex items-center justify-center gap-1.5 text-center shrink-0">
+          {readOnlyNotice}
+        </div>
+      ) : null}
     </div>
   );
 };

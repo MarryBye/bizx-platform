@@ -636,8 +636,9 @@ export const uk = {
       admin: 'Адміністратор платформи (повний доступ з урахуванням ієрархії)',
       stores: {
         read: 'Перегляд усіх торгових точок платформи',
-        moderate: 'Модерація та зміна статусів закладів',
+        moderate: 'Модерація та призупинення закладів',
         approve: 'Підтвердження та відхилення нових заявок бізнесів',
+        unblock: 'Дострокове розблокування призупинених закладів',
         archive: 'Архівація (видалення) торгових точок'
       },
       categories: {
@@ -645,7 +646,9 @@ export const uk = {
       },
       users: {
         read: 'Перегляд реєстру користувачів BizX ID',
-        edit: 'Блокування та відновлення користувачів',
+        edit: 'Блокування облікових записів користувачів',
+        unblock: 'Розблокування заблокованих користувачів',
+        subscriptions: 'Перегляд та керування підписками користувачів',
         archive: 'Архівація облікових записів користувачів'
       },
       analytics: {
@@ -669,6 +672,7 @@ export const uk = {
         resolve: 'Розгляд скарг, повернення коштів та видача страйків'
       },
       strikes: {
+        issue: 'Ручна видача страйків закладам через керування',
         revoke: 'Зняття страйків та дострокове розблокування закладів'
       }
     }
@@ -1306,8 +1310,9 @@ export const en: typeof uk = {
       admin: 'Platform Administrator (full console access respecting hierarchy)',
       stores: {
         read: 'View all platform stores',
-        moderate: 'Moderate & change store statuses',
+        moderate: 'Moderate & suspend stores',
         approve: 'Approve & reject new business applications',
+        unblock: 'Unblock suspended stores early',
         archive: 'Archive (remove) platform stores'
       },
       categories: {
@@ -1315,7 +1320,9 @@ export const en: typeof uk = {
       },
       users: {
         read: 'View BizX ID users registry',
-        edit: 'Suspend & restore user accounts',
+        edit: 'Suspend user accounts',
+        unblock: 'Unblock suspended user accounts early',
+        subscriptions: 'View & manage user subscriptions',
         archive: 'Archive user accounts'
       },
       analytics: {
@@ -1339,6 +1346,7 @@ export const en: typeof uk = {
         resolve: 'Resolve disputes, issue refunds & store strikes'
       },
       strikes: {
+        issue: 'Issue manual strikes to stores',
         revoke: 'Revoke store strikes & lift suspension early'
       }
     }

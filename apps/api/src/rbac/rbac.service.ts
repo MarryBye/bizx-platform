@@ -7,6 +7,7 @@ import {
   BadRequestException
 } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service.js';
+import { InboxService } from '../inbox/inbox.service.js';
 import {
   permissions as permissionsTable,
   roles as rolesTable,
@@ -19,6 +20,7 @@ import {
   storeCategories,
   storeStrikes,
   products,
+  refreshTokens,
   users,
   eq,
   and,
@@ -48,7 +50,9 @@ import {
   type UpdateStoreMemberDto,
   type PlatformMember,
   type AddPlatformMemberDto,
-  type UpdatePlatformMemberDto
+  type UpdatePlatformMemberDto,
+  type UpdatePlatformUserStatusDto,
+  type UpdatePlatformUserSubscriptionDto
 } from '@bizx/common-types';
 import {
   isSubscriptionActive,
@@ -127,7 +131,10 @@ const DEFAULT_SUPPORT_PLATFORM_CODES: PlatformPermissionCode[] = [
 
 @Injectable()
 export class RbacService implements OnModuleInit {
-  constructor(private readonly databaseService: DatabaseService) {}
+  constructor(
+    private readonly databaseService: DatabaseService,
+    private readonly inboxService: InboxService
+  ) {}
 
   async onModuleInit() {
     try {
@@ -405,6 +412,75 @@ export class RbacService implements OnModuleInit {
             isNull(stores.archivedAt)
           )
         );
+    } else if (!isStaff && hasActiveBizSub) {
+      // Перевірка перевищення ліміту закладів при пониженні тарифу (включно з адмінським оновленням підписки)
+      const activeOrPending = await this.databaseService.db
+        .select({ id: stores.id })
+        .from(stores)
+        .where(
+          and(
+            eq(stores.ownerId, ownerId),
+            inArray(stores.status, ['active', 'pending']),
+            isNull(stores.archivedAt)
+          )
+        );
+      if (activeOrPending.length > maxAllowedStores) {
+        await this.databaseService.db
+          .update(stores)
+          .set({ status: 'suspended', updatedAt: new Date() })
+          .where(
+            and(
+              eq(stores.ownerId, ownerId),
+              inArray(stores.status, ['active', 'pending']),
+              isNull(stores.archivedAt)
+            )
+          );
+      }
+    }
+
+    // Автоматичне зняття тимчасового призупинення закладів, у яких вийшов термін suspendedUntil
+    if (isStaff || hasActiveBizSub) {
+      const now = new Date();
+      const suspendedStores = await this.databaseService.db
+        .select({
+          id: stores.id,
+          name: stores.name,
+          suspendedUntil: stores.suspendedUntil
+        })
+        .from(stores)
+        .where(
+          and(
+            eq(stores.ownerId, ownerId),
+            eq(stores.status, 'suspended'),
+            isNull(stores.archivedAt)
+          )
+        );
+
+      for (const s of suspendedStores) {
+        if (s.suspendedUntil && s.suspendedUntil <= now) {
+          const [strikeRes] = await this.databaseService.db
+            .select({ cnt: count() })
+            .from(storeStrikes)
+            .where(
+              and(
+                eq(storeStrikes.storeId, s.id),
+                isNull(storeStrikes.revokedAt),
+                or(isNull(storeStrikes.expiresAt), gt(storeStrikes.expiresAt, now))
+              )
+            );
+          if (Number(strikeRes?.cnt || 0) < 3) {
+            await this.databaseService.db
+              .update(stores)
+              .set({
+                status: 'active',
+                suspendedUntil: null,
+                suspensionReason: null,
+                updatedAt: now
+              })
+              .where(eq(stores.id, s.id));
+          }
+        }
+      }
     }
 
     return { hasActiveBizSub, maxAllowedStores, isStaff };
@@ -666,6 +742,7 @@ export class RbacService implements OnModuleInit {
     requiredPermission: StorePermissionCode,
     options?: {
       write?: boolean;
+      allowWhenSuspended?: boolean;
       allowPlatformPermission?: PlatformPermissionCode;
     }
   ): Promise<{ store: typeof stores.$inferSelect; access: MemberAccessSummary; viaPlatform: boolean }> {
@@ -706,13 +783,31 @@ export class RbacService implements OnModuleInit {
       .from(stores)
       .where(eq(stores.id, storeId));
 
+    const effectiveStore = freshStore || initialStore;
+
+    if (options?.write && (effectiveStore.archivedAt || effectiveStore.status === 'archived')) {
+      throw new ForbiddenException(
+        'Заклад знаходиться в архіві. Редагування та внесення змін заблоковано.'
+      );
+    }
+
     if (options?.write && !isStaff && !hasActiveBizSub) {
       throw new ForbiddenException(
         'Термін дії бізнес-підписки власника закладу завершився або підписка відсутня. Редагування заблоковано (режим перегляду).'
       );
     }
 
-    return { store: freshStore || initialStore, access, viaPlatform: false };
+    if (
+      options?.write &&
+      !options?.allowWhenSuspended &&
+      effectiveStore.status === 'suspended'
+    ) {
+      throw new ForbiddenException(
+        'Роботу закладу призупинено. Редагування каталогу, налаштувань та команди тимчасово заблоковано.'
+      );
+    }
+
+    return { store: effectiveStore, access, viaPlatform: false };
   }
 
   /**
@@ -800,17 +895,40 @@ export class RbacService implements OnModuleInit {
     const access = await this.getStoreMemberAccess(storeId, userId);
     if (!access.isMember) {
       const platformAccess = await this.getPlatformMemberAccess(userId);
-      if (!platformAccess.isMember) {
+      const canInspectStore =
+        platformAccess.isMember &&
+        (platformAccess.permissions.includes('platform.stores.read') ||
+          platformAccess.permissions.includes('platform.analytics.read'));
+      if (!canInspectStore) {
         throw new ForbiddenException('У вас немає доступу до цього магазину');
       }
+
+      const derivedCodes = new Set<StorePermissionCode>();
+      if (platformAccess.permissions.includes('platform.stores.read')) {
+        derivedCodes.add('store.read');
+        derivedCodes.add('products.read');
+        derivedCodes.add('orders.read');
+      }
+      if (platformAccess.permissions.includes('platform.analytics.read')) {
+        derivedCodes.add('analytics.read');
+      }
+      if (platformAccess.permissions.includes('platform.analytics.export')) {
+        derivedCodes.add('analytics.export');
+      }
+      if (platformAccess.permissions.includes('platform.stores.moderate')) {
+        derivedCodes.add('store.status.manage');
+      }
+
+      const derivedDefs = STORE_PERMISSIONS.filter((p) => derivedCodes.has(p.code as StorePermissionCode));
       return {
         catalog: STORE_PERMISSIONS,
         myAccess: {
           ...platformAccess,
-          permissions: STORE_PERMISSIONS.map((p) => p.code),
-          permissionIds: STORE_PERMISSIONS.map((p) => p.id)
+          isOwner: false,
+          permissions: derivedDefs.map((p) => p.code),
+          permissionIds: derivedDefs.map((p) => p.id)
         },
-        ownerHasActiveSubscription: true
+        ownerHasActiveSubscription
       };
     }
     return {
@@ -832,7 +950,7 @@ export class RbacService implements OnModuleInit {
 
   async listRoles(scope: PermissionScope, storeId: string | null, userId: string): Promise<RoleItem[]> {
     if (scope === 'store' && storeId) {
-      await this.ensureStoreRolesExist(storeId);
+      // Перевіряємо існування магазину та права доступу ДО створення системних ролей (захист від FK 500)
       const access = await this.getStoreMemberAccess(storeId, userId);
       const canSeeRoles =
         access.isMember &&
@@ -843,6 +961,7 @@ export class RbacService implements OnModuleInit {
       if (!canSeeRoles) {
         throw new ForbiddenException('Недостатньо прав для перегляду ролей');
       }
+      await this.ensureStoreRolesExist(storeId);
     } else {
       await this.ensureDefaultPlatformRoles();
       const access = await this.getPlatformMemberAccess(userId);
@@ -1947,6 +2066,7 @@ export class RbacService implements OnModuleInit {
   async listPlatformUsers(userId: string) {
     await this.assertPlatformPermission(userId, 'platform.users.read');
 
+    const now = new Date();
     const [allUsers, activePlatformRows, ownedStoresRows] = await Promise.all([
       this.databaseService.db
         .select({
@@ -1955,8 +2075,11 @@ export class RbacService implements OnModuleInit {
           email: users.email,
           phone: users.phone,
           status: users.status,
+          suspendedUntil: users.suspendedUntil,
+          suspensionReason: users.suspensionReason,
           subscriptionTier: users.subscriptionTier,
           subscriptionStatus: users.subscriptionStatus,
+          subscriptionExpiresAt: users.subscriptionExpiresAt,
           createdAt: users.createdAt
         })
         .from(users)
@@ -1977,6 +2100,23 @@ export class RbacService implements OnModuleInit {
         .where(isNull(stores.archivedAt))
     ]);
 
+    // Автоматично розблоковуємо користувачів, у яких минув термін тимчасового блокування
+    const expiredSuspendedIds = allUsers
+      .filter((u) => u.status === 'suspended' && u.suspendedUntil && u.suspendedUntil <= now)
+      .map((u) => u.id);
+
+    if (expiredSuspendedIds.length > 0) {
+      await this.databaseService.db
+        .update(users)
+        .set({
+          status: 'active',
+          suspendedUntil: null,
+          suspensionReason: null,
+          updatedAt: now
+        })
+        .where(inArray(users.id, expiredSuspendedIds));
+    }
+
     const platformMap = new Map(activePlatformRows.map((r) => [r.userId, r]));
     const ownedCountMap = new Map<string, number>();
     for (const s of ownedStoresRows) {
@@ -1986,8 +2126,19 @@ export class RbacService implements OnModuleInit {
     return allUsers.map((u) => {
       const pm = platformMap.get(u.id);
       const storesCount = ownedCountMap.get(u.id) || 0;
+      const autoUnlocked = expiredSuspendedIds.includes(u.id);
       return {
         ...u,
+        status: autoUnlocked ? 'active' : u.status,
+        suspendedUntil: autoUnlocked
+          ? null
+          : u.suspendedUntil
+            ? u.suspendedUntil.toISOString()
+            : null,
+        suspensionReason: autoUnlocked ? null : u.suspensionReason,
+        subscriptionExpiresAt: u.subscriptionExpiresAt
+          ? u.subscriptionExpiresAt.toISOString()
+          : null,
         isPlatformStaff: Boolean(pm),
         platformRoleName: pm
           ? pm.isOwner
@@ -2006,10 +2157,52 @@ export class RbacService implements OnModuleInit {
   async updatePlatformUserStatus(
     targetUserId: string,
     callerUserId: string,
-    status: 'active' | 'suspended' | 'archived'
+    dto: UpdatePlatformUserStatusDto
   ) {
+    // 1. Спершу перевіряємо, що викликач є співробітником платформи (захист від UUID-enumeration 404 vs 403)
+    const callerPlatform = await this.getPlatformMemberAccess(callerUserId);
+    if (!callerPlatform.isMember) {
+      throw new ForbiddenException('Доступ дозволено лише співробітникам платформи BizX');
+    }
+
+    const [existing] = await this.databaseService.db
+      .select()
+      .from(users)
+      .where(eq(users.id, targetUserId));
+
+    if (!existing) {
+      throw new NotFoundException('Користувача не знайдено');
+    }
+
+    const now = new Date();
+    const proposedSuspendedUntil =
+      dto.status === 'suspended' && typeof dto.suspensionDays === 'number' && dto.suspensionDays > 0
+        ? new Date(now.getTime() + dto.suspensionDays * 24 * 60 * 60 * 1000)
+        : null;
+
+    // Вихід з архіву в БУДЬ-ЯКИЙ інший статус, активація із suspended/archived, або скорочення активного блокування
+    const isLeavingArchive = existing.status === 'archived' && dto.status !== 'archived';
+    const isShorteningActiveBan =
+      existing.status === 'suspended' &&
+      dto.status === 'suspended' &&
+      ((existing.suspendedUntil === null && proposedSuspendedUntil !== null) ||
+        (existing.suspendedUntil !== null &&
+          proposedSuspendedUntil !== null &&
+          proposedSuspendedUntil.getTime() < existing.suspendedUntil.getTime()));
+
+    const isUnblocking =
+      (dto.status === 'active' &&
+        (existing.status === 'suspended' || existing.status === 'archived')) ||
+      isLeavingArchive ||
+      isShorteningActiveBan;
+
     const requiredPerm: PlatformPermissionCode =
-      status === 'archived' ? 'platform.users.archive' : 'platform.users.edit';
+      dto.status === 'archived'
+        ? 'platform.users.archive'
+        : isUnblocking
+          ? 'platform.users.unblock'
+          : 'platform.users.edit';
+
     const actor = await this.assertPlatformPermission(callerUserId, requiredPerm);
 
     if (targetUserId === callerUserId) {
@@ -2026,23 +2219,142 @@ export class RbacService implements OnModuleInit {
       );
     }
 
+    if (dto.status === 'suspended') {
+      const reason = dto.suspensionReason?.trim();
+      if (!reason || reason.length < 5) {
+        throw new BadRequestException(
+          'Вкажіть причину блокування користувача (мінімум 5 символів)'
+        );
+      }
+    }
+
+    const suspendedUntil = proposedSuspendedUntil;
+    const suspensionReason =
+      dto.status === 'suspended' ? dto.suspensionReason?.trim() || null : null;
+
     const [updated] = await this.databaseService.db
       .update(users)
       .set({
-        status,
-        archivedAt: status === 'archived' ? new Date() : null,
-        updatedAt: new Date()
+        status: dto.status,
+        suspendedUntil: dto.status === 'suspended' ? suspendedUntil : null,
+        suspensionReason: dto.status === 'suspended' ? suspensionReason : null,
+        archivedAt: dto.status === 'archived' ? now : null,
+        updatedAt: now
       })
       .where(eq(users.id, targetUserId))
       .returning();
 
-    if (!updated) {
-      throw new NotFoundException('Користувача не знайдено');
+    if (dto.status === 'suspended' || dto.status === 'archived') {
+      await this.databaseService.db
+        .delete(refreshTokens)
+        .where(eq(refreshTokens.userId, targetUserId));
+    }
+
+    if (dto.status === 'suspended') {
+      const durationText = suspendedUntil
+        ? `на ${dto.suspensionDays} дн. (до ${suspendedUntil.toLocaleDateString('uk-UA')})`
+        : 'безстроково (до ручного розблокування адміністрацією BizX)';
+      await this.inboxService
+        .sendOfficialBizxMessage({
+          userId: targetUserId,
+          senderName: 'BizX Безпека',
+          subject: 'Ваш обліковий запис заблоковано',
+          body: `Модератор BizX заблокував ваш обліковий запис ${durationText}.\n\nПричина:\n${suspensionReason || 'Порушення правил платформи'}`,
+          canReply: false
+        })
+        .catch(() => {});
+    } else if (isUnblocking) {
+      await this.inboxService
+        .sendOfficialBizxMessage({
+          userId: targetUserId,
+          senderName: 'BizX Безпека',
+          subject: 'Доступ до облікового запису відновлено',
+          body: 'Адміністрація BizX розблокувала ваш обліковий запис. Ви знову можете користуватися всіма сервісами платформи.',
+          canReply: false
+        })
+        .catch(() => {});
     }
 
     return {
       id: updated.id,
-      status: updated.status
+      status: updated.status,
+      suspendedUntil: updated.suspendedUntil ? updated.suspendedUntil.toISOString() : null,
+      suspensionReason: updated.suspensionReason ?? null
+    };
+  }
+
+  async updatePlatformUserSubscription(
+    targetUserId: string,
+    callerUserId: string,
+    dto: UpdatePlatformUserSubscriptionDto
+  ) {
+    const actor = await this.assertPlatformPermission(callerUserId, 'platform.users.subscriptions');
+
+    if (targetUserId === callerUserId && !actor.isOwner) {
+      throw new ForbiddenException('Не можна змінювати власний тарифний план через адмін-панель');
+    }
+
+    const [existing] = await this.databaseService.db
+      .select({ id: users.id, name: users.name })
+      .from(users)
+      .where(eq(users.id, targetUserId));
+
+    if (!existing) {
+      throw new NotFoundException('Користувача не знайдено');
+    }
+
+    const now = new Date();
+    const expiresAt =
+      dto.subscriptionExpiresAt !== undefined
+        ? dto.subscriptionExpiresAt
+          ? new Date(dto.subscriptionExpiresAt)
+          : null
+        : undefined;
+
+    const [updated] = await this.databaseService.db
+      .update(users)
+      .set({
+        subscriptionTier: dto.subscriptionTier,
+        subscriptionStatus: dto.subscriptionStatus,
+        ...(expiresAt !== undefined ? { subscriptionExpiresAt: expiresAt } : {}),
+        updatedAt: now
+      })
+      .where(eq(users.id, targetUserId))
+      .returning();
+
+    // Синхронізуємо ліміти активних магазинів власника згідно нового тарифу
+    await this.reconcileOwnerStores(targetUserId).catch(() => {});
+
+    const tierLabels: Record<string, string> = {
+      free: 'Базовий (Free)',
+      client_premium: 'Client Premium',
+      business_starter: 'Business Starter',
+      business_pro: 'Business Pro',
+      business_enterprise: 'Business Enterprise'
+    };
+
+    const expLabel = updated.subscriptionExpiresAt
+      ? `Діє до: ${updated.subscriptionExpiresAt.toLocaleDateString('uk-UA')}`
+      : 'Дата закінчення не встановлена';
+    const notePart = dto.note?.trim() ? `\n\nКоментар оператора:\n${dto.note.trim()}` : '';
+
+    await this.inboxService
+      .sendOfficialBizxMessage({
+        userId: targetUserId,
+        senderName: 'BizX Підписки',
+        subject: `Оновлено параметри підписки (${tierLabels[updated.subscriptionTier] || updated.subscriptionTier})`,
+        body: `Адміністратор BizX оновив параметри вашої підписки.\n\nТариф: ${tierLabels[updated.subscriptionTier] || updated.subscriptionTier}\nСтатус: ${updated.subscriptionStatus}\n${expLabel}${notePart}`,
+        canReply: false
+      })
+      .catch(() => {});
+
+    return {
+      id: updated.id,
+      subscriptionTier: updated.subscriptionTier,
+      subscriptionStatus: updated.subscriptionStatus,
+      subscriptionExpiresAt: updated.subscriptionExpiresAt
+        ? updated.subscriptionExpiresAt.toISOString()
+        : null
     };
   }
 

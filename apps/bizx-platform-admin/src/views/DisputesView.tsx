@@ -6,16 +6,22 @@ import type {
   PlatformDisputeListItem,
   OrderMessageAttachmentDto
 } from '@bizx/common-types';
-import { OrderChatBox } from '@bizx/ui';
+import {
+  OrderChatBox,
+  Modal,
+  ConfirmModal,
+  DurationPicker,
+  StatusBadge,
+  AlertBanner,
+  Button
+} from '@bizx/ui';
 import {
   Scale,
   AlertTriangle,
   CheckCircle2,
-  XCircle,
   MessageSquare,
   ShieldAlert,
   Eye,
-  X,
   Zap,
   RotateCcw,
   RefreshCw,
@@ -30,14 +36,6 @@ interface DisputesViewProps {
   canRevokeStrikes: boolean;
   onDisputesChanged?: () => void;
 }
-
-const SUSPENSION_OPTIONS: Array<{ value: number | null; labelUk: string; labelEn: string }> = [
-  { value: 3, labelUk: '3 дні', labelEn: '3 days' },
-  { value: 7, labelUk: '7 днів (рекомендовано)', labelEn: '7 days (recommended)' },
-  { value: 14, labelUk: '14 днів', labelEn: '14 days' },
-  { value: 30, labelUk: '30 днів', labelEn: '30 days' },
-  { value: null, labelUk: 'Безстроково (до ручного зняття)', labelEn: 'Indefinite (manual lift only)' }
-];
 
 export const DisputesView: React.FC<DisputesViewProps> = ({
   canResolve,
@@ -61,7 +59,8 @@ export const DisputesView: React.FC<DisputesViewProps> = ({
   const [isResolving, setIsResolving] = useState(false);
   const [notice, setNotice] = useState<{ text: string; isError?: boolean } | null>(null);
 
-  // 3rd-Strike Suspension Confirmation Modal (shown BEFORE sending API request!)
+  // Confirmation Modals (shown BEFORE sending API request for BOTH decisions!)
+  const [confirmDecision, setConfirmDecision] = useState<'business' | 'customer' | null>(null);
   const [showThirdStrikeModal, setShowThirdStrikeModal] = useState(false);
   const [selectedSuspensionDays, setSelectedSuspensionDays] = useState<number | null>(7);
 
@@ -100,13 +99,16 @@ export const DisputesView: React.FC<DisputesViewProps> = ({
   }, []);
 
   useEffect(() => {
+    setConfirmDecision(null);
+    setShowThirdStrikeModal(false);
+    setRevokingStrikeId(null);
+    setRevokeReason('');
     if (!selectedId) {
       setDetail(null);
       setResolutionNote('');
       setStrikeReason('');
       setIssueStrike(true);
       setNotice(null);
-      setShowThirdStrikeModal(false);
       return;
     }
 
@@ -154,6 +156,7 @@ export const DisputesView: React.FC<DisputesViewProps> = ({
       });
       if (res.success && res.data) {
         setShowThirdStrikeModal(false);
+        setConfirmDecision(null);
         await Promise.all([loadDetail(detail.dispute.id), loadDisputes()]);
         onDisputesChanged?.();
         setNotice({
@@ -180,7 +183,7 @@ export const DisputesView: React.FC<DisputesViewProps> = ({
     }
   };
 
-  const handleClickCustomerDecision = () => {
+  const handleClickDecision = (decision: 'business' | 'customer') => {
     if (!detail) return;
     if (resolutionNote.trim().length < 3) {
       setNotice({
@@ -193,14 +196,15 @@ export const DisputesView: React.FC<DisputesViewProps> = ({
       return;
     }
 
-    // ЯКЩО видається страйк і у закладу вже >= 2 активних страйків → спочатку модалка вибору терміну та попередження!
-    if (issueStrike && detail.dispute.storeActiveStrikes >= 2) {
+    // ЯКЩО на користь клієнта + видається страйк і у закладу вже >= 2 активних страйків → модалка 3-го страйку!
+    if (decision === 'customer' && issueStrike && detail.dispute.storeActiveStrikes >= 2) {
       setSelectedSuspensionDays(7);
       setShowThirdStrikeModal(true);
       return;
     }
 
-    void executeResolution('customer');
+    // В усіх інших випадках (і для бізнесу, і для клієнта) — обовʼязкова модалка підтвердження!
+    setConfirmDecision(decision);
   };
 
   const handleRevokeStrike = async (e: React.FormEvent) => {
@@ -260,23 +264,22 @@ export const DisputesView: React.FC<DisputesViewProps> = ({
     const label = t(`disputes.statuses.${status}`);
     if (status === 'escalated_platform') {
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-black bg-red-600 text-white uppercase">
-          <AlertTriangle className="w-3 h-3" />
-          <span>{label}</span>
-        </span>
+        <StatusBadge tone="rose" size="xs" icon={<AlertTriangle className="w-3 h-3" />}>
+          {label}
+        </StatusBadge>
       );
     }
     if (status === 'open_store') {
       return (
-        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-200">
+        <StatusBadge tone="amber" size="xs" dot>
           {label}
-        </span>
+        </StatusBadge>
       );
     }
     return (
-      <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+      <StatusBadge tone="slate" size="xs">
         {label}
-      </span>
+      </StatusBadge>
     );
   };
 
@@ -296,15 +299,16 @@ export const DisputesView: React.FC<DisputesViewProps> = ({
           </p>
         </div>
 
-        <button
-          type="button"
+        <Button
+          variant="outline"
+          size="sm"
           onClick={() => void loadDisputes()}
           disabled={isLoading}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 hover:border-slate-300 rounded-lg text-xs font-bold text-slate-700 self-start sm:self-auto"
+          className="self-start sm:self-auto"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
           <span>{t('common.refresh')}</span>
-        </button>
+        </Button>
       </div>
 
       {/* Filter Tabs */}
@@ -363,19 +367,16 @@ export const DisputesView: React.FC<DisputesViewProps> = ({
                       {d.orderNumber}
                     </span>
                     {getDisputeBadge(d.status)}
-                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700">
+                    <StatusBadge tone="slate" size="xs" className="rounded">
                       {t(`disputes.categories.${d.category}`)}
-                    </span>
-                    <span
-                      className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded text-[10px] font-bold border ${
-                        d.storeActiveStrikes >= 2
-                          ? 'bg-rose-100 text-rose-800 border-rose-200'
-                          : 'bg-slate-50 text-slate-600 border-slate-200'
-                      }`}
+                    </StatusBadge>
+                    <StatusBadge
+                      tone={d.storeActiveStrikes >= 2 ? 'rose' : 'slate'}
+                      size="xs"
+                      icon={<Zap className="w-3 h-3" />}
                     >
-                      <Zap className="w-3 h-3 shrink-0" />
-                      <span>{d.storeActiveStrikes}/3</span>
-                    </span>
+                      {d.storeActiveStrikes}/3
+                    </StatusBadge>
                   </div>
                   <p className="text-xs text-slate-700 line-clamp-1">{d.description}</p>
                   <div className="flex items-center gap-2.5 text-[11px] text-slate-500 flex-wrap">
@@ -394,76 +395,50 @@ export const DisputesView: React.FC<DisputesViewProps> = ({
                   </div>
                 </div>
 
-                <button
-                  type="button"
+                <Button
+                  variant="primary"
+                  size="sm"
                   onClick={() => setSelectedId(d.id)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-colors shrink-0 self-start md:self-center"
+                  className="shrink-0 self-start md:self-center"
                 >
                   <Eye className="w-3.5 h-3.5" />
                   <span>{locale === 'en' ? 'Inspect Case' : 'Розглянути'}</span>
-                </button>
+                </Button>
               </div>
             ))}
           </div>
         )}
       </div>
 
-      {/* Arbitration Detail Modal */}
-      {selectedId && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-900/65 backdrop-blur-sm"
-          onClick={() => setSelectedId(null)}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-4xl max-h-[92vh] bg-white border border-slate-200 rounded-2xl shadow-2xl flex flex-col overflow-hidden"
-          >
-            {/* Header */}
-            <div className="px-5 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between gap-3 shrink-0">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h2 className="text-base font-black text-slate-900">
-                    {locale === 'en' ? 'Case' : 'Скарга'} {detail?.dispute.orderNumber || ''}
-                  </h2>
-                  {detail && getDisputeBadge(detail.dispute.status)}
-                </div>
-                {detail && (
-                  <p className="text-[11px] text-slate-500 mt-0.5">
-                    {t(`disputes.categories.${detail.dispute.category}`)} •{' '}
-                    {new Date(detail.dispute.createdAt).toLocaleString(
-                      locale === 'en' ? 'en-US' : 'uk-UA'
-                    )}
-                  </p>
-                )}
-              </div>
-              <button
-                type="button"
-                onClick={() => setSelectedId(null)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-800 hover:bg-slate-200/60"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {isLoadingDetail || !detail ? (
-              <div className="py-16 flex items-center justify-center gap-2 text-xs text-slate-500">
-                <Loader2 className="w-5 h-5 animate-spin" />
-                <span>{t('common.loading')}</span>
-              </div>
-            ) : (
-              <div className="flex-1 overflow-y-auto p-5 space-y-5">
-                {notice && (
-                  <div
-                    className={`p-3 rounded-xl text-xs border flex items-center gap-2 ${
-                      notice.isError
-                        ? 'bg-red-50 border-red-200 text-red-700'
-                        : 'bg-emerald-50 border-emerald-200 text-emerald-800'
-                    }`}
-                  >
-                    <CheckCircle2 className="w-4 h-4 shrink-0" />
-                    <span>{notice.text}</span>
-                  </div>
-                )}
+      {/* Arbitration Detail Modal — Unified Light Header */}
+      <Modal
+        isOpen={Boolean(selectedId)}
+        onClose={() => setSelectedId(null)}
+        size="4xl"
+        tone={detail?.dispute.status === 'escalated_platform' ? 'danger' : 'default'}
+        icon={<Scale className="w-4 h-4" />}
+        title={`${locale === 'en' ? 'Case' : 'Скарга'} ${detail?.dispute.orderNumber || ''}`}
+        badge={detail ? getDisputeBadge(detail.dispute.status) : undefined}
+        subtitle={
+          detail
+            ? `${t(`disputes.categories.${detail.dispute.category}`)} • ${new Date(
+                detail.dispute.createdAt
+              ).toLocaleString(locale === 'en' ? 'en-US' : 'uk-UA')}`
+            : undefined
+        }
+      >
+        {isLoadingDetail || !detail ? (
+          <div className="py-16 flex items-center justify-center gap-2 text-xs text-slate-500">
+            <Loader2 className="w-5 h-5 animate-spin" />
+            <span>{t('common.loading')}</span>
+          </div>
+        ) : (
+          <div className="space-y-5">
+            {notice && (
+              <AlertBanner tone={notice.isError ? 'danger' : 'success'}>
+                {notice.text}
+              </AlertBanner>
+            )}
 
                 {/* Parties & Order Summary */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 text-xs">
@@ -475,7 +450,7 @@ export const DisputesView: React.FC<DisputesViewProps> = ({
                     <p className="font-bold text-slate-900">{detail.dispute.storeName}</p>
                     <p className="text-[11px] text-slate-600">
                       {t('common.status')}:{' '}
-                      <strong className="uppercase">{detail.dispute.storeStatus}</strong>
+                      <strong>{t(`statuses.store.${detail.dispute.storeStatus}`)}</strong>
                     </p>
                     <p
                       className={`text-[11px] font-bold ${
@@ -669,34 +644,34 @@ export const DisputesView: React.FC<DisputesViewProps> = ({
                         )}
                       </div>
 
-                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2.5 pt-1">
-                        <button
-                          type="button"
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2 border-t border-slate-200/80">
+                        <Button
+                          variant="neutral"
+                          size="lg"
                           disabled={isResolving}
-                          onClick={() => void executeResolution('business')}
-                          className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold disabled:opacity-50 transition-colors"
+                          onClick={() => handleClickDecision('business')}
                         >
-                          <CheckCircle2 className="w-4 h-4 shrink-0" />
+                          <Building2 className="w-4 h-4 shrink-0" />
                           <span>
                             {locale === 'en'
                               ? 'Resolve for Business'
                               : 'Закрити на користь бізнесу'}
                           </span>
-                        </button>
+                        </Button>
 
-                        <button
-                          type="button"
+                        <Button
+                          variant="neutral"
+                          size="lg"
                           disabled={isResolving}
-                          onClick={handleClickCustomerDecision}
-                          className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold disabled:opacity-50 transition-colors"
+                          onClick={() => handleClickDecision('customer')}
                         >
-                          <XCircle className="w-4 h-4 shrink-0" />
+                          <UserIcon className="w-4 h-4 shrink-0" />
                           <span>
                             {locale === 'en'
                               ? 'Resolve for Customer (Refund)'
                               : 'На користь клієнта (Повернення)'}
                           </span>
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   ) : (
@@ -711,12 +686,12 @@ export const DisputesView: React.FC<DisputesViewProps> = ({
                   )
                 ) : (
                   detail.dispute.resolutionNote && (
-                    <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-950 space-y-1">
-                      <div className="font-bold">
-                        {locale === 'en' ? 'Final Resolution:' : 'Підсумок розгляду:'}
-                      </div>
-                      <p>{detail.dispute.resolutionNote}</p>
-                    </div>
+                    <AlertBanner
+                      tone="success"
+                      title={locale === 'en' ? 'Final Resolution' : 'Підсумок розгляду'}
+                    >
+                      {detail.dispute.resolutionNote}
+                    </AlertBanner>
                   )
                 )}
 
@@ -750,13 +725,7 @@ export const DisputesView: React.FC<DisputesViewProps> = ({
                         >
                           <div className="space-y-0.5">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <span
-                                className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${
-                                  st.isActive
-                                    ? 'bg-rose-600 text-white'
-                                    : 'bg-slate-200 text-slate-600'
-                                }`}
-                              >
+                              <StatusBadge tone={st.isActive ? 'rose' : 'slate'} size="xs">
                                 {st.isActive
                                   ? locale === 'en'
                                     ? 'Active'
@@ -764,7 +733,7 @@ export const DisputesView: React.FC<DisputesViewProps> = ({
                                   : locale === 'en'
                                     ? 'Revoked / Expired'
                                     : 'Знято / Завершено'}
-                              </span>
+                              </StatusBadge>
                               <span className="text-[11px] text-slate-500">
                                 {new Date(st.createdAt).toLocaleDateString(
                                   locale === 'en' ? 'en-US' : 'uk-UA'
@@ -785,17 +754,18 @@ export const DisputesView: React.FC<DisputesViewProps> = ({
                           </div>
 
                           {st.isActive && canRevokeStrikes && (
-                            <button
-                              type="button"
+                            <Button
+                              variant="neutral"
+                              size="xs"
                               onClick={() => {
                                 setRevokingStrikeId(st.id);
                                 setRevokeReason('');
                               }}
-                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-900 hover:text-white text-[11px] font-bold text-slate-700 transition-colors shrink-0 self-start sm:self-center"
+                              className="shrink-0 self-start sm:self-center"
                             >
                               <RotateCcw className="w-3 h-3" />
                               <span>{locale === 'en' ? 'Revoke strike' : 'Зняти страйк'}</span>
-                            </button>
+                            </Button>
                           )}
                         </div>
                       ))}
@@ -826,130 +796,120 @@ export const DisputesView: React.FC<DisputesViewProps> = ({
                         className="w-full px-3 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:border-slate-900"
                       />
                       <div className="flex items-center justify-end gap-2">
-                        <button
-                          type="button"
+                        <Button
+                          variant="outline"
+                          size="xs"
                           onClick={() => setRevokingStrikeId(null)}
-                          className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-bold text-slate-600"
                         >
                           {t('common.cancel')}
-                        </button>
-                        <button
-                          type="submit"
-                          disabled={isRevoking}
-                          className="px-3.5 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-bold disabled:opacity-50"
-                        >
+                        </Button>
+                        <Button type="submit" variant="primary" size="xs" disabled={isRevoking}>
                           {isRevoking ? t('common.loading') : t('common.confirm')}
-                        </button>
+                        </Button>
                       </div>
                     </form>
                   )}
                 </div>
-              </div>
-            )}
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
 
-      {/* 3rd-Strike Suspension Confirmation Modal (Pre-submit Guard!) */}
-      {showThirdStrikeModal && detail && (
-        <div
-          className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-sm"
-          onClick={() => setShowThirdStrikeModal(false)}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-md bg-white border border-rose-200 rounded-2xl shadow-2xl overflow-hidden"
-          >
-            <div className="px-5 py-4 bg-rose-600 text-white flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <ShieldAlert className="w-5 h-5 shrink-0" />
-                <h3 className="text-sm font-black">
-                  {locale === 'en'
-                    ? '3rd Strike — Automatic Store Suspension'
-                    : '3-й страйк — Призупинення бізнесу'}
-                </h3>
+      {/* Standard Confirmation Modal (for BOTH Business & Customer verdicts) — Unified Light Header */}
+      <ConfirmModal
+        isOpen={Boolean(confirmDecision && detail)}
+        onClose={() => setConfirmDecision(null)}
+        onConfirm={async () => {
+          if (confirmDecision) await executeResolution(confirmDecision);
+        }}
+        tone="default"
+        icon={<Scale className="w-4 h-4" />}
+        title={
+          confirmDecision === 'business'
+            ? locale === 'en'
+              ? 'Confirm Resolution for Business'
+              : 'Підтвердження рішення на користь бізнесу'
+            : locale === 'en'
+              ? 'Confirm Resolution for Customer'
+              : 'Підтвердження рішення на користь клієнта'
+        }
+        subtitle={detail?.dispute.orderNumber}
+        confirmLabel={locale === 'en' ? 'Confirm Decision' : 'Підтвердити рішення'}
+        cancelLabel={t('common.cancel')}
+        confirmVariant="primary"
+        isLoading={isResolving}
+      >
+        {detail && confirmDecision && (
+          <>
+            <p className="text-slate-700 leading-relaxed">
+              {confirmDecision === 'business'
+                ? locale === 'en'
+                  ? `You are closing dispute for order ${detail.dispute.orderNumber} in favor of «${detail.dispute.storeName}». No refund or strike will be issued.`
+                  : `Ви закриваєте скаргу по замовленню ${detail.dispute.orderNumber} на користь закладу «${detail.dispute.storeName}». Кошти залишаться за бізнесом, страйк не видається.`
+                : locale === 'en'
+                  ? `You are resolving dispute for order ${detail.dispute.orderNumber} in favor of customer (${formatMoney(detail.dispute.orderTotalAmount)} UAH refund).${issueStrike ? ' 1 strike will be issued to the store.' : ''}`
+                  : `Ви закриваєте скаргу по замовленню ${detail.dispute.orderNumber} на користь клієнта з поверненням ${formatMoney(detail.dispute.orderTotalAmount)} ₴.${issueStrike ? ` Закладу «${detail.dispute.storeName}» буде видано страйк (${detail.dispute.storeActiveStrikes + 1}/3).` : ''}`}
+            </p>
+
+            <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
+              <div className="text-[10px] font-bold text-slate-400 uppercase">
+                {locale === 'en' ? 'Explanation' : 'Обґрунтування рішення'}
               </div>
-              <button
-                type="button"
-                onClick={() => setShowThirdStrikeModal(false)}
-                className="text-white/80 hover:text-white"
-              >
-                <X className="w-4 h-4" />
-              </button>
+              <p className="text-slate-800 whitespace-pre-wrap">{resolutionNote.trim()}</p>
             </div>
+          </>
+        )}
+      </ConfirmModal>
 
-            <div className="p-5 space-y-4 text-xs">
-              <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-300 text-amber-950 space-y-1.5 leading-relaxed">
-                <p className="font-bold flex items-center gap-1.5">
-                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-                  <span>
-                    {locale === 'en'
-                      ? `Store «${detail.dispute.storeName}» currently has ${detail.dispute.storeActiveStrikes} active strikes.`
-                      : `У закладу «${detail.dispute.storeName}» вже ${detail.dispute.storeActiveStrikes} активних страйків.`}
-                  </span>
-                </p>
-                <p>
-                  {locale === 'en'
-                    ? 'Issuing this strike will immediately suspend the store. Only a staff member with the dedicated «Revoke Strikes» permission can revoke strikes and lift the suspension early. Please verify your decision carefully.'
-                    : 'Видача цього страйку негайно призупинить роботу закладу. Зняти страйки та достроково вивести бізнес із блокування зможе лише співробітник із окремим правом «Зняття страйків». Будь ласка, перевірте обґрунтованість рішення.'}
-                </p>
-              </div>
+      {/* 3rd-Strike Suspension Confirmation Modal — Unified Light Header + DurationPicker */}
+      <ConfirmModal
+        isOpen={Boolean(showThirdStrikeModal && detail)}
+        onClose={() => setShowThirdStrikeModal(false)}
+        onConfirm={async () => {
+          await executeResolution('customer', selectedSuspensionDays);
+        }}
+        tone="danger"
+        icon={<ShieldAlert className="w-4 h-4" />}
+        title={
+          locale === 'en'
+            ? '3rd Strike — Automatic Store Suspension'
+            : '3-й страйк — Призупинення бізнесу'
+        }
+        subtitle={detail?.dispute.storeName}
+        confirmLabel={
+          locale === 'en' ? 'Confirm 3rd Strike & Suspend' : 'Підтвердити страйк та заблокувати'
+        }
+        cancelLabel={t('common.cancel')}
+        confirmVariant="destructive"
+        isLoading={isResolving}
+      >
+        {detail && (
+          <>
+            <AlertBanner
+              tone="warning"
+              title={
+                locale === 'en'
+                  ? `Store «${detail.dispute.storeName}» currently has ${detail.dispute.storeActiveStrikes} active strikes.`
+                  : `У закладу «${detail.dispute.storeName}» вже ${detail.dispute.storeActiveStrikes} активних страйків.`
+              }
+            >
+              {locale === 'en'
+                ? 'Issuing this strike will immediately suspend the store. Only a staff member with the dedicated «Revoke Strikes» permission can revoke strikes and lift the suspension early.'
+                : 'Видача цього страйку негайно призупинить роботу закладу. Зняти страйки та достроково вивести бізнес із блокування зможе лише співробітник із окремим правом «Зняття страйків».'}
+            </AlertBanner>
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-800 block">
-                  {locale === 'en' ? 'Select suspension duration:' : 'Оберіть термін блокування закладу:'}
-                </label>
-                <div className="space-y-1.5">
-                  {SUSPENSION_OPTIONS.map((opt) => {
-                    const active = selectedSuspensionDays === opt.value;
-                    return (
-                      <button
-                        key={String(opt.value)}
-                        type="button"
-                        onClick={() => setSelectedSuspensionDays(opt.value)}
-                        className={`w-full flex items-center justify-between px-3 py-2 rounded-xl border text-left font-semibold transition-all ${
-                          active
-                            ? 'border-rose-600 bg-rose-50 text-rose-900 ring-1 ring-rose-600'
-                            : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-                        }`}
-                      >
-                        <span>{locale === 'en' ? opt.labelEn : opt.labelUk}</span>
-                        <span
-                          className={`w-3.5 h-3.5 rounded-full border-2 ${
-                            active ? 'border-rose-600 bg-rose-600' : 'border-slate-300'
-                          }`}
-                        />
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setShowThirdStrikeModal(false)}
-                  className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50"
-                >
-                  {t('common.cancel')}
-                </button>
-                <button
-                  type="button"
-                  disabled={isResolving}
-                  onClick={() => void executeResolution('customer', selectedSuspensionDays)}
-                  className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold disabled:opacity-50 shadow-sm"
-                >
-                  {isResolving
-                    ? t('common.loading')
-                    : locale === 'en'
-                      ? 'Confirm 3rd Strike & Suspend'
-                      : 'Підтвердити страйк та заблокувати'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+            <DurationPicker
+              value={selectedSuspensionDays}
+              onChange={setSelectedSuspensionDays}
+              locale={locale}
+              label={
+                locale === 'en'
+                  ? 'Select suspension duration:'
+                  : 'Оберіть термін блокування закладу:'
+              }
+            />
+          </>
+        )}
+      </ConfirmModal>
     </div>
   );
 };

@@ -9,16 +9,23 @@ import {
   UseGuards,
   UsePipes,
   UseInterceptors,
-  UploadedFile
+  UploadedFile,
+  ForbiddenException
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
+import { storeMembers, stores, eq, and, isNull } from '@bizx/database';
+import { DatabaseService } from '../database/database.service.js';
 import { StorageService } from './storage.service.js';
 import { RbacService } from '../rbac/rbac.service.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import { Public, CurrentUser } from '../auth/decorators/auth.decorators.js';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
-import { validateImageFile, type UploadedFileDto } from '../common/file-upload.utils.js';
+import {
+  validateImageFile,
+  MAX_IMAGE_FILE_SIZE,
+  type UploadedFileDto
+} from '../common/file-upload.utils.js';
 import {
   presignedUploadDtoSchema,
   type PresignedUploadDto,
@@ -31,8 +38,28 @@ import {
 export class StorageController {
   constructor(
     private readonly storageService: StorageService,
-    private readonly rbacService: RbacService
+    private readonly rbacService: RbacService,
+    private readonly databaseService: DatabaseService
   ) {}
+
+  private async assertCanUploadToFolder(userId: string, folder: string): Promise<void> {
+    if (folder === 'avatars') return;
+    const plat = await this.rbacService.getPlatformMemberAccess(userId);
+    if (plat.isMember) return;
+    const [ownedOrMember] = await this.databaseService.db
+      .select({ id: stores.id })
+      .from(stores)
+      .where(and(eq(stores.ownerId, userId), isNull(stores.archivedAt)))
+      .limit(1);
+    if (ownedOrMember) return;
+    const [staffRow] = await this.databaseService.db
+      .select({ id: storeMembers.id })
+      .from(storeMembers)
+      .where(and(eq(storeMembers.userId, userId), isNull(storeMembers.archivedAt)))
+      .limit(1);
+    if (staffRow) return;
+    throw new ForbiddenException('Завантаження медіа в цю категорію доступне лише бізнес-акаунтам та адміністраторам');
+  }
 
   /**
    * Статичні SVG заглушки (avatar, store, product, banner)
@@ -44,6 +71,8 @@ export class StorageController {
     const svg = this.storageService.getDefaultPlaceholderSvg(cleanName);
 
     res.setHeader('Content-Type', 'image/svg+xml');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
     res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
     res.send(svg);
   }
@@ -55,8 +84,10 @@ export class StorageController {
   @UseGuards(JwtAuthGuard)
   @UsePipes(new ZodValidationPipe(presignedUploadDtoSchema))
   async getPresignedUpload(
-    @Body() dto: PresignedUploadDto
+    @Body() dto: PresignedUploadDto,
+    @CurrentUser('sub') userId: string
   ): Promise<ApiResponse<PresignedUploadResponse>> {
+    await this.assertCanUploadToFolder(userId, dto.folder);
     const result = await this.storageService.getPresignedUploadUrl(
       dto.folder,
       dto.fileName,
@@ -75,15 +106,17 @@ export class StorageController {
    */
   @Post('upload')
   @UseGuards(JwtAuthGuard)
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_IMAGE_FILE_SIZE } }))
   async uploadFile(
     @UploadedFile() rawFile: UploadedFileDto | undefined,
+    @CurrentUser('sub') userId: string,
     @Body('folder') folderParam?: string
   ): Promise<ApiResponse<UploadFileResponse>> {
-    const file = validateImageFile(rawFile);
     const validFolders = ['avatars', 'stores/logos', 'stores/banners', 'products'];
-    const folder = validFolders.includes(folderParam || '') ? (folderParam as string) : 'general';
+    const folder = validFolders.includes(folderParam || '') ? (folderParam as string) : 'avatars';
+    await this.assertCanUploadToFolder(userId, folder);
 
+    const file = validateImageFile(rawFile);
     const fileKey = this.storageService.generateFileKey(folder, file.originalname);
     const publicUrl = await this.storageService.uploadBuffer(fileKey, file.buffer, file.mimetype);
 
@@ -112,6 +145,11 @@ export class StorageController {
     const { stream, contentType, contentLength } = await this.storageService.getFileStream(fileKey);
 
     res.setHeader('Content-Type', contentType);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
+    if (contentType === 'image/svg+xml' || contentType === 'text/html') {
+      res.setHeader('Content-Disposition', 'inline');
+    }
     if (contentLength) {
       res.setHeader('Content-Length', contentLength);
     }

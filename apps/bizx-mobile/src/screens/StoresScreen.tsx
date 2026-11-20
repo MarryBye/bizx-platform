@@ -148,7 +148,7 @@ export const StoresScreen: React.FC<StoresScreenProps> = ({ onSelectStore }) => 
                     <View className="bg-white/95 px-2 py-0.5 rounded border border-amber-200 shadow-sm flex-row items-center gap-1">
                       <MaterialIcon name="star" size={12} color="#f59e0b" />
                       <Text className="text-[10px] font-black text-slate-900">
-                        {((store.ratingAvg || 0) / 100).toFixed(1)}
+                        {Number(store.ratingAvg || 0).toFixed(1)}
                       </Text>
                       <Text className="text-[10px] font-semibold text-slate-500">
                         ({store.ratingCount})

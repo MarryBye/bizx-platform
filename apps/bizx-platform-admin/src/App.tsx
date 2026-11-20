@@ -5,7 +5,9 @@ import type {
   UserProfile,
   PlatformAnalytics,
   StoreCategory,
-  MemberAccessSummary
+  MemberAccessSummary,
+  UpdatePlatformUserStatusDto,
+  UpdatePlatformUserSubscriptionDto
 } from '@bizx/common-types';
 import { ShieldAlert, AlertCircle, X, Lock, Bell, ArrowRight } from 'lucide-react';
 import { PlatformLayout, type PlatformTab } from './components/PlatformLayout';
@@ -18,7 +20,10 @@ import { UsersView } from './views/UsersView';
 import { DisputesView } from './views/DisputesView';
 import { StaffView } from './views/StaffView';
 import { LoginView } from './views/LoginView';
-import { BusinessDetailsModal } from './components/BusinessDetailsModal';
+import {
+  BusinessDetailsModal,
+  type BusinessStatusUpdatePayload
+} from './components/BusinessDetailsModal';
 import { UserDetailsModal, type PlatformUserRecord } from './components/UserDetailsModal';
 
 export const App: React.FC = () => {
@@ -139,6 +144,11 @@ export const App: React.FC = () => {
                 isBusinessOwner: Boolean(u.isBusinessOwner),
                 storesCount: u.storesCount ?? 0,
                 status: u.status,
+                suspendedUntil: u.suspendedUntil || null,
+                suspensionReason: u.suspensionReason || null,
+                subscriptionTier: u.subscriptionTier || 'free',
+                subscriptionStatus: u.subscriptionStatus || 'none',
+                subscriptionExpiresAt: u.subscriptionExpiresAt || null,
                 createdAt: new Date(u.createdAt).toLocaleDateString('uk-UA')
               }))
             );
@@ -266,22 +276,51 @@ export const App: React.FC = () => {
     void initAuth();
   }, [loadPlatformData]);
 
-  // Handler: Update Business Status
+  // Handler: Update Business Status (with optional timed suspension & mandatory reason)
   const handleUpdateBusinessStatus = async (
     id: string,
-    newStatus: 'active' | 'pending' | 'suspended' | 'archived'
+    payload: BusinessStatusUpdatePayload
   ) => {
     setIsUpdatingBusinessStatus(true);
     setActionError(null);
     try {
-      if (newStatus === 'archived') {
+      let updatedStore: {
+        status?: string;
+        suspendedUntil?: string | null;
+        suspensionReason?: string | null;
+      } | null = null;
+
+      if (payload.status === 'archived') {
         await platformApi.stores.archiveStore(id);
+        updatedStore = { status: 'archived', suspendedUntil: null, suspensionReason: null };
       } else {
-        await platformApi.stores.updateStore(id, { status: newStatus });
+        const res = await platformApi.stores.updateStore(id, {
+          status: payload.status,
+          suspensionDays: payload.suspensionDays,
+          suspensionReason: payload.suspensionReason ?? undefined
+        });
+        updatedStore = res.data || { status: payload.status };
       }
 
+      const nextStatus = (updatedStore?.status || payload.status) as ExtendedBusiness['status'];
+      const nextUntil =
+        payload.status === 'suspended' ? updatedStore?.suspendedUntil ?? null : null;
+      const nextReason =
+        payload.status === 'suspended'
+          ? updatedStore?.suspensionReason ?? payload.suspensionReason ?? null
+          : null;
+
       setBusinesses((prev) => {
-        const next = prev.map((b) => (b.id === id ? { ...b, status: newStatus } : b));
+        const next = prev.map((b) =>
+          b.id === id
+            ? {
+                ...b,
+                status: nextStatus,
+                suspendedUntil: nextUntil,
+                suspensionReason: nextReason
+              }
+            : b
+        );
         const pCount = next.filter((b) => b.status === 'pending').length;
         prevPendingStoresRef.current = pCount;
         setPendingStoresCount(pCount);
@@ -289,14 +328,26 @@ export const App: React.FC = () => {
       });
 
       if (selectedBusiness && selectedBusiness.id === id) {
-        setSelectedBusiness((prev) => (prev ? { ...prev, status: newStatus } : null));
+        setSelectedBusiness((prev) =>
+          prev
+            ? {
+                ...prev,
+                status: nextStatus,
+                suspendedUntil: nextUntil,
+                suspensionReason: nextReason
+              }
+            : null
+        );
       }
     } catch (err: any) {
       setActionError(
         err?.data?.message ||
           err?.message ||
-          (locale === 'en' ? 'Insufficient permissions to update store status' : 'Недостатньо прав для зміни статусу закладу')
+          (locale === 'en'
+            ? 'Insufficient permissions to update store status'
+            : 'Недостатньо прав для зміни статусу закладу')
       );
+      throw err;
     } finally {
       setIsUpdatingBusinessStatus(false);
     }
@@ -377,26 +428,82 @@ export const App: React.FC = () => {
     }
   };
 
-  // Handler: Update User Status (persisted in DB)
+  // Handler: Update User Status (with timed/indefinite suspension & reason)
   const handleUpdateUserStatus = async (
     userId: string,
-    newStatus: 'active' | 'suspended' | 'archived'
+    dto: UpdatePlatformUserStatusDto
   ) => {
     setActionError(null);
     try {
-      await platformApi.rbac.updatePlatformUserStatus(userId, newStatus);
+      const res = await platformApi.rbac.updatePlatformUserStatus(userId, dto);
+      const nextStatus = (res.data?.status || dto.status) as PlatformUserRecord['status'];
+      const nextUntil = res.data?.suspendedUntil ?? null;
+      const nextReason = res.data?.suspensionReason ?? null;
+
       setUsersList((prev) =>
-        prev.map((u) => (u.id === userId ? { ...u, status: newStatus } : u))
+        prev.map((u) =>
+          u.id === userId
+            ? {
+                ...u,
+                status: nextStatus,
+                suspendedUntil: nextUntil,
+                suspensionReason: nextReason
+              }
+            : u
+        )
       );
       if (selectedUser && selectedUser.id === userId) {
-        setSelectedUser((prev) => (prev ? { ...prev, status: newStatus } : null));
+        setSelectedUser((prev) =>
+          prev
+            ? {
+                ...prev,
+                status: nextStatus,
+                suspendedUntil: nextUntil,
+                suspensionReason: nextReason
+              }
+            : null
+        );
       }
     } catch (err: any) {
       setActionError(
         err?.data?.message ||
           err?.message ||
-          (locale === 'en' ? 'Insufficient permissions to update user status' : 'Недостатньо прав для зміни статусу користувача')
+          (locale === 'en'
+            ? 'Insufficient permissions to update user status'
+            : 'Недостатньо прав для зміни статусу користувача')
       );
+      throw err;
+    }
+  };
+
+  // Handler: Update User Subscription (tier, status, expiration date)
+  const handleUpdateUserSubscription = async (
+    userId: string,
+    dto: UpdatePlatformUserSubscriptionDto
+  ) => {
+    setActionError(null);
+    try {
+      const res = await platformApi.rbac.updatePlatformUserSubscription(userId, dto);
+      if (res.success && res.data) {
+        const patch = {
+          subscriptionTier: res.data.subscriptionTier,
+          subscriptionStatus: res.data.subscriptionStatus,
+          subscriptionExpiresAt: res.data.subscriptionExpiresAt
+        };
+        setUsersList((prev) => prev.map((u) => (u.id === userId ? { ...u, ...patch } : u)));
+        if (selectedUser && selectedUser.id === userId) {
+          setSelectedUser((prev) => (prev ? { ...prev, ...patch } : null));
+        }
+      }
+    } catch (err: any) {
+      setActionError(
+        err?.data?.message ||
+          err?.message ||
+          (locale === 'en'
+            ? 'Insufficient permissions to update user subscription'
+            : 'Недостатньо прав для керування підпискою користувача')
+      );
+      throw err;
     }
   };
 
@@ -599,9 +706,6 @@ export const App: React.FC = () => {
                 setSelectedBusiness(b);
                 setIsBusinessModalOpen(true);
               }}
-              onPreviewStore={handlePreviewStore}
-              onApproveStore={handleApproveStore}
-              onRejectStore={handleRejectStore}
             />
           )}
 
@@ -637,7 +741,11 @@ export const App: React.FC = () => {
 
       {/* Business Details Modal */}
       <BusinessDetailsModal
-        business={selectedBusiness}
+        business={
+          selectedBusiness
+            ? businesses.find((b) => b.id === selectedBusiness.id) || selectedBusiness
+            : null
+        }
         isOpen={isBusinessModalOpen}
         onClose={() => {
           setIsBusinessModalOpen(false);
@@ -650,22 +758,31 @@ export const App: React.FC = () => {
         isUpdating={isUpdatingBusinessStatus}
         canModerate={hasPerm('platform.stores.moderate')}
         canApprove={hasPerm('platform.stores.approve')}
+        canUnblock={hasPerm('platform.stores.unblock')}
         canArchive={hasPerm('platform.stores.archive')}
+        canIssueStrikes={hasPerm('platform.strikes.issue')}
         canRevokeStrikes={hasPerm('platform.strikes.revoke')}
         onRefresh={loadPlatformData}
       />
 
       {/* User Details Modal */}
       <UserDetailsModal
-        user={selectedUser}
+        user={
+          selectedUser
+            ? usersList.find((u) => u.id === selectedUser.id) || selectedUser
+            : null
+        }
         isOpen={isUserModalOpen}
         onClose={() => {
           setIsUserModalOpen(false);
           setSelectedUser(null);
         }}
         onUpdateStatus={handleUpdateUserStatus}
+        onUpdateSubscription={handleUpdateUserSubscription}
         canEditStatus={hasPerm('platform.users.edit')}
+        canUnblock={hasPerm('platform.users.unblock')}
         canArchive={hasPerm('platform.users.archive')}
+        canManageSubscriptions={hasPerm('platform.users.subscriptions')}
       />
     </PlatformLayout>
   );

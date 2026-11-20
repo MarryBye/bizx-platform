@@ -15,6 +15,7 @@ import type {
   ResolveDisputeDto,
   PlatformDisputeListItem,
   StoreStrikeItem,
+  IssueStoreStrikeDto,
   RevokeStrikeDto,
   CreateStoreReviewDto,
   StoreReviewItem
@@ -227,6 +228,17 @@ export class OrdersModule {
 
   async getStoreStrikes(storeId: string): Promise<ApiResponse<StoreStrikeItem[]>> {
     return this.client.get<ApiResponse<StoreStrikeItem[]>>(`/platform/stores/${storeId}/strikes`);
+  }
+
+  async issueStoreStrike(
+    storeId: string,
+    dto: IssueStoreStrikeDto
+  ): Promise<
+    ApiResponse<{ strike: StoreStrikeItem; activeStrikesCount: number; storeSuspended: boolean }>
+  > {
+    return this.client.post<
+      ApiResponse<{ strike: StoreStrikeItem; activeStrikesCount: number; storeSuspended: boolean }>
+    >(`/platform/stores/${storeId}/strikes`, dto);
   }
 
   async revokeStrike(

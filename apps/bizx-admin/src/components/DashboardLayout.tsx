@@ -3,8 +3,8 @@ import { useAuthStore } from '../store/useAuthStore';
 import { useBusinessStore } from '../store/useBusinessStore';
 import { useTranslation } from '../hooks/useTranslation';
 import { api } from '../lib/api';
-import { formatCompactCount, type MemberAccessSummary } from '@bizx/common-types';
-import { Select, LanguageSelector, SidebarAccountMenu } from '@bizx/ui';
+import type { MemberAccessSummary } from '@bizx/common-types';
+import { Select, LanguageSelector, SidebarAccountMenu, CountBadge } from '@bizx/ui';
 import {
   LayoutDashboard,
   BarChart3,
@@ -118,7 +118,11 @@ export const DashboardLayout: React.FC = () => {
   }, [activeStoreId, permsLoaded, myAccess]);
 
   const isStoreInactive = activeStore && activeStore.status !== 'active';
+  const isStoreWriteLocked = Boolean(
+    activeStore && (activeStore.status === 'suspended' || activeStore.status === 'archived')
+  );
   const isReadOnly = activeStore ? !ownerHasActiveSub : !hasActiveSubscription;
+  const isCatalogLocked = isReadOnly || isStoreWriteLocked;
 
   const merchantNavItems = [
     { id: 'overview' as const, label: t('admin.overview'), icon: LayoutDashboard, visible: hasPerm('analytics.read') },
@@ -301,23 +305,21 @@ export const DashboardLayout: React.FC = () => {
                       <span className="truncate">{item.label}</span>
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
-                      {item.id === 'orders' && activeDisputesCount > 0 && (
-                        <span
-                          title={locale === 'en' ? 'Active disputes' : 'Активні спори'}
-                          className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[9px] font-black bg-red-600 text-white"
-                        >
-                          !{formatCompactCount(activeDisputesCount)}
-                        </span>
-                      )}
-                      {item.id === 'orders' && unreadOrdersCount > 0 && (
-                        <span
-                          title={locale === 'en' ? 'Unread messages' : 'Непрочитані повідомлення'}
-                          className={`inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full text-[10px] font-bold ${
-                            isActive ? 'bg-white text-slate-900' : 'bg-blue-600 text-white'
-                          }`}
-                        >
-                          {formatCompactCount(unreadOrdersCount)}
-                        </span>
+                      {item.id === 'orders' && (
+                        <>
+                          <CountBadge
+                            count={activeDisputesCount}
+                            tone="red"
+                            title={locale === 'en' ? 'Active disputes' : 'Активні спори'}
+                            icon={<AlertTriangle className="w-2.5 h-2.5" />}
+                          />
+                          <CountBadge
+                            count={unreadOrdersCount}
+                            tone="blue"
+                            inverted={isActive}
+                            title={locale === 'en' ? 'Unread messages' : 'Непрочитані повідомлення'}
+                          />
+                        </>
                       )}
                       {item.isStub && (
                         <span
@@ -468,11 +470,11 @@ export const DashboardLayout: React.FC = () => {
               )}
               {currentTab === 'products' && hasPerm('products.read') && (
                 <ProductsView
-                  isReadOnly={isReadOnly}
-                  canCreate={!isReadOnly && hasPerm('products.write')}
-                  canEdit={!isReadOnly && hasPerm('products.edit')}
-                  canChangeStatus={!isReadOnly && hasPerm('products.status')}
-                  canArchive={!isReadOnly && hasPerm('products.archive')}
+                  isReadOnly={isCatalogLocked}
+                  canCreate={!isCatalogLocked && hasPerm('products.write')}
+                  canEdit={!isCatalogLocked && hasPerm('products.edit')}
+                  canChangeStatus={!isCatalogLocked && hasPerm('products.status')}
+                  canArchive={!isCatalogLocked && hasPerm('products.archive')}
                 />
               )}
               {currentTab === 'orders' && hasPerm('orders.read') && (
@@ -483,8 +485,8 @@ export const DashboardLayout: React.FC = () => {
               )}
               {currentTab === 'settings' && hasPerm('store.read') && (
                 <StoreSettingsView
-                  isReadOnly={isReadOnly}
-                  canEdit={!isReadOnly && hasPerm('store.edit')}
+                  isReadOnly={isCatalogLocked}
+                  canEdit={!isCatalogLocked && hasPerm('store.edit')}
                 />
               )}
               {currentTab === 'staff' && hasPerm('staff.read') && <StaffView />}

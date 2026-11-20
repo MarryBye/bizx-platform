@@ -19,7 +19,11 @@ import { StorageService } from '../storage/storage.service.js';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
 import { JwtAuthGuard } from './guards/jwt-auth.guard.js';
 import { CurrentUser, Public } from './decorators/auth.decorators.js';
-import { validateImageFile, type UploadedFileDto } from '../common/file-upload.utils.js';
+import {
+  validateImageFile,
+  MAX_IMAGE_FILE_SIZE,
+  type UploadedFileDto
+} from '../common/file-upload.utils.js';
 import {
   registerDtoSchema,
   loginDtoSchema,
@@ -115,12 +119,18 @@ export class AuthController {
   @Public()
   @Post('refresh')
   async refresh(
-    @Body() body: RefreshTokenDto,
+    @Body() body: RefreshTokenDto | undefined,
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response
   ): Promise<ApiResponse<AuthResponse>> {
     // Поддержка куки (веб) ИЛИ тела запроса (мобилка)
-    const rawToken = req.cookies?.[REFRESH_COOKIE_NAME] || body.refreshToken;
+    const bodyToken =
+      body && typeof body.refreshToken === 'string' ? body.refreshToken.trim() : undefined;
+    const cookieToken =
+      typeof req.cookies?.[REFRESH_COOKIE_NAME] === 'string'
+        ? req.cookies[REFRESH_COOKIE_NAME]
+        : undefined;
+    const rawToken = cookieToken || bodyToken;
 
     if (!rawToken) {
       throw new UnauthorizedException('Refresh токен не передан');
@@ -190,7 +200,7 @@ export class AuthController {
 
   @Post('me/avatar')
   @UseGuards(JwtAuthGuard)
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_IMAGE_FILE_SIZE } }))
   async uploadAvatar(
     @CurrentUser('sub') userId: string,
     @UploadedFile() rawFile?: UploadedFileDto

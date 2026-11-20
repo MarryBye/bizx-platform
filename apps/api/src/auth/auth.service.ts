@@ -8,6 +8,7 @@ import {
   Injectable,
   ConflictException,
   UnauthorizedException,
+  ForbiddenException,
   NotFoundException
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -46,6 +47,51 @@ export class AuthService {
 
   private hashToken(token: string): string {
     return crypto.createHash('sha256').update(token).digest('hex');
+  }
+
+  private async assertUserNotBlocked<
+    T extends {
+      id: string;
+      status: string;
+      suspendedUntil?: Date | null;
+      suspensionReason?: string | null;
+    }
+  >(user: T): Promise<T> {
+    if (user.status === 'archived') {
+      throw new ForbiddenException('Обліковий запис архівовано. Зверніться до підтримки BizX.');
+    }
+
+    if (user.status === 'suspended') {
+      const now = new Date();
+      if (user.suspendedUntil && user.suspendedUntil <= now) {
+        // Термін тимчасового блокування минув — автоматично розблоковуємо
+        await this.databaseService.db
+          .update(users)
+          .set({
+            status: 'active',
+            suspendedUntil: null,
+            suspensionReason: null,
+            updatedAt: now
+          })
+          .where(eq(users.id, user.id));
+        return {
+          ...user,
+          status: 'active',
+          suspendedUntil: null,
+          suspensionReason: null
+        };
+      }
+
+      const untilText = user.suspendedUntil
+        ? `до ${user.suspendedUntil.toLocaleDateString('uk-UA')}`
+        : 'безстроково';
+      const reasonText = user.suspensionReason ? ` Причина: ${user.suspensionReason}` : '';
+      throw new ForbiddenException(
+        `Ваш обліковий запис заблоковано (${untilText}).${reasonText}`
+      );
+    }
+
+    return user;
   }
 
   private async isPlatformStaffUser(userId: string): Promise<boolean> {
@@ -118,7 +164,8 @@ export class AuthService {
     const payload = {
       sub: user.id,
       email: user.email,
-      name: user.name
+      name: user.name,
+      tokenType: 'access' as const
     };
 
     const accessToken = await this.jwtService.signAsync(payload, {
@@ -238,6 +285,8 @@ export class AuthService {
       throw new UnauthorizedException('Неверный логин или пароль');
     }
 
+    user = await this.assertUserNotBlocked(user);
+
     const reconciledUser = await this.reconcileExpiredSubscription(user);
     const userProfile = await this.mapToProfile(reconciledUser);
 
@@ -278,7 +327,8 @@ export class AuthService {
       throw new UnauthorizedException('Пользователь не найден');
     }
 
-    const reconciledUser = await this.reconcileExpiredSubscription(user);
+    const activeUser = await this.assertUserNotBlocked(user);
+    const reconciledUser = await this.reconcileExpiredSubscription(activeUser);
     const userProfile = await this.mapToProfile(reconciledUser);
 
     const tokens = await this.generateTokens(reconciledUser);
@@ -292,22 +342,34 @@ export class AuthService {
   }
 
   async logout(rawRefreshToken?: string, userId?: string, bearerToken?: string): Promise<void> {
-    if (rawRefreshToken) {
+    if (rawRefreshToken && typeof rawRefreshToken === 'string') {
       const tokenHash = this.hashToken(rawRefreshToken);
       await this.databaseService.db
         .delete(refreshTokens)
         .where(eq(refreshTokens.tokenHash, tokenHash));
     }
 
-    let resolvedUserId = userId;
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    let resolvedUserId = userId && uuidRegex.test(userId) ? userId : undefined;
+
     if (!resolvedUserId && bearerToken) {
       try {
-        const decoded = this.jwtService.decode(bearerToken) as { sub?: string } | null;
-        if (decoded?.sub) {
-          resolvedUserId = decoded.sub;
+        // Verify cryptographic signature (allowing expired access token during logout), never trust unverified decode()
+        const verified = await this.jwtService.verifyAsync<{
+          sub?: string;
+          tokenType?: string;
+          type?: string;
+        }>(bearerToken, { ignoreExpiration: true });
+        if (
+          verified?.tokenType === 'access' &&
+          verified?.type !== 'store_preview' &&
+          typeof verified?.sub === 'string' &&
+          uuidRegex.test(verified.sub)
+        ) {
+          resolvedUserId = verified.sub;
         }
       } catch {
-        // ignore
+        // Invalid/forged bearer token: silently ignore instead of wiping any user's sessions
       }
     }
 

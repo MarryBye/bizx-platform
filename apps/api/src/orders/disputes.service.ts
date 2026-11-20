@@ -8,6 +8,7 @@ import {
 import { DatabaseService } from '../database/database.service.js';
 import { RbacService } from '../rbac/rbac.service.js';
 import { OrdersService, type EnrichedOrder } from './orders.service.js';
+import { InboxService } from '../inbox/inbox.service.js';
 import {
   orders,
   orderMessages,
@@ -29,6 +30,7 @@ import type {
   CreateDisputeDto,
   EscalateDisputeDto,
   ResolveDisputeDto,
+  IssueStoreStrikeDto,
   RevokeStrikeDto,
   OrderDisputeItem,
   PlatformDisputeListItem,
@@ -71,7 +73,8 @@ export class DisputesService {
   constructor(
     private readonly databaseService: DatabaseService,
     private readonly rbacService: RbacService,
-    private readonly ordersService: OrdersService
+    private readonly ordersService: OrdersService,
+    private readonly inboxService: InboxService
   ) {}
 
   private async countActiveStrikes(storeId: string): Promise<number> {
@@ -107,22 +110,32 @@ export class DisputesService {
     if (order.customerId !== userId) {
       throw new ForbiddenException('Відкрити спір може лише клієнт, який оформив замовлення');
     }
-    if (order.status === 'cancelled' && order.paymentStatus === 'refunded') {
-      throw new BadRequestException('Замовлення вже скасовано та кошти повернено');
+    if (order.status === 'cancelled' || order.paymentStatus === 'refunded') {
+      throw new BadRequestException('Замовлення вже скасовано або кошти повернено');
     }
 
-    const [existingActive] = await this.databaseService.db
-      .select({ id: orderDisputes.id })
+    const [existingDispute] = await this.databaseService.db
+      .select({ id: orderDisputes.id, status: orderDisputes.status })
       .from(orderDisputes)
       .where(
         and(
           eq(orderDisputes.orderId, orderId),
-          inArray(orderDisputes.status, ['open_store', 'escalated_platform'])
+          inArray(orderDisputes.status, [
+            'open_store',
+            'escalated_platform',
+            'resolved_refund',
+            'resolved_business',
+            'resolved_customer'
+          ])
         )
       );
 
-    if (existingActive) {
-      throw new ConflictException('По цьому замовленню вже відкрито активний спір');
+    if (existingDispute) {
+      throw new ConflictException(
+        ['open_store', 'escalated_platform'].includes(existingDispute.status)
+          ? 'По цьому замовленню вже відкрито активний спір'
+          : 'Спір по цьому замовленню вже був розглянутий та закритий'
+      );
     }
 
     const now = new Date();
@@ -461,6 +474,9 @@ export class DisputesService {
     dto: ResolveDisputeDto
   ): Promise<{ dispute: OrderDisputeItem; strikeIssued: boolean; storeSuspended: boolean }> {
     await this.rbacService.assertPlatformPermission(userId, 'platform.disputes.resolve');
+    if (dto.decision === 'customer' && dto.issueStrike) {
+      await this.rbacService.assertPlatformPermission(userId, 'platform.strikes.issue');
+    }
 
     const [dispute] = await this.databaseService.db
       .select()
@@ -662,6 +678,14 @@ export class DisputesService {
 
     if (!allowed) {
       await this.rbacService.assertStorePermission(storeId, userId, 'store.read', { write: false });
+    } else {
+      const [storeExists] = await this.databaseService.db
+        .select({ id: stores.id })
+        .from(stores)
+        .where(eq(stores.id, storeId));
+      if (!storeExists) {
+        throw new NotFoundException('Заклад не знайдено');
+      }
     }
 
     const rows = await this.databaseService.db
@@ -755,21 +779,36 @@ export class DisputesService {
 
       if (dto.liftSuspension !== false && remainingActive < 3) {
         const [store] = await tx
-          .select({ id: stores.id, status: stores.status })
+          .select({
+            id: stores.id,
+            ownerId: stores.ownerId,
+            status: stores.status,
+            suspensionReason: stores.suspensionReason,
+            archivedAt: stores.archivedAt
+          })
           .from(stores)
           .where(eq(stores.id, strike.storeId));
 
-        if (store && store.status === 'suspended') {
-          await tx
-            .update(stores)
-            .set({
-              status: 'active',
-              suspendedUntil: null,
-              suspensionReason: null,
-              updatedAt: now
-            })
-            .where(eq(stores.id, strike.storeId));
-          storeSuspensionLifted = true;
+        const isStrikeSuspension =
+          !store?.suspensionReason ||
+          store.suspensionReason.toLowerCase().includes('страйк');
+
+        if (store && store.status === 'suspended' && !store.archivedAt && isStrikeSuspension) {
+          const { hasActiveBizSub, isStaff } = await this.rbacService.reconcileOwnerStores(
+            store.ownerId
+          );
+          if (isStaff || hasActiveBizSub) {
+            await tx
+              .update(stores)
+              .set({
+                status: 'active',
+                suspendedUntil: null,
+                suspensionReason: null,
+                updatedAt: now
+              })
+              .where(eq(stores.id, strike.storeId));
+            storeSuspensionLifted = true;
+          }
         }
       }
 
@@ -798,6 +837,119 @@ export class DisputesService {
         createdAt: updatedStrike.createdAt.toISOString()
       },
       storeSuspensionLifted
+    };
+  }
+
+  async issueManualStrike(
+    storeId: string,
+    userId: string,
+    dto: IssueStoreStrikeDto
+  ): Promise<{
+    strike: StoreStrikeItem;
+    activeStrikesCount: number;
+    storeSuspended: boolean;
+  }> {
+    await this.rbacService.assertPlatformPermission(userId, 'platform.strikes.issue');
+
+    const [store] = await this.databaseService.db
+      .select()
+      .from(stores)
+      .where(eq(stores.id, storeId));
+
+    if (!store) {
+      throw new NotFoundException('Заклад не знайдено');
+    }
+
+    const now = new Date();
+    const reason = dto.reason.trim();
+    const existingActiveCount = await this.countActiveStrikes(storeId);
+    const nextActiveCount = existingActiveCount + 1;
+    const shouldSuspend = nextActiveCount >= 3;
+
+    const suspensionDays =
+      shouldSuspend && typeof dto.suspensionDays === 'number' && dto.suspensionDays > 0
+        ? dto.suspensionDays
+        : null;
+    const suspendedUntil =
+      shouldSuspend && suspensionDays
+        ? new Date(now.getTime() + suspensionDays * 24 * 60 * 60 * 1000)
+        : null;
+
+    const expiresAt = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000); // 90 днів (єдине правило зі страйками по спорах)
+    const shouldSuspendStore = shouldSuspend && store.status !== 'archived' && !store.archivedAt;
+
+    const inserted = await this.databaseService.db.transaction(async (tx) => {
+      const [created] = await tx
+        .insert(storeStrikes)
+        .values({
+          storeId,
+          disputeId: null,
+          issuedByUserId: userId,
+          reason,
+          suspensionDays: shouldSuspendStore ? suspensionDays : null,
+          expiresAt,
+          createdAt: now
+        })
+        .returning();
+
+      if (shouldSuspendStore) {
+        await tx
+          .update(stores)
+          .set({
+            status: 'suspended',
+            suspendedUntil,
+            suspensionReason: `Автоматичне блокування через ${nextActiveCount} активних страйків: ${reason}`,
+            updatedAt: now
+          })
+          .where(eq(stores.id, storeId));
+      }
+
+      return created;
+    });
+
+    const [actor] = await this.databaseService.db
+      .select({ name: users.name })
+      .from(users)
+      .where(eq(users.id, userId));
+
+    const durationNote = shouldSuspend
+      ? suspendedUntil
+        ? `Роботу закладу призупинено на ${suspensionDays} дн. (до ${suspendedUntil.toLocaleDateString('uk-UA')}).`
+        : 'Роботу закладу призупинено безстроково до рішення адміністрації BizX.'
+      : `Усього активних страйків: ${nextActiveCount}/3. При досягненні 3 страйків роботу закладу буде автоматично призупинено.`;
+
+    await this.inboxService
+      .sendOfficialBizxMessage({
+        userId: store.ownerId,
+        senderName: 'BizX Арбітраж',
+        subject: shouldSuspend
+          ? `Заклад «${store.name}» призупинено (страйк ${nextActiveCount}/3)`
+          : `Видано страйк закладу «${store.name}» (${nextActiveCount}/3)`,
+        body: `Модератор BizX видав страйк закладу «${store.name}».\n\nПричина:\n${reason}\n\n${durationNote}`,
+        relatedStoreId: store.id,
+        canReply: false
+      })
+      .catch(() => {});
+
+    return {
+      strike: {
+        id: inserted.id,
+        storeId: inserted.storeId,
+        disputeId: null,
+        issuedByUserId: inserted.issuedByUserId,
+        issuedByName: actor?.name || null,
+        reason: inserted.reason,
+        suspensionDays: inserted.suspensionDays,
+        expiresAt: inserted.expiresAt ? inserted.expiresAt.toISOString() : null,
+        revokedAt: null,
+        revokedByUserId: null,
+        revokedByName: null,
+        revokeReason: null,
+        isActive: true,
+        createdAt: inserted.createdAt.toISOString()
+      },
+      activeStrikesCount: nextActiveCount,
+      storeSuspended: shouldSuspend
     };
   }
 }

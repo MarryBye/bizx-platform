@@ -14,8 +14,10 @@ import { CurrentUser } from '../auth/decorators/auth.decorators.js';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
 import {
   resolveDisputeDtoSchema,
+  issueStoreStrikeDtoSchema,
   revokeStrikeDtoSchema,
   type ResolveDisputeDto,
+  type IssueStoreStrikeDto,
   type RevokeStrikeDto,
   type PlatformDisputeListItem,
   type OrderDisputeItem,
@@ -73,6 +75,18 @@ export class DisputesController {
     @CurrentUser('sub') userId: string
   ): Promise<ApiResponse<StoreStrikeItem[]>> {
     const data = await this.disputesService.getStoreStrikes(storeId, userId);
+    return { success: true, data, timestamp: new Date().toISOString() };
+  }
+
+  @Post('stores/:storeId/strikes')
+  async issueStoreStrike(
+    @Param('storeId') storeId: string,
+    @CurrentUser('sub') userId: string,
+    @Body(new ZodValidationPipe(issueStoreStrikeDtoSchema)) dto: IssueStoreStrikeDto
+  ): Promise<
+    ApiResponse<{ strike: StoreStrikeItem; activeStrikesCount: number; storeSuspended: boolean }>
+  > {
+    const data = await this.disputesService.issueManualStrike(storeId, userId, dto);
     return { success: true, data, timestamp: new Date().toISOString() };
   }
 

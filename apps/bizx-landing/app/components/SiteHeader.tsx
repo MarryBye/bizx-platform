@@ -4,8 +4,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { api } from '../lib/api';
 import { useTranslation } from '../hooks/useTranslation';
-import { formatCompactCount, type UserProfile, type Store } from '@bizx/common-types';
-import { LanguageSelector } from '@bizx/ui';
+import type { UserProfile, Store } from '@bizx/common-types';
+import { LanguageSelector, CountBadge } from '@bizx/ui';
 import { AuthModal } from './AuthModal';
 import {
   ChevronDown,
@@ -184,11 +184,11 @@ export const SiteHeader: React.FC = () => {
                   className="relative p-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 transition-colors shadow-sm"
                 >
                   <Mail className="w-4 h-4" />
-                  {inboxUnread > 0 && (
-                    <span className="absolute -top-1.5 -right-1.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-blue-600 text-white text-[10px] font-black">
-                      {formatCompactCount(inboxUnread)}
-                    </span>
-                  )}
+                  <CountBadge
+                    count={inboxUnread}
+                    tone="blue"
+                    className="absolute -top-1.5 -right-1.5 px-1"
+                  />
                 </Link>
                 <div className="relative" ref={dropdownRef}>
                 <button

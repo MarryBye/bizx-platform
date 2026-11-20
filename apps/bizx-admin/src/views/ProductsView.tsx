@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useBusinessStore } from '../store/useBusinessStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { useTranslation } from '../hooks/useTranslation';
-import { Button, Input, Textarea, Card, CardContent, Badge, Modal, ProductPlaceholder, Select } from '@bizx/ui';
+import { Button, Input, Textarea, Card, CardContent, Badge, Modal, ConfirmModal, ProductPlaceholder, Select } from '@bizx/ui';
 import { Plus, Search, Archive, Image as ImageIcon, Upload, AlertCircle, Pencil } from 'lucide-react';
 import { resolveMediaUrl } from '../lib/media';
 import type { Product } from '@bizx/common-types';
@@ -35,6 +35,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [archivingProduct, setArchivingProduct] = useState<Product | null>(null);
 
   // Form State
   const [name, setName] = useState('');
@@ -320,11 +321,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                             variant="outline"
                             size="sm"
                             className="text-slate-500 hover:text-amber-700 hover:bg-amber-50 hover:border-amber-200"
-                            onClick={() => {
-                              if (confirm(`Архівувати товар "${p.name}"? Товар буде сховано з каталогу, але збережено в системному архіві.`)) {
-                                void deleteProduct(p.id);
-                              }
-                            }}
+                            onClick={() => setArchivingProduct(p)}
                             title="Архівувати товар"
                           >
                             <Archive className="w-3.5 h-3.5" />
@@ -514,6 +511,30 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
           </div>
         </form>
       </Modal>
+
+      <ConfirmModal
+        isOpen={Boolean(archivingProduct)}
+        onClose={() => setArchivingProduct(null)}
+        onConfirm={async () => {
+          if (!archivingProduct) return;
+          await deleteProduct(archivingProduct.id);
+          setArchivingProduct(null);
+        }}
+        nested={false}
+        tone="warning"
+        icon={<Archive className="w-4 h-4" />}
+        title="Архівувати товар?"
+        subtitle={archivingProduct?.name}
+        confirmLabel="Архівувати"
+        cancelLabel="Скасувати"
+        confirmVariant="destructive"
+        isLoading={isLoading}
+      >
+        <p className="text-slate-700 leading-relaxed">
+          Товар <strong>«{archivingProduct?.name}»</strong> буде приховано з каталогу та вітрини,
+          але збережено в системному архіві замовлень.
+        </p>
+      </ConfirmModal>
     </div>
   );
 };
