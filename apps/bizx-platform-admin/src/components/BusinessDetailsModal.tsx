@@ -113,14 +113,17 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
 
   const activeStrikesCount = strikes.filter((s) => s.isActive).length;
   const isThreeStrikeLock = business.status === 'suspended' && activeStrikesCount >= 3;
-  const canActivateCurrent =
-    business.status === 'suspended'
+  const canActivateCurrent = !canModerate
+    ? false
+    : business.status === 'suspended'
       ? isThreeStrikeLock
         ? canRevokeStrikes
         : canUnblock || canRevokeStrikes
       : business.status === 'archived'
-      ? canUnblock || canArchive
-      : canModerate;
+        ? canUnblock || canArchive
+        : business.status === 'draft' || business.status === 'closed'
+          ? canApprove
+          : false;
 
   const openDialog = (next: ConfirmDialogType) => {
     setConfirmDialog(next);
@@ -458,7 +461,7 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
                       {business.status === 'suspended' ? 'Розблокувати' : 'Активувати'}
                     </span>
                     <span className="text-[10px] text-slate-400">
-                      {!canActivateCurrent && business.status === 'suspended'
+                      {!canActivateCurrent && business.status !== 'active'
                         ? 'Потрібне право'
                         : 'Працює штатно'}
                     </span>
