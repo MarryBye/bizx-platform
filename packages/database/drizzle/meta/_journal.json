@@ -85,6 +85,13 @@
       "when": 1795130000000,
       "tag": "0011_broadcasts_and_marketing_subscriptions",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1795140000000,
+      "tag": "0012_db_hygiene_indexes_and_tz",
+      "breakpoints": true
     }
   ]
 }

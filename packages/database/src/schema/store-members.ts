@@ -7,9 +7,9 @@ import {
   smallint,
   timestamp,
   uniqueIndex,
+  index,
   primaryKey
 } from 'drizzle-orm/pg-core';
-import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
 import { users } from './users.js';
 import { stores } from './stores.js';
 import { roles, permissions } from './rbac.js';
@@ -31,7 +31,10 @@ export const storeMembers = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull()
   },
-  (table) => [uniqueIndex('store_members_store_user_idx').on(table.storeId, table.userId)]
+  (table) => [
+    uniqueIndex('store_members_store_user_idx').on(table.storeId, table.userId),
+    index('store_members_user_idx').on(table.userId)
+  ]
 );
 
 /**
@@ -49,9 +52,6 @@ export const storeMemberPermissions = pgTable(
   },
   (table) => [primaryKey({ columns: [table.storeMemberId, table.permissionId] })]
 );
-
-export const insertStoreMemberSchema = createInsertSchema(storeMembers);
-export const selectStoreMemberSchema = createSelectSchema(storeMembers);
 
 export type StoreMemberRecord = typeof storeMembers.$inferSelect;
 export type NewStoreMemberRecord = typeof storeMembers.$inferInsert;

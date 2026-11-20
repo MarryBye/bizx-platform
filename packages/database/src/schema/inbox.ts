@@ -34,9 +34,9 @@ export const inboxThreads = pgTable(
     canReply: boolean('can_reply').notNull().default(false),
     relatedStoreId: uuid('related_store_id').references(() => stores.id, { onDelete: 'set null' }),
     lastMessagePreview: text('last_message_preview'),
-    lastMessageAt: timestamp('last_message_at').defaultNow().notNull(),
-    createdAt: timestamp('created_at').defaultNow().notNull(),
-    updatedAt: timestamp('updated_at').defaultNow().notNull()
+    lastMessageAt: timestamp('last_message_at', { withTimezone: true }).defaultNow().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull()
   },
   (t) => ({
     userIdx: index('inbox_threads_user_idx').on(t.userId),
@@ -60,9 +60,9 @@ export const inboxMessages = pgTable(
     senderName: varchar('sender_name', { length: 160 }).notNull(),
     body: text('body'),
     attachments: jsonb('attachments').$type<OrderMessageAttachment[]>().default([]).notNull(),
-    readByRecipientAt: timestamp('read_by_recipient_at'),
-    readByStaffAt: timestamp('read_by_staff_at'),
-    createdAt: timestamp('created_at').defaultNow().notNull()
+    readByRecipientAt: timestamp('read_by_recipient_at', { withTimezone: true }),
+    readByStaffAt: timestamp('read_by_staff_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull()
   },
   (t) => ({
     threadIdx: index('inbox_messages_thread_idx').on(t.threadId),
