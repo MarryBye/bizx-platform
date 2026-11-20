@@ -250,8 +250,8 @@ export const DashboardLayout: React.FC = () => {
             )}
           </div>
 
-          {/* Compact Subscription Info — ONLY for Owner or Store Admin */}
-          {isOwnerOrAdmin && user && (user.subscriptionTier || myAccess?.isOwner) && (
+          {/* Compact Subscription Info — ONLY for real Store Owner */}
+          {myAccess?.isOwner && user && (
             <div className="px-2.5 py-2 rounded-lg bg-slate-50 border border-slate-200/80 space-y-1">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
@@ -261,14 +261,12 @@ export const DashboardLayout: React.FC = () => {
                   <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-900 text-white">
                     {formatTierShort(user.subscriptionTier)}
                   </span>
-                  {myAccess?.isOwner && (
-                    <span className="text-[10px] font-semibold text-slate-600">
-                      {user.subscriptionDaysLeft ?? 0} {t('common.daysShort')}
-                    </span>
-                  )}
+                  <span className="text-[10px] font-semibold text-slate-600">
+                    {user.subscriptionDaysLeft ?? 0} {t('common.daysShort')}
+                  </span>
                 </div>
               </div>
-              {myAccess?.isOwner && (user.subscriptionDaysLeft ?? 0) <= 5 && (
+              {(user.subscriptionDaysLeft ?? 0) <= 5 && (
                 <div className="text-[10px] font-semibold text-amber-700">
                   {t('subscriptions.expiringSoon')}
                 </div>
@@ -499,6 +497,7 @@ export const DashboardLayout: React.FC = () => {
                 <StoreSettingsView
                   isReadOnly={isCatalogLocked}
                   canEdit={!isCatalogLocked && hasPerm('store.edit')}
+                  canManageStatus={!isCatalogLocked && hasPerm('store.status.manage')}
                 />
               )}
               {currentTab === 'staff' && hasPerm('staff.read') && <StaffView />}
