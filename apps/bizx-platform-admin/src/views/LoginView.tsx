@@ -32,7 +32,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onSuccess }) => {
 
       if (res.success && res.data) {
         const loggedUser = res.data.user;
-        if (loggedUser.systemRole !== 'platform_admin' && loggedUser.role !== 'admin') {
+        if (!loggedUser.isPlatformStaff) {
           setError(t('auth.staffOnlyError'));
           platformApi.client.setAccessToken(null);
           return;

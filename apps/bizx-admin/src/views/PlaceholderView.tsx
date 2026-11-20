@@ -40,8 +40,8 @@ export const PlaceholderView: React.FC<PlaceholderViewProps> = ({
         </h2>
         <p className="text-sm text-slate-500 max-w-md mx-auto mb-6">
           {locale === 'en'
-            ? 'This functionality is planned on the BizX platform roadmap. Database and API foundations are ready.'
-            : 'Цей функціонал заплановано у дорожній карті розвитку платформи BizX. Наразі база даних та API готові до інтеграції.'}
+            ? 'This section is currently being prepared and will become available for your business soon.'
+            : 'Цей розділ наразі готується до запуску та скоро стане доступним для вашого бізнесу.'}
         </p>
 
         <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-50 text-blue-700 text-xs font-semibold">

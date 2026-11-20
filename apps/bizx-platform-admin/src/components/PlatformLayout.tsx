@@ -1,52 +1,105 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { platformApi } from '../lib/api';
 import { useTranslation } from '../hooks/useTranslation';
 import type { UserProfile } from '@bizx/common-types';
-import { LanguageSelector } from '@bizx/ui';
+import { LanguageSelector, SidebarAccountMenu, CountBadge } from '@bizx/ui';
 import {
   LayoutDashboard,
   BarChart3,
   Building2,
+  Clock,
   Users,
+  Scale,
   ShieldCheck,
-  LogOut,
+  KeyRound,
   Menu,
   X,
-  ExternalLink
+  ExternalLink,
+  ChevronDown,
+  Store as StoreIcon,
+  MessageSquare,
+  Headphones,
+  Megaphone
 } from 'lucide-react';
 
-export type PlatformTab = 'metrics' | 'analytics' | 'businesses' | 'users' | 'staff';
+export type PlatformTab =
+  | 'metrics'
+  | 'analytics'
+  | 'businesses'
+  | 'businesses_pending'
+  | 'disputes'
+  | 'support'
+  | 'broadcasts'
+  | 'users'
+  | 'staff'
+  | 'roles';
 
 interface PlatformLayoutProps {
   currentTab: PlatformTab;
   onTabChange: (tab: PlatformTab) => void;
   currentUser: UserProfile | null;
+  myPermissions?: string[] | null;
+  myRoleName?: string | null;
+  permsLoaded?: boolean;
+  pendingStoresCount?: number;
+  pendingDisputesCount?: number;
+  unreadSupportCount?: number;
   onLogout: () => void;
   children: React.ReactNode;
 }
+
+const BUSINESS_CHILD_TABS: PlatformTab[] = ['businesses', 'businesses_pending', 'disputes'];
+const COMM_CHILD_TABS: PlatformTab[] = ['support', 'broadcasts'];
 
 export const PlatformLayout: React.FC<PlatformLayoutProps> = ({
   currentTab,
   onTabChange,
   currentUser,
+  myPermissions,
+  myRoleName,
+  permsLoaded = true,
+  pendingStoresCount = 0,
+  pendingDisputesCount = 0,
+  unreadSupportCount = 0,
   onLogout,
   children
 }) => {
   const { t, locale, setLocale } = useTranslation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [avatarError, setAvatarError] = useState(false);
+  const [isBusinessesOpen, setIsBusinessesOpen] = useState(
+    BUSINESS_CHILD_TABS.includes(currentTab) || pendingStoresCount > 0 || pendingDisputesCount > 0
+  );
+  const [isCommOpen, setIsCommOpen] = useState(
+    COMM_CHILD_TABS.includes(currentTab) || unreadSupportCount > 0
+  );
+
+  useEffect(() => {
+    if (BUSINESS_CHILD_TABS.includes(currentTab)) {
+      setIsBusinessesOpen(true);
+    }
+    if (COMM_CHILD_TABS.includes(currentTab)) {
+      setIsCommOpen(true);
+    }
+  }, [currentTab]);
 
   const resolvedAvatar = currentUser?.avatarUrl
     ? platformApi.storage.resolveMediaUrl(currentUser.avatarUrl)
     : null;
 
-  const navItems = [
-    { id: 'metrics' as const, label: t('platform.tabMetrics'), icon: LayoutDashboard },
-    { id: 'analytics' as const, label: t('platform.tabAnalytics'), icon: BarChart3 },
-    { id: 'businesses' as const, label: t('platform.tabBusinesses'), icon: Building2 },
-    { id: 'users' as const, label: t('platform.tabUsers'), icon: Users },
-    { id: 'staff' as const, label: t('platform.tabStaff'), icon: ShieldCheck }
-  ];
+  const hasPerm = (code: string) => Boolean(myPermissions && myPermissions.includes(code));
+
+  const canReadStores = hasPerm('platform.stores.read');
+  const canReadDisputes = hasPerm('platform.disputes.read');
+  const showBusinessesGroup = canReadStores || canReadDisputes;
+  const businessAttentionTotal =
+    (canReadStores ? pendingStoresCount : 0) + (canReadDisputes ? pendingDisputesCount : 0);
+
+  const canReadSupport = hasPerm('platform.support.read');
+  const canReadBroadcasts = hasPerm('platform.broadcasts.read');
+  const showCommGroup = canReadSupport || canReadBroadcasts;
+  const isCommChildActive = COMM_CHILD_TABS.includes(currentTab);
+
+  const isBusinessChildActive = BUSINESS_CHILD_TABS.includes(currentTab);
 
   const handleLanguageChange = (next: 'uk' | 'en') => {
     setLocale(next);
@@ -55,19 +108,63 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({
     }
   };
 
-  const getInitials = (nameVal?: string) => {
-    if (!nameVal) return 'SA';
-    const parts = nameVal.trim().split(/\s+/);
-    if (parts.length >= 2) {
-      return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+  const getBreadcrumb = (): { parent?: string; label: string } => {
+    switch (currentTab) {
+      case 'metrics':
+        return { label: t('platform.tabMetrics') };
+      case 'analytics':
+        return { label: t('platform.tabAnalytics') };
+      case 'businesses':
+        return { parent: t('platform.tabBusinesses'), label: t('platform.tabBusinessesAll') };
+      case 'businesses_pending':
+        return { parent: t('platform.tabBusinesses'), label: t('platform.tabBusinessesPending') };
+      case 'disputes':
+        return { parent: t('platform.tabBusinesses'), label: t('platform.tabDisputes') };
+      case 'support':
+        return { parent: t('platform.tabCommunications'), label: t('platform.tabSupport') };
+      case 'broadcasts':
+        return { parent: t('platform.tabCommunications'), label: t('platform.tabBroadcasts') };
+      case 'users':
+        return { label: t('platform.tabUsers') };
+      case 'staff':
+        return { label: t('platform.tabStaff') };
+      case 'roles':
+        return { label: t('platform.tabRoles') };
+      default:
+        return { label: t('platform.consoleTitle') };
     }
-    return nameVal.slice(0, 2).toUpperCase();
+  };
+
+  const breadcrumb = getBreadcrumb();
+
+  const renderTopButton = (id: PlatformTab, label: string, Icon: React.ComponentType<{ className?: string }>) => {
+    const isActive = currentTab === id;
+    return (
+      <button
+        key={id}
+        type="button"
+        onClick={() => {
+          onTabChange(id);
+          setIsMobileMenuOpen(false);
+        }}
+        className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all text-left ${
+          isActive
+            ? 'bg-slate-900 text-white shadow-sm'
+            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+        }`}
+      >
+        <span className="flex items-center gap-3 min-w-0">
+          <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+          <span className="truncate">{label}</span>
+        </span>
+      </button>
+    );
   };
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row text-slate-900 font-sans">
       {/* Mobile Top Header */}
-      <div className="md:hidden flex items-center justify-between p-4 bg-white border-b border-slate-200">
+      <div className="md:hidden sticky top-0 z-30 flex items-center justify-between p-4 bg-white border-b border-slate-200">
         <div className="flex items-center gap-2.5">
           <div className="w-7 h-7 bg-slate-900 text-white rounded flex items-center justify-center font-bold text-xs tracking-wider">
             B
@@ -77,23 +174,32 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({
             <span className="block text-[9px] font-bold text-blue-600 uppercase">Platform Admin</span>
           </div>
         </div>
-        <button
-          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          className="p-2 rounded-lg border border-slate-200 text-slate-600"
-        >
-          {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-        </button>
+        <div className="flex items-center gap-2">
+          <LanguageSelector
+            value={locale}
+            onChange={handleLanguageChange}
+            variant="minimal"
+            align="right"
+          />
+          <button
+            type="button"
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            className="p-2 rounded-lg border border-slate-200 text-slate-600"
+          >
+            {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          </button>
+        </div>
       </div>
 
-      {/* Sidebar */}
+      {/* Sticky Full-Viewport Sidebar */}
       <aside
-        className={`w-full md:w-64 bg-white border-r border-slate-200 flex flex-col justify-between shrink-0 ${
-          isMobileMenuOpen ? 'block' : 'hidden md:flex'
+        className={`w-full md:w-64 bg-white border-r border-slate-200 flex-col shrink-0 md:sticky md:top-0 md:h-screen md:max-h-screen z-30 ${
+          isMobileMenuOpen ? 'flex' : 'hidden md:flex'
         }`}
       >
-        <div className="p-4 space-y-6">
-          {/* Logo & Service Badge */}
-          <div className="hidden md:flex items-center justify-between px-2">
+        {/* Top Fixed Brand Header */}
+        <div className="p-4 pb-3 border-b border-slate-100 shrink-0">
+          <div className="hidden md:flex items-center justify-between px-1">
             <div className="flex items-center gap-2.5">
               <div className="w-7 h-7 bg-slate-900 text-white rounded flex items-center justify-center font-bold text-xs tracking-wider">
                 B
@@ -109,38 +215,268 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({
               Control
             </span>
           </div>
+        </div>
 
-          {/* Platform Navigation */}
-          <nav className="space-y-1">
+        {/* Scrollable Middle Navigation + Quick Links */}
+        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-5">
+          <nav className="space-y-0.5">
             <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-3 mb-2">
               {t('platform.consoleTitle')}
             </div>
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = currentTab === item.id;
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => {
-                    onTabChange(item.id);
-                    setIsMobileMenuOpen(false);
-                  }}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-bold transition-all text-left ${
-                    isActive
-                      ? 'bg-slate-900 text-white shadow-sm'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                  }`}
-                >
-                  <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-slate-400'}`} />
-                  <span>{item.label}</span>
-                </button>
-              );
-            })}
+
+            {!permsLoaded ? (
+              <div className="px-2 py-2 space-y-2">
+                <div className="h-8 rounded-lg bg-slate-100 animate-pulse" />
+                <div className="h-8 rounded-lg bg-slate-100 animate-pulse" />
+                <div className="h-8 rounded-lg bg-slate-100 animate-pulse" />
+              </div>
+            ) : (
+              <>
+                {hasPerm('platform.analytics.read') &&
+                  renderTopButton('metrics', t('platform.tabMetrics'), LayoutDashboard)}
+                {hasPerm('platform.analytics.read') &&
+                  renderTopButton('analytics', t('platform.tabAnalytics'), BarChart3)}
+
+                {/* Expandable Businesses Group Dropdown */}
+                {showBusinessesGroup && (
+                  <div className="pt-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setIsBusinessesOpen((prev) => !prev)}
+                      className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all text-left ${
+                        isBusinessChildActive && !isBusinessesOpen
+                          ? 'bg-slate-900 text-white shadow-sm'
+                          : isBusinessChildActive
+                          ? 'bg-slate-100 text-slate-900'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                      }`}
+                    >
+                      <span className="flex items-center gap-3 min-w-0">
+                        <Building2
+                          className={`w-4 h-4 shrink-0 ${
+                            isBusinessChildActive && !isBusinessesOpen
+                              ? 'text-white'
+                              : isBusinessChildActive
+                              ? 'text-slate-900'
+                              : 'text-slate-400'
+                          }`}
+                        />
+                        <span className="truncate">{t('platform.tabBusinesses')}</span>
+                      </span>
+
+                      <span className="flex items-center gap-1.5 shrink-0">
+                        {!isBusinessesOpen && (
+                          <CountBadge count={businessAttentionTotal} tone="amber" />
+                        )}
+                        <ChevronDown
+                          className={`w-3.5 h-3.5 transition-transform ${
+                            isBusinessesOpen ? 'rotate-180 text-slate-500' : 'text-slate-400'
+                          }`}
+                        />
+                      </span>
+                    </button>
+
+                    {isBusinessesOpen && (
+                      <div className="mt-1 ml-3.5 pl-2.5 border-l border-slate-200 space-y-0.5">
+                        {canReadStores && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onTabChange('businesses');
+                              setIsMobileMenuOpen(false);
+                            }}
+                            className={`w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all text-left ${
+                              currentTab === 'businesses'
+                                ? 'bg-slate-900 text-white shadow-sm'
+                                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                            }`}
+                          >
+                            <span className="flex items-center gap-2 min-w-0">
+                              <StoreIcon
+                                className={`w-3.5 h-3.5 shrink-0 ${
+                                  currentTab === 'businesses' ? 'text-white' : 'text-slate-400'
+                                }`}
+                              />
+                              <span className="truncate">{t('platform.tabBusinessesAll')}</span>
+                            </span>
+                          </button>
+                        )}
+
+                        {canReadStores && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onTabChange('businesses_pending');
+                              setIsMobileMenuOpen(false);
+                            }}
+                            className={`w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all text-left ${
+                              currentTab === 'businesses_pending'
+                                ? 'bg-slate-900 text-white shadow-sm'
+                                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                            }`}
+                          >
+                            <span className="flex items-center gap-2 min-w-0">
+                              <Clock
+                                className={`w-3.5 h-3.5 shrink-0 ${
+                                  currentTab === 'businesses_pending'
+                                    ? 'text-amber-300'
+                                    : 'text-amber-500'
+                                }`}
+                              />
+                              <span className="truncate">{t('platform.tabBusinessesPending')}</span>
+                            </span>
+                            <CountBadge
+                              count={pendingStoresCount}
+                              tone="amber"
+                              inverted={currentTab === 'businesses_pending'}
+                            />
+                          </button>
+                        )}
+
+                        {canReadDisputes && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onTabChange('disputes');
+                              setIsMobileMenuOpen(false);
+                            }}
+                            className={`w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all text-left ${
+                              currentTab === 'disputes'
+                                ? 'bg-slate-900 text-white shadow-sm'
+                                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                            }`}
+                          >
+                            <span className="flex items-center gap-2 min-w-0">
+                              <Scale
+                                className={`w-3.5 h-3.5 shrink-0 ${
+                                  currentTab === 'disputes' ? 'text-rose-300' : 'text-rose-500'
+                                }`}
+                              />
+                              <span className="truncate">{t('platform.tabDisputes')}</span>
+                            </span>
+                            <CountBadge
+                              count={pendingDisputesCount}
+                              tone="red"
+                              inverted={currentTab === 'disputes'}
+                            />
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Expandable Communications Group Dropdown (Support + BizX Broadcasts) */}
+                {showCommGroup && (
+                  <div className="pt-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setIsCommOpen((prev) => !prev)}
+                      className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all text-left ${
+                        isCommChildActive && !isCommOpen
+                          ? 'bg-slate-900 text-white shadow-sm'
+                          : isCommChildActive
+                          ? 'bg-slate-100 text-slate-900'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                      }`}
+                    >
+                      <span className="flex items-center gap-3 min-w-0">
+                        <MessageSquare
+                          className={`w-4 h-4 shrink-0 ${
+                            isCommChildActive && !isCommOpen
+                              ? 'text-white'
+                              : isCommChildActive
+                              ? 'text-slate-900'
+                              : 'text-slate-400'
+                          }`}
+                        />
+                        <span className="truncate">{t('platform.tabCommunications')}</span>
+                      </span>
+
+                      <span className="flex items-center gap-1.5 shrink-0">
+                        {!isCommOpen && canReadSupport && (
+                          <CountBadge count={unreadSupportCount} tone="red" />
+                        )}
+                        <ChevronDown
+                          className={`w-3.5 h-3.5 transition-transform ${
+                            isCommOpen ? 'rotate-180 text-slate-500' : 'text-slate-400'
+                          }`}
+                        />
+                      </span>
+                    </button>
+
+                    {isCommOpen && (
+                      <div className="mt-1 ml-3.5 pl-2.5 border-l border-slate-200 space-y-0.5">
+                        {canReadSupport && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onTabChange('support');
+                              setIsMobileMenuOpen(false);
+                            }}
+                            className={`w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all text-left ${
+                              currentTab === 'support'
+                                ? 'bg-slate-900 text-white shadow-sm'
+                                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                            }`}
+                          >
+                            <span className="flex items-center gap-2 min-w-0">
+                              <Headphones
+                                className={`w-3.5 h-3.5 shrink-0 ${
+                                  currentTab === 'support' ? 'text-blue-300' : 'text-blue-500'
+                                }`}
+                              />
+                              <span className="truncate">{t('platform.tabSupport')}</span>
+                            </span>
+                            <CountBadge
+                              count={unreadSupportCount}
+                              tone="red"
+                              inverted={currentTab === 'support'}
+                            />
+                          </button>
+                        )}
+
+                        {canReadBroadcasts && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onTabChange('broadcasts');
+                              setIsMobileMenuOpen(false);
+                            }}
+                            className={`w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all text-left ${
+                              currentTab === 'broadcasts'
+                                ? 'bg-slate-900 text-white shadow-sm'
+                                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                            }`}
+                          >
+                            <span className="flex items-center gap-2 min-w-0">
+                              <Megaphone
+                                className={`w-3.5 h-3.5 shrink-0 ${
+                                  currentTab === 'broadcasts' ? 'text-white' : 'text-slate-400'
+                                }`}
+                              />
+                              <span className="truncate">{t('platform.tabBroadcasts')}</span>
+                            </span>
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {hasPerm('platform.users.read') &&
+                  renderTopButton('users', t('platform.tabUsers'), Users)}
+                {hasPerm('platform.staff.read') &&
+                  renderTopButton('staff', t('platform.tabStaff'), ShieldCheck)}
+                {hasPerm('platform.roles.read') &&
+                  renderTopButton('roles', t('platform.tabRoles'), KeyRound)}
+              </>
+            )}
           </nav>
 
           {/* Quick External Links */}
-          <div className="pt-4 border-t border-slate-100 space-y-1">
-            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-3 mb-2">
+          <div className="pt-3 border-t border-slate-100 space-y-0.5">
+            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-3 mb-1.5">
               {t('platform.quickLinks')}
             </div>
             <a
@@ -164,57 +500,51 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({
           </div>
         </div>
 
-        {/* Bottom Operator Pill + Language Dropdown */}
-        <div className="p-4 border-t border-slate-200 bg-slate-50/50 space-y-3">
-          <LanguageSelector
-            value={locale}
-            onChange={handleLanguageChange}
-            variant="sidebar"
-            dropUp={true}
-            align="left"
-            label={t('account.language')}
+        {/* Pinned Bottom Operator Account Dropdown */}
+        <div className="p-3 border-t border-slate-200 bg-slate-50/70 shrink-0">
+          <SidebarAccountMenu
+            name={currentUser?.name || t('platform.operatorFallback')}
+            subtitle={currentUser?.email || currentUser?.phone || null}
+            roleBadge={myRoleName || t('roles.platformAdmin')}
+            roleBadgeClassName="bg-blue-50 text-blue-700"
+            avatarUrl={resolvedAvatar}
+            accountHref="http://localhost:3100/account"
+            accountSettingsLabel={t('nav.accountSettings')}
+            logoutLabel={t('common.logout')}
+            onLogout={onLogout}
           />
-
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-8 h-8 rounded-full bg-slate-900 text-white font-bold flex items-center justify-center text-xs shrink-0 overflow-hidden">
-                {resolvedAvatar && !avatarError ? (
-                  <img
-                    src={resolvedAvatar}
-                    alt={currentUser?.name || ''}
-                    className="w-full h-full object-cover"
-                    onError={() => setAvatarError(true)}
-                  />
-                ) : (
-                  getInitials(currentUser?.name)
-                )}
-              </div>
-              <div className="min-w-0">
-                <div className="text-xs font-bold text-slate-900 truncate">
-                  {currentUser?.name || t('platform.operatorFallback')}
-                </div>
-                <div className="text-[10px] font-bold text-blue-700 bg-blue-50 px-1.5 py-0.2 rounded inline-block">
-                  {t('roles.platformAdmin')}
-                </div>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={onLogout}
-              title={t('platform.logoutTitle')}
-              className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-            >
-              <LogOut className="w-4 h-4 shrink-0" />
-            </button>
-          </div>
         </div>
       </aside>
 
-      {/* Main Content Area */}
-      <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
-        <div className="max-w-7xl mx-auto">{children}</div>
-      </main>
+      {/* Right Content Column */}
+      <div className="flex-1 min-w-0 flex flex-col">
+        {/* Desktop Top Utility Bar (Breadcrumb + Landing-style Language Dropdown) */}
+        <header className="hidden md:flex sticky top-0 z-20 h-14 px-6 lg:px-8 bg-white/85 backdrop-blur-sm border-b border-slate-200/80 items-center justify-between gap-4 shrink-0">
+          <div className="flex items-center gap-2 min-w-0 text-xs">
+            <span className="font-semibold text-slate-500">BizX Control</span>
+            {breadcrumb.parent && (
+              <>
+                <span className="text-slate-300">/</span>
+                <span className="font-semibold text-slate-500">{breadcrumb.parent}</span>
+              </>
+            )}
+            <span className="text-slate-300">/</span>
+            <span className="font-bold text-slate-900 truncate">{breadcrumb.label}</span>
+          </div>
+
+          <LanguageSelector
+            value={locale}
+            onChange={handleLanguageChange}
+            variant="minimal"
+            align="right"
+          />
+        </header>
+
+        {/* Main Content Area */}
+        <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8">
+          <div className="max-w-7xl mx-auto">{children}</div>
+        </main>
+      </div>
     </div>
   );
 };

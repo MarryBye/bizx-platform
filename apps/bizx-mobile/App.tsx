@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   SafeAreaView,
   View,
@@ -6,7 +6,8 @@ import {
   TouchableOpacity,
   StatusBar,
   StyleSheet,
-  ActivityIndicator
+  ActivityIndicator,
+  Platform
 } from 'react-native';
 import { MaterialIcon } from './src/components/MaterialIcon';
 import './global.css';
@@ -19,67 +20,109 @@ import { StoresScreen } from './src/screens/StoresScreen';
 import { StoreDetailScreen } from './src/screens/StoreDetailScreen';
 import { CartScreen } from './src/screens/CartScreen';
 import { OrdersScreen } from './src/screens/OrdersScreen';
+import { OrderDetailScreen } from './src/screens/OrderDetailScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
 import { AuthScreen } from './src/screens/AuthScreen';
-import type { Store } from '@bizx/common-types';
+import { mobileApi } from './src/lib/api';
+import { useMobileTranslation } from './src/hooks/useMobileTranslation';
+import { formatCompactCount, type Store } from '@bizx/common-types';
 
 type TabType = 'stores' | 'cart' | 'orders' | 'profile';
 
 export default function App() {
+  const { t } = useMobileTranslation();
   const [activeTab, setActiveTab] = useState<TabType>('stores');
   const [selectedStore, setSelectedStore] = useState<Store | null>(null);
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const [inboxUnreadCount, setInboxUnreadCount] = useState<number>(0);
 
   const { user, isInitialized, init } = useMobileAuthStore();
-  const { fetchInitialData, selectStore } = useMobileStoresStore();
+  const {
+    fetchInitialData,
+    selectStore,
+    fetchMyOrders,
+    fetchUnreadSummary,
+    unreadMessagesCount,
+    pendingRefundOffersCount
+  } = useMobileStoresStore();
   const { items } = useCartStore();
 
   const cartItemCount = items.reduce((sum, item) => sum + item.quantity, 0);
+  const ordersBadgeCount = unreadMessagesCount + pendingRefundOffersCount;
 
   useEffect(() => {
-    init();
-    fetchInitialData();
-  }, []);
+    void init();
+    void fetchInitialData();
+  }, [init, fetchInitialData]);
+
+  useEffect(() => {
+    if (!user) {
+      setInboxUnreadCount(0);
+      return;
+    }
+    const loadInboxSummary = () => {
+      mobileApi.inbox
+        .getUnreadSummary()
+        .then((res) => {
+          if (res.success && res.data) {
+            setInboxUnreadCount(res.data.totalUnreadMessages || 0);
+          }
+        })
+        .catch(() => {});
+    };
+    void fetchUnreadSummary();
+    loadInboxSummary();
+    const timer = setInterval(() => {
+      void fetchUnreadSummary();
+      loadInboxSummary();
+    }, 15000);
+    return () => clearInterval(timer);
+  }, [user, fetchUnreadSummary]);
 
   const handleSelectStore = (store: Store) => {
     setSelectedStore(store);
-    selectStore(store);
+    void selectStore(store);
   };
 
   const handleBackToStores = () => {
     setSelectedStore(null);
   };
 
-  if (!isInitialized) {
-    return (
-      <SafeAreaView style={styles.container}>
+  const handleOrderUpdated = useCallback(() => {
+    void fetchMyOrders();
+    void fetchUnreadSummary();
+  }, [fetchMyOrders, fetchUnreadSummary]);
+
+  const shell = (children: React.ReactNode) => (
+    <View style={Platform.OS === 'web' ? styles.webBackdrop : styles.nativeBackdrop}>
+      <SafeAreaView style={[styles.container, Platform.OS === 'web' && styles.webShell]}>
         <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f8fafc' }}>
-          <ActivityIndicator size="large" color="#0f172a" />
-          <Text style={{ marginTop: 12, fontSize: 12, fontWeight: '700', color: '#64748b' }}>
-            Завантаження BizX...
-          </Text>
-        </View>
+        {children}
       </SafeAreaView>
+    </View>
+  );
+
+  if (!isInitialized) {
+    return shell(
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f8fafc' }}>
+        <ActivityIndicator size="large" color="#0f172a" />
+        <Text style={{ marginTop: 12, fontSize: 12, fontWeight: '700', color: '#64748b' }}>
+          Завантаження BizX...
+        </Text>
+      </View>
     );
   }
 
   if (!user) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
-        <AuthScreen />
-      </SafeAreaView>
-    );
+    return shell(<AuthScreen />);
   }
 
-  return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
-
+  return shell(
+    <>
       {/* Main Content View */}
       <View style={styles.content}>
-        {activeTab === 'stores' && (
-          selectedStore ? (
+        {activeTab === 'stores' &&
+          (selectedStore ? (
             <StoreDetailScreen
               store={selectedStore}
               onBack={handleBackToStores}
@@ -87,8 +130,7 @@ export default function App() {
             />
           ) : (
             <StoresScreen onSelectStore={handleSelectStore} />
-          )
-        )}
+          ))}
 
         {activeTab === 'cart' && (
           <CartScreen
@@ -96,22 +138,35 @@ export default function App() {
               setActiveTab('stores');
               setSelectedStore(null);
             }}
-            onOrderSuccess={() => setActiveTab('orders')}
-          />
-        )}
-
-        {activeTab === 'orders' && (
-          <OrdersScreen
-            onExploreStores={() => {
-              setActiveTab('stores');
-              setSelectedStore(null);
+            onOrderSuccess={() => {
+              setSelectedOrderId(null);
+              setActiveTab('orders');
+              void fetchMyOrders();
             }}
           />
         )}
 
-        {activeTab === 'profile' && (
-          <ProfileScreen />
-        )}
+        {activeTab === 'orders' &&
+          (selectedOrderId ? (
+            <OrderDetailScreen
+              orderId={selectedOrderId}
+              onBack={() => {
+                setSelectedOrderId(null);
+                handleOrderUpdated();
+              }}
+              onOrderUpdated={handleOrderUpdated}
+            />
+          ) : (
+            <OrdersScreen
+              onExploreStores={() => {
+                setActiveTab('stores');
+                setSelectedStore(null);
+              }}
+              onSelectOrder={(order) => setSelectedOrderId(order.id)}
+            />
+          ))}
+
+        {activeTab === 'profile' && <ProfileScreen />}
       </View>
 
       {/* Bottom Tab Bar */}
@@ -129,13 +184,8 @@ export default function App() {
             size={22}
             color={activeTab === 'stores' ? '#0f172a' : '#64748b'}
           />
-          <Text
-            style={[
-              styles.tabLabel,
-              activeTab === 'stores' && styles.tabLabelActive
-            ]}
-          >
-            Магазини
+          <Text style={[styles.tabLabel, activeTab === 'stores' && styles.tabLabelActive]}>
+            {t('mobile.tabStores')}
           </Text>
         </TouchableOpacity>
 
@@ -153,38 +203,40 @@ export default function App() {
             {cartItemCount > 0 && (
               <View style={styles.badge}>
                 <Text style={styles.badgeText}>
-                  {cartItemCount > 99 ? '99+' : cartItemCount}
+                  {formatCompactCount(cartItemCount)}
                 </Text>
               </View>
             )}
           </View>
-          <Text
-            style={[
-              styles.tabLabel,
-              activeTab === 'cart' && styles.tabLabelActive
-            ]}
-          >
-            Кошик
+          <Text style={[styles.tabLabel, activeTab === 'cart' && styles.tabLabelActive]}>
+            {t('mobile.tabCart')}
           </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.tabItem}
           activeOpacity={0.7}
-          onPress={() => setActiveTab('orders')}
+          onPress={() => {
+            setSelectedOrderId(null);
+            setActiveTab('orders');
+          }}
         >
-          <MaterialIcon
-            name="receipt-long"
-            size={22}
-            color={activeTab === 'orders' ? '#0f172a' : '#64748b'}
-          />
-          <Text
-            style={[
-              styles.tabLabel,
-              activeTab === 'orders' && styles.tabLabelActive
-            ]}
-          >
-            Замовлення
+          <View style={styles.cartIconWrapper}>
+            <MaterialIcon
+              name="receipt-long"
+              size={22}
+              color={activeTab === 'orders' ? '#0f172a' : '#64748b'}
+            />
+            {ordersBadgeCount > 0 && (
+              <View style={[styles.badge, styles.badgeBlue]}>
+                <Text style={styles.badgeText}>
+                  {formatCompactCount(ordersBadgeCount)}
+                </Text>
+              </View>
+            )}
+          </View>
+          <Text style={[styles.tabLabel, activeTab === 'orders' && styles.tabLabelActive]}>
+            {t('mobile.tabOrders')}
           </Text>
         </TouchableOpacity>
 
@@ -193,29 +245,53 @@ export default function App() {
           activeOpacity={0.7}
           onPress={() => setActiveTab('profile')}
         >
-          <MaterialIcon
-            name="person-outline"
-            size={22}
-            color={activeTab === 'profile' ? '#0f172a' : '#64748b'}
-          />
-          <Text
-            style={[
-              styles.tabLabel,
-              activeTab === 'profile' && styles.tabLabelActive
-            ]}
-          >
-            Профіль
+          <View style={styles.cartIconWrapper}>
+            <MaterialIcon
+              name="person-outline"
+              size={22}
+              color={activeTab === 'profile' ? '#0f172a' : '#64748b'}
+            />
+            {inboxUnreadCount > 0 && (
+              <View style={[styles.badge, styles.badgeBlue]}>
+                <Text style={styles.badgeText}>
+                  {formatCompactCount(inboxUnreadCount)}
+                </Text>
+              </View>
+            )}
+          </View>
+          <Text style={[styles.tabLabel, activeTab === 'profile' && styles.tabLabelActive]}>
+            {t('mobile.tabProfile')}
           </Text>
         </TouchableOpacity>
       </View>
-    </SafeAreaView>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  nativeBackdrop: {
     flex: 1,
     backgroundColor: '#ffffff'
+  },
+  webBackdrop: {
+    flex: 1,
+    backgroundColor: '#e2e8f0',
+    alignItems: 'center'
+  },
+  container: {
+    flex: 1,
+    width: '100%',
+    backgroundColor: '#ffffff'
+  },
+  webShell: {
+    maxWidth: 960,
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderColor: '#cbd5e1',
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16
   },
   content: {
     flex: 1,
@@ -257,7 +333,7 @@ const styles = StyleSheet.create({
   badge: {
     position: 'absolute',
     top: -4,
-    right: -10,
+    right: -12,
     backgroundColor: '#ef4444',
     borderRadius: 9,
     minWidth: 18,
@@ -265,6 +341,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 4
+  },
+  badgeBlue: {
+    backgroundColor: '#2563eb'
   },
   badgeText: {
     color: '#ffffff',

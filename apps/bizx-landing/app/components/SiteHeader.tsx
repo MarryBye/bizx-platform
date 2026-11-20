@@ -5,7 +5,8 @@ import Link from 'next/link';
 import { api } from '../lib/api';
 import { useTranslation } from '../hooks/useTranslation';
 import type { UserProfile, Store } from '@bizx/common-types';
-import { LanguageSelector } from '@bizx/ui';
+import { LanguageSelector, CountBadge } from '@bizx/ui';
+import { getInitials } from '@bizx/utils';
 import { AuthModal } from './AuthModal';
 import {
   ChevronDown,
@@ -14,13 +15,15 @@ import {
   CreditCard,
   Settings,
   LogOut,
-  LogIn
+  LogIn,
+  Mail
 } from 'lucide-react';
 
 export const SiteHeader: React.FC = () => {
   const { t, locale, setLocale } = useTranslation();
   const [user, setUser] = useState<UserProfile | null>(null);
   const [stores, setStores] = useState<Store[]>([]);
+  const [inboxUnread, setInboxUnread] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
@@ -47,6 +50,14 @@ export const SiteHeader: React.FC = () => {
           }
         } catch {
           // Ignore stores failure if not a business user
+        }
+        try {
+          const inboxRes = await api.inbox.getUnreadSummary();
+          if (inboxRes.success && inboxRes.data) {
+            setInboxUnread(inboxRes.data.totalUnreadMessages || 0);
+          }
+        } catch {
+          // ignore
         }
       } else {
         setUser(null);
@@ -119,17 +130,8 @@ export const SiteHeader: React.FC = () => {
     window.location.reload();
   };
 
-  const isBusinessUser = user?.role === 'business_owner' || stores.length > 0;
-  const isPlatformStaff = user?.systemRole === 'platform_admin';
-
-  const getInitials = (name?: string) => {
-    if (!name) return 'U';
-    const parts = name.trim().split(/\s+/);
-    if (parts.length >= 2) {
-      return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
-    }
-    return name.slice(0, 2).toUpperCase();
-  };
+  const isBusinessUser = Boolean(user?.hasStoreAccess || user?.isBusinessOwner || stores.length > 0);
+  const isPlatformStaff = Boolean(user?.isPlatformStaff);
 
   return (
     <>
@@ -145,6 +147,9 @@ export const SiteHeader: React.FC = () => {
 
           {/* Business-oriented Navigation */}
           <nav className="hidden md:flex items-center gap-7 text-xs font-semibold text-slate-600">
+            <Link href="/stores" className="hover:text-slate-900 transition-colors">
+              {locale === 'en' ? 'Stores' : 'Заклади'}
+            </Link>
             <Link href="/#features" className="hover:text-slate-900 transition-colors">
               {t('nav.features')}
             </Link>
@@ -167,7 +172,20 @@ export const SiteHeader: React.FC = () => {
             {isLoading ? (
               <div className="w-28 h-8 bg-slate-100 animate-pulse rounded-md" />
             ) : user ? (
-              <div className="relative" ref={dropdownRef}>
+              <>
+                <Link
+                  href="/account?tab=inbox"
+                  title={locale === 'en' ? 'Inbox' : 'Пошта'}
+                  className="relative p-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 transition-colors shadow-sm"
+                >
+                  <Mail className="w-4 h-4" />
+                  <CountBadge
+                    count={inboxUnread}
+                    tone="blue"
+                    className="absolute -top-1.5 -right-1.5 px-1"
+                  />
+                </Link>
+                <div className="relative" ref={dropdownRef}>
                 <button
                   type="button"
                   onClick={() => setIsDropdownOpen((prev) => !prev)}
@@ -221,23 +239,23 @@ export const SiteHeader: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="px-4 py-1.5 flex items-center gap-1.5 flex-wrap">
+                    <div className="px-4 py-2 flex items-center gap-1.5 flex-wrap">
                       {isPlatformStaff ? (
-                        <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800">
+                        <span className="inline-flex items-center h-5 px-2 rounded text-[10px] font-bold leading-none bg-blue-100 text-blue-800 border border-blue-200">
                           {t('roles.platformAdmin')}
                         </span>
                       ) : isBusinessUser ? (
-                        <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                        <span className="inline-flex items-center h-5 px-2 rounded text-[10px] font-bold leading-none bg-emerald-100 text-emerald-800 border border-emerald-200">
                           {t('roles.businessPartner')}
                         </span>
                       ) : (
-                        <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700">
+                        <span className="inline-flex items-center h-5 px-2 rounded text-[10px] font-bold leading-none bg-slate-100 text-slate-700 border border-slate-200">
                           {t('auth.clientRole')}
                         </span>
                       )}
 
                       {user.subscriptionTier && user.subscriptionTier !== 'free' && (
-                        <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-200 uppercase">
+                        <span className="inline-flex items-center h-5 px-2 rounded text-[10px] font-bold leading-none bg-amber-100 text-amber-900 border border-amber-200 uppercase">
                           {user.subscriptionTier === 'client_premium' && 'Premium'}
                           {user.subscriptionTier === 'business_starter' && 'Starter'}
                           {user.subscriptionTier === 'business_pro' && 'Pro'}
@@ -301,6 +319,7 @@ export const SiteHeader: React.FC = () => {
                   </div>
                 )}
               </div>
+              </>
             ) : (
               <div className="flex items-center gap-2">
                 <button

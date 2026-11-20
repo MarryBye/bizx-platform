@@ -26,7 +26,8 @@ export class AnalyticsModule {
             endDate: queryOrPeriod.endDate,
             status: queryOrPeriod.status,
             minAmount: queryOrPeriod.minAmount,
-            maxAmount: queryOrPeriod.maxAmount
+            maxAmount: queryOrPeriod.maxAmount,
+            topLimit: queryOrPeriod.topLimit
           };
 
     return this.client.get<ApiResponse<StoreAnalytics>>(`/analytics/stores/${storeId}`, {
@@ -48,7 +49,8 @@ export class AnalyticsModule {
           status: query.status,
           minAmount: query.minAmount,
           maxAmount: query.maxAmount,
-          storeId: query.storeId
+          storeId: query.storeId,
+          topLimit: query.topLimit
         }
       : undefined;
 

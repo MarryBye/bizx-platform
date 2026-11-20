@@ -13,20 +13,27 @@ import {
   UnauthorizedException
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import { AuthService } from './auth.service.js';
 import { StorageService } from '../storage/storage.service.js';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
 import { JwtAuthGuard } from './guards/jwt-auth.guard.js';
 import { CurrentUser, Public } from './decorators/auth.decorators.js';
-import { validateImageFile, type UploadedFileDto } from '../common/file-upload.utils.js';
+import {
+  validateImageFile,
+  MAX_IMAGE_FILE_SIZE,
+  type UploadedFileDto
+} from '../common/file-upload.utils.js';
 import {
   registerDtoSchema,
   loginDtoSchema,
   updateUserProfileDtoSchema,
+  changePasswordDtoSchema,
   type RegisterDto,
   type LoginDto,
   type UpdateUserProfileDto,
+  type ChangePasswordDto,
   type RefreshTokenDto,
   type ApiResponse,
   type AuthResponse,
@@ -63,6 +70,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ default: { limit: 6, ttl: 60_000 } })
   @Post('register')
   @UsePipes(new ZodValidationPipe(registerDtoSchema))
   async register(
@@ -88,6 +96,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ default: { limit: 12, ttl: 60_000 } })
   @Post('login')
   @UsePipes(new ZodValidationPipe(loginDtoSchema))
   async login(
@@ -113,14 +122,21 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Post('refresh')
   async refresh(
-    @Body() body: RefreshTokenDto,
+    @Body() body: RefreshTokenDto | undefined,
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response
   ): Promise<ApiResponse<AuthResponse>> {
     // Поддержка куки (веб) ИЛИ тела запроса (мобилка)
-    const rawToken = req.cookies?.[REFRESH_COOKIE_NAME] || body.refreshToken;
+    const bodyToken =
+      body && typeof body.refreshToken === 'string' ? body.refreshToken.trim() : undefined;
+    const cookieToken =
+      typeof req.cookies?.[REFRESH_COOKIE_NAME] === 'string'
+        ? req.cookies[REFRESH_COOKIE_NAME]
+        : undefined;
+    const rawToken = cookieToken || bodyToken;
 
     if (!rawToken) {
       throw new UnauthorizedException('Refresh токен не передан');
@@ -190,7 +206,7 @@ export class AuthController {
 
   @Post('me/avatar')
   @UseGuards(JwtAuthGuard)
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_IMAGE_FILE_SIZE } }))
   async uploadAvatar(
     @CurrentUser('sub') userId: string,
     @UploadedFile() rawFile?: UploadedFileDto
@@ -203,6 +219,21 @@ export class AuthController {
     return {
       success: true,
       data: profile,
+      timestamp: new Date().toISOString()
+    };
+  }
+
+  @Post('change-password')
+  @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { limit: 6, ttl: 60_000 } })
+  async changePassword(
+    @CurrentUser('sub') userId: string,
+    @Body(new ZodValidationPipe(changePasswordDtoSchema)) dto: ChangePasswordDto
+  ): Promise<ApiResponse<{ message: string }>> {
+    const data = await this.authService.changePassword(userId, dto.currentPassword, dto.newPassword);
+    return {
+      success: true,
+      data,
       timestamp: new Date().toISOString()
     };
   }

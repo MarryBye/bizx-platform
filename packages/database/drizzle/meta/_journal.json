@@ -43,6 +43,55 @@
       "when": 1795085800000,
       "tag": "0005_add_unique_phone_index",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1795091000000,
+      "tag": "0006_add_rbac_roles_and_permissions",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1795094000000,
+      "tag": "0007_normalize_rbac_and_icons",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1795100000000,
+      "tag": "0008_orders_chat_disputes_reviews_domains",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1795110000000,
+      "tag": "0009_account_inbox_messenger",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1795120000000,
+      "tag": "0010_user_suspension_fields",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1795130000000,
+      "tag": "0011_broadcasts_and_marketing_subscriptions",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1795140000000,
+      "tag": "0012_db_hygiene_indexes_and_tz",
+      "breakpoints": true
     }
   ]
 }

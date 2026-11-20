@@ -6,14 +6,27 @@ import {
 } from '../subscriptions/subscriptions.constants.js';
 import {
   Injectable,
+  BadRequestException,
   ConflictException,
   UnauthorizedException,
+  ForbiddenException,
   NotFoundException
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { DatabaseService } from '../database/database.service.js';
-import { users, refreshTokens, stores, eq, and, gt, inArray, isNull } from '@bizx/database';
+import {
+  users,
+  refreshTokens,
+  stores,
+  storeMembers,
+  platformMembers,
+  eq,
+  and,
+  gt,
+  inArray,
+  isNull
+} from '@bizx/database';
 import {
   normalizePhone,
   type RegisterDto,
@@ -37,33 +50,123 @@ export class AuthService {
     return crypto.createHash('sha256').update(token).digest('hex');
   }
 
-  private mapToProfile(user: any): UserProfile {
+  private async assertUserNotBlocked<
+    T extends {
+      id: string;
+      status: string;
+      suspendedUntil?: Date | null;
+      suspensionReason?: string | null;
+    }
+  >(user: T): Promise<T> {
+    if (user.status === 'archived') {
+      throw new ForbiddenException('Обліковий запис архівовано. Зверніться до підтримки BizX.');
+    }
+
+    if (user.status === 'suspended') {
+      const now = new Date();
+      if (user.suspendedUntil && user.suspendedUntil <= now) {
+        // Термін тимчасового блокування минув — автоматично розблоковуємо
+        await this.databaseService.db
+          .update(users)
+          .set({
+            status: 'active',
+            suspendedUntil: null,
+            suspensionReason: null,
+            updatedAt: now
+          })
+          .where(eq(users.id, user.id));
+        return {
+          ...user,
+          status: 'active',
+          suspendedUntil: null,
+          suspensionReason: null
+        };
+      }
+
+      const untilText = user.suspendedUntil
+        ? `до ${user.suspendedUntil.toLocaleDateString('uk-UA')}`
+        : 'безстроково';
+      const reasonText = user.suspensionReason ? ` Причина: ${user.suspensionReason}` : '';
+      throw new ForbiddenException(
+        `Ваш обліковий запис заблоковано (${untilText}).${reasonText}`
+      );
+    }
+
+    return user;
+  }
+
+  private async isPlatformStaffUser(userId: string): Promise<boolean> {
+    const [row] = await this.databaseService.db
+      .select({ id: platformMembers.id })
+      .from(platformMembers)
+      .where(and(eq(platformMembers.userId, userId), isNull(platformMembers.archivedAt)))
+      .limit(1);
+    return Boolean(row);
+  }
+
+  private async mapToProfile(user: typeof users.$inferSelect): Promise<UserProfile> {
+    const [platformRow, ownedStoreRow, memberStoreRow] = await Promise.all([
+      this.databaseService.db
+        .select({ id: platformMembers.id })
+        .from(platformMembers)
+        .where(and(eq(platformMembers.userId, user.id), isNull(platformMembers.archivedAt)))
+        .limit(1),
+      this.databaseService.db
+        .select({ id: stores.id })
+        .from(stores)
+        .where(and(eq(stores.ownerId, user.id), isNull(stores.archivedAt)))
+        .limit(1),
+      this.databaseService.db
+        .select({ id: storeMembers.id })
+        .from(storeMembers)
+        .innerJoin(stores, eq(storeMembers.storeId, stores.id))
+        .where(
+          and(
+            eq(storeMembers.userId, user.id),
+            isNull(storeMembers.archivedAt),
+            isNull(stores.archivedAt)
+          )
+        )
+        .limit(1)
+    ]);
+
+    const isPlatformStaff = platformRow.length > 0;
+    const isBusinessOwner = ownedStoreRow.length > 0;
+    const hasActiveBizSub =
+      isSubscriptionActive(user) && isBusinessSubscriptionTier(user.subscriptionTier);
+    const hasStoreAccess =
+      isPlatformStaff || isBusinessOwner || hasActiveBizSub || memberStoreRow.length > 0;
+
     return {
       id: user.id,
       email: user.email,
       name: user.name,
-      role: user.role as UserProfile['role'],
-      systemRole: (user.systemRole || 'user') as UserProfile['systemRole'],
+      isPlatformStaff,
+      isBusinessOwner,
+      hasStoreAccess,
       phone: user.phone || null,
       avatarUrl: user.avatarUrl || null,
       preferredLanguage: (user.preferredLanguage || 'uk') as UserProfile['preferredLanguage'],
       status: (user.status || 'active') as UserProfile['status'],
-      subscriptionTier: (user.subscriptionTier || 'free') as any,
-      subscriptionStatus: (user.subscriptionStatus || 'none') as any,
-      subscriptionExpiresAt: user.subscriptionExpiresAt ? (user.subscriptionExpiresAt instanceof Date ? user.subscriptionExpiresAt.toISOString() : user.subscriptionExpiresAt) : null,
+      subscriptionTier: (user.subscriptionTier || 'free') as UserProfile['subscriptionTier'],
+      subscriptionStatus: (user.subscriptionStatus || 'none') as UserProfile['subscriptionStatus'],
+      subscriptionExpiresAt: user.subscriptionExpiresAt
+        ? user.subscriptionExpiresAt instanceof Date
+          ? user.subscriptionExpiresAt.toISOString()
+          : user.subscriptionExpiresAt
+        : null,
       subscriptionDaysLeft: getSubscriptionDaysLeft(user.subscriptionExpiresAt),
       maxAllowedStores: getMaxAllowedStores(user.subscriptionTier),
       createdAt: user.createdAt instanceof Date ? user.createdAt.toISOString() : user.createdAt
     };
   }
 
-  private async generateTokens(user: { id: string; email: string; role: string; systemRole?: string; name: string }) {
+  private async generateTokens(user: { id: string; email: string; name: string }) {
     const payload = {
       sub: user.id,
       email: user.email,
-      role: user.role,
-      systemRole: user.systemRole || 'user',
-      name: user.name
+      name: user.name,
+      tokenType: 'access' as const
     };
 
     const accessToken = await this.jwtService.signAsync(payload, {
@@ -84,7 +187,7 @@ export class AuthService {
     metadata: { userAgent?: string; ipAddress?: string }
   ) {
     const tokenHash = this.hashToken(rawRefreshToken);
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 дней
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 днів
 
     await this.databaseService.db.insert(refreshTokens).values({
       userId,
@@ -105,7 +208,7 @@ export class AuthService {
       .where(eq(users.email, dto.email.toLowerCase()));
 
     if (existing) {
-      throw new ConflictException('Пользователь с таким email уже зарегистрирован');
+      throw new ConflictException('Користувач із таким email вже зареєстрований');
     }
 
     const normalizedPhone = normalizePhone(dto.phone);
@@ -116,7 +219,7 @@ export class AuthService {
         .where(eq(users.phone, normalizedPhone));
 
       if (existingPhone) {
-        throw new ConflictException('Пользователь с таким номером телефона уже зарегистрирован');
+        throw new ConflictException('Користувач із таким номером телефону вже зареєстрований');
       }
     }
 
@@ -128,12 +231,11 @@ export class AuthService {
         email: dto.email.toLowerCase(),
         name: dto.name,
         phone: normalizedPhone,
-        passwordHash,
-        role: 'client'
+        passwordHash
       })
       .returning();
 
-    const userProfile = this.mapToProfile(newUser);
+    const userProfile = await this.mapToProfile(newUser);
 
     const tokens = await this.generateTokens(newUser);
     await this.storeRefreshToken(newUser.id, tokens.refreshToken, metadata);
@@ -149,7 +251,7 @@ export class AuthService {
     dto: LoginDto,
     metadata: { userAgent?: string; ipAddress?: string } = {}
   ): Promise<AuthResponse> {
-    let user: any = null;
+    let user: typeof users.$inferSelect | undefined;
 
     const rawIdentifier = dto.identifier?.trim();
     const phoneInput =
@@ -160,7 +262,7 @@ export class AuthService {
     if (phoneInput) {
       const normalizedPhone = normalizePhone(phoneInput);
       if (!normalizedPhone) {
-        throw new UnauthorizedException('Неверный номер телефона или пароль');
+        throw new UnauthorizedException('Невірний номер телефону або пароль');
       }
       const [foundByPhone] = await this.databaseService.db
         .select()
@@ -176,16 +278,18 @@ export class AuthService {
     }
 
     if (!user) {
-      throw new UnauthorizedException('Неверный логин или пароль');
+      throw new UnauthorizedException('Невірний логін або пароль');
     }
 
     const isMatch = await bcrypt.compare(dto.password, user.passwordHash);
     if (!isMatch) {
-      throw new UnauthorizedException('Неверный логин или пароль');
+      throw new UnauthorizedException('Невірний логін або пароль');
     }
 
+    user = await this.assertUserNotBlocked(user);
+
     const reconciledUser = await this.reconcileExpiredSubscription(user);
-    const userProfile = this.mapToProfile(reconciledUser);
+    const userProfile = await this.mapToProfile(reconciledUser);
 
     const tokens = await this.generateTokens(reconciledUser);
     await this.storeRefreshToken(reconciledUser.id, tokens.refreshToken, metadata);
@@ -224,8 +328,9 @@ export class AuthService {
       throw new UnauthorizedException('Пользователь не найден');
     }
 
-    const reconciledUser = await this.reconcileExpiredSubscription(user);
-    const userProfile = this.mapToProfile(reconciledUser);
+    const activeUser = await this.assertUserNotBlocked(user);
+    const reconciledUser = await this.reconcileExpiredSubscription(activeUser);
+    const userProfile = await this.mapToProfile(reconciledUser);
 
     const tokens = await this.generateTokens(reconciledUser);
     await this.storeRefreshToken(reconciledUser.id, tokens.refreshToken, metadata);
@@ -238,22 +343,34 @@ export class AuthService {
   }
 
   async logout(rawRefreshToken?: string, userId?: string, bearerToken?: string): Promise<void> {
-    if (rawRefreshToken) {
+    if (rawRefreshToken && typeof rawRefreshToken === 'string') {
       const tokenHash = this.hashToken(rawRefreshToken);
       await this.databaseService.db
         .delete(refreshTokens)
         .where(eq(refreshTokens.tokenHash, tokenHash));
     }
 
-    let resolvedUserId = userId;
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    let resolvedUserId = userId && uuidRegex.test(userId) ? userId : undefined;
+
     if (!resolvedUserId && bearerToken) {
       try {
-        const decoded = this.jwtService.decode(bearerToken) as { sub?: string } | null;
-        if (decoded?.sub) {
-          resolvedUserId = decoded.sub;
+        // Verify cryptographic signature (allowing expired access token during logout), never trust unverified decode()
+        const verified = await this.jwtService.verifyAsync<{
+          sub?: string;
+          tokenType?: string;
+          type?: string;
+        }>(bearerToken, { ignoreExpiration: true });
+        if (
+          verified?.tokenType === 'access' &&
+          verified?.type !== 'store_preview' &&
+          typeof verified?.sub === 'string' &&
+          uuidRegex.test(verified.sub)
+        ) {
+          resolvedUserId = verified.sub;
         }
       } catch {
-        // ignore
+        // Invalid/forged bearer token: silently ignore instead of wiping any user's sessions
       }
     }
 
@@ -264,9 +381,10 @@ export class AuthService {
     }
   }
 
-  private async reconcileExpiredSubscription(user: any): Promise<any> {
-    if (!user) return user;
-    const isStaff = user.systemRole === 'platform_admin' || user.role === 'admin';
+  private async reconcileExpiredSubscription(
+    user: typeof users.$inferSelect
+  ): Promise<typeof users.$inferSelect> {
+    const isStaff = await this.isPlatformStaffUser(user.id);
     let currentUser = user;
 
     if (
@@ -302,7 +420,10 @@ export class AuthService {
   }
 
   async getProfile(userId: string): Promise<UserProfile> {
-    const [rawUser] = await this.databaseService.db.select().from(users).where(eq(users.id, userId));
+    const [rawUser] = await this.databaseService.db
+      .select()
+      .from(users)
+      .where(eq(users.id, userId));
 
     if (!rawUser) {
       throw new NotFoundException('Пользователь не найден');
@@ -364,9 +485,44 @@ export class AuthService {
       .returning();
 
     if (!updated) {
-      throw new NotFoundException('Пользователь не найден');
+      throw new NotFoundException('Користувача не знайдено');
     }
 
     return this.mapToProfile(updated);
+  }
+
+  async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string
+  ): Promise<{ message: string }> {
+    const [user] = await this.databaseService.db
+      .select()
+      .from(users)
+      .where(eq(users.id, userId));
+
+    if (!user) {
+      throw new NotFoundException('Користувача не знайдено');
+    }
+
+    const matches = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!matches) {
+      throw new BadRequestException('Поточний пароль вказано невірно');
+    }
+
+    if (currentPassword === newPassword) {
+      throw new BadRequestException('Новий пароль має відрізнятися від поточного');
+    }
+
+    const newHash = await bcrypt.hash(newPassword, 10);
+    await this.databaseService.db.transaction(async (tx) => {
+      await tx
+        .update(users)
+        .set({ passwordHash: newHash, updatedAt: new Date() })
+        .where(eq(users.id, userId));
+      await tx.delete(refreshTokens).where(eq(refreshTokens.userId, userId));
+    });
+
+    return { message: 'Пароль успішно оновлено' };
   }
 }

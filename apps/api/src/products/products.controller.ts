@@ -7,12 +7,15 @@ import {
   Body,
   Param,
   Query,
+  Req,
   UseGuards,
   UsePipes,
   UseInterceptors,
   UploadedFile
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { JwtService } from '@nestjs/jwt';
+import type { Request } from 'express';
 import {
   ProductsService,
   type ProductListItem,
@@ -20,42 +23,65 @@ import {
 } from './products.service.js';
 import { StorageService } from '../storage/storage.service.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
-import { RolesGuard } from '../auth/guards/roles.guard.js';
-import { CurrentUser, Roles, Public } from '../auth/decorators/auth.decorators.js';
+import { CurrentUser, Public } from '../auth/decorators/auth.decorators.js';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
-import { validateImageFile, type UploadedFileDto } from '../common/file-upload.utils.js';
+import {
+  validateImageFile,
+  MAX_IMAGE_FILE_SIZE,
+  type UploadedFileDto
+} from '../common/file-upload.utils.js';
 import type { ProductRecord, ProductCategoryRecord } from '@bizx/database';
 import {
   createProductDtoSchema,
   updateProductDtoSchema,
   productFilterQuerySchema,
   createProductCategoryDtoSchema,
+  updateProductCategoryDtoSchema,
   type CreateProductDto,
   type UpdateProductDto,
   type ProductFilterQuery,
   type CreateProductCategoryDto,
-  type UserRole,
-  type SystemRole,
+  type UpdateProductCategoryDto,
   type ApiResponse,
   type PaginatedResult
 } from '@bizx/common-types';
 
 @Controller('products')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard)
 export class ProductsController {
   constructor(
     private readonly productsService: ProductsService,
-    private readonly storageService: StorageService
+    private readonly storageService: StorageService,
+    private readonly jwtService: JwtService
   ) {}
+
+  private async extractOptionalUserId(req: Request): Promise<string | undefined> {
+    const authHeader = req.headers.authorization;
+    const token =
+      (authHeader?.startsWith('Bearer ') ? authHeader.slice(7).trim() : undefined) ||
+      req.cookies?.['access_token'];
+    if (!token) return undefined;
+    try {
+      const payload = await this.jwtService.verifyAsync<{ sub?: string; tokenType?: string }>(token);
+      if (payload?.tokenType === 'access' && typeof payload.sub === 'string') {
+        return payload.sub;
+      }
+    } catch {
+      // ignore invalid optional token on public route
+    }
+    return undefined;
+  }
 
   // ==================== КАТЕГОРИИ ТОВАРОВ ====================
 
   @Public()
   @Get('store/:storeId/categories')
   async getCategories(
-    @Param('storeId') storeId: string
+    @Param('storeId') storeId: string,
+    @Req() req: Request
   ): Promise<ApiResponse<ProductCategoryRecord[]>> {
-    const categories = await this.productsService.getProductCategories(storeId);
+    const callerUserId = await this.extractOptionalUserId(req);
+    const categories = await this.productsService.getProductCategories(storeId, callerUserId);
     return {
       success: true,
       data: categories,
@@ -68,17 +94,23 @@ export class ProductsController {
   async createCategory(
     @Param('storeId') storeId: string,
     @CurrentUser('sub') userId: string,
-    @CurrentUser('role') userRole: UserRole,
-    @CurrentUser('systemRole') systemRole: SystemRole | undefined,
     @Body() dto: CreateProductCategoryDto
   ): Promise<ApiResponse<ProductCategoryRecord>> {
-    const category = await this.productsService.createProductCategory(
-      storeId,
-      userId,
-      userRole,
-      dto,
-      systemRole
-    );
+    const category = await this.productsService.createProductCategory(storeId, userId, dto);
+    return {
+      success: true,
+      data: category,
+      timestamp: new Date().toISOString()
+    };
+  }
+
+  @Patch('categories/:id')
+  async updateCategory(
+    @Param('id') id: string,
+    @CurrentUser('sub') userId: string,
+    @Body(new ZodValidationPipe(updateProductCategoryDtoSchema)) dto: UpdateProductCategoryDto
+  ): Promise<ApiResponse<ProductCategoryRecord>> {
+    const category = await this.productsService.updateProductCategory(id, userId, dto);
     return {
       success: true,
       data: category,
@@ -89,11 +121,9 @@ export class ProductsController {
   @Delete('categories/:id')
   async deleteCategory(
     @Param('id') id: string,
-    @CurrentUser('sub') userId: string,
-    @CurrentUser('role') userRole: UserRole,
-    @CurrentUser('systemRole') systemRole: SystemRole | undefined
+    @CurrentUser('sub') userId: string
   ): Promise<ApiResponse<{ message: string }>> {
-    const result = await this.productsService.deleteProductCategory(id, userId, userRole, systemRole);
+    const result = await this.productsService.deleteProductCategory(id, userId);
     return {
       success: true,
       data: result,
@@ -108,9 +138,11 @@ export class ProductsController {
   async getStoreProducts(
     @Param('storeId') storeId: string,
     @Query(new ZodValidationPipe(productFilterQuerySchema))
-    query: ProductFilterQuery
+    query: ProductFilterQuery,
+    @Req() req: Request
   ): Promise<ApiResponse<PaginatedResult<ProductListItem>>> {
-    const result = await this.productsService.getStoreProducts(storeId, query);
+    const callerUserId = await this.extractOptionalUserId(req);
+    const result = await this.productsService.getStoreProducts(storeId, query, callerUserId);
     return {
       success: true,
       data: result,
@@ -120,8 +152,12 @@ export class ProductsController {
 
   @Public()
   @Get(':id')
-  async getProductById(@Param('id') id: string): Promise<ApiResponse<ProductDetailItem>> {
-    const product = await this.productsService.getProductById(id);
+  async getProductById(
+    @Param('id') id: string,
+    @Req() req: Request
+  ): Promise<ApiResponse<ProductDetailItem>> {
+    const callerUserId = await this.extractOptionalUserId(req);
+    const product = await this.productsService.getProductById(id, callerUserId);
     return {
       success: true,
       data: product,
@@ -134,11 +170,9 @@ export class ProductsController {
   async createProduct(
     @Param('storeId') storeId: string,
     @CurrentUser('sub') userId: string,
-    @CurrentUser('role') userRole: UserRole,
-    @CurrentUser('systemRole') systemRole: SystemRole | undefined,
     @Body() dto: CreateProductDto
   ): Promise<ApiResponse<ProductRecord>> {
-    const product = await this.productsService.createProduct(storeId, userId, userRole, dto, systemRole);
+    const product = await this.productsService.createProduct(storeId, userId, dto);
     return {
       success: true,
       data: product,
@@ -151,11 +185,9 @@ export class ProductsController {
   async updateProduct(
     @Param('id') id: string,
     @CurrentUser('sub') userId: string,
-    @CurrentUser('role') userRole: UserRole,
-    @CurrentUser('systemRole') systemRole: SystemRole | undefined,
     @Body() dto: UpdateProductDto
   ): Promise<ApiResponse<ProductRecord>> {
-    const updated = await this.productsService.updateProduct(id, userId, userRole, dto, systemRole);
+    const updated = await this.productsService.updateProduct(id, userId, dto);
     return {
       success: true,
       data: updated,
@@ -164,26 +196,18 @@ export class ProductsController {
   }
 
   @Post(':id/image')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_IMAGE_FILE_SIZE } }))
   async uploadProductImage(
     @Param('id') id: string,
     @CurrentUser('sub') userId: string,
-    @CurrentUser('role') userRole: UserRole,
-    @CurrentUser('systemRole') systemRole: SystemRole | undefined,
     @UploadedFile() rawFile?: UploadedFileDto
   ): Promise<ApiResponse<ProductRecord>> {
-    await this.productsService.assertProductOwnership(id, userId, userRole, systemRole);
+    await this.productsService.assertProductOwnership(id, userId);
     const file = validateImageFile(rawFile);
     const fileKey = this.storageService.generateFileKey('products', file.originalname);
     const publicUrl = await this.storageService.uploadBuffer(fileKey, file.buffer, file.mimetype);
 
-    const updated = await this.productsService.updateProduct(
-      id,
-      userId,
-      userRole,
-      { imageUrl: publicUrl },
-      systemRole
-    );
+    const updated = await this.productsService.updateProduct(id, userId, { imageUrl: publicUrl });
     return {
       success: true,
       data: updated,
@@ -194,11 +218,9 @@ export class ProductsController {
   @Delete(':id')
   async deleteProduct(
     @Param('id') id: string,
-    @CurrentUser('sub') userId: string,
-    @CurrentUser('role') userRole: UserRole,
-    @CurrentUser('systemRole') systemRole: SystemRole | undefined
+    @CurrentUser('sub') userId: string
   ): Promise<ApiResponse<{ message: string }>> {
-    const result = await this.productsService.deleteProduct(id, userId, userRole, systemRole);
+    const result = await this.productsService.deleteProduct(id, userId);
     return {
       success: true,
       data: result,

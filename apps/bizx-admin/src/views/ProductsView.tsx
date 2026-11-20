@@ -2,21 +2,104 @@ import React, { useState } from 'react';
 import { useBusinessStore } from '../store/useBusinessStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { useTranslation } from '../hooks/useTranslation';
-import { Button, Input, Textarea, Card, CardContent, Badge, Modal, ProductPlaceholder, Select } from '@bizx/ui';
-import { Plus, Search, Archive, Image as ImageIcon, Upload, AlertCircle, Pencil } from 'lucide-react';
+import { Button, Input, Textarea, Card, CardContent, Badge, Modal, ConfirmModal, ProductPlaceholder, Select } from '@bizx/ui';
+import { Plus, Search, Archive, Image as ImageIcon, Upload, AlertCircle, Pencil, FolderTree, Check, X } from 'lucide-react';
+import { api } from '../lib/api';
 import { resolveMediaUrl } from '../lib/media';
-import type { Product } from '@bizx/common-types';
+import type { Product, ProductCategory } from '@bizx/common-types';
 
-export const ProductsView: React.FC = () => {
-  const { products, categories, activeStore, createProduct, updateProduct, deleteProduct, isLoading } =
+export interface ProductsViewProps {
+  isReadOnly?: boolean;
+  canCreate?: boolean;
+  canEdit?: boolean;
+  canChangeStatus?: boolean;
+  canArchive?: boolean;
+}
+
+export const ProductsView: React.FC<ProductsViewProps> = ({
+  isReadOnly: isReadOnlyProp,
+  canCreate: canCreateProp,
+  canEdit: canEditProp,
+  canChangeStatus: canChangeStatusProp,
+  canArchive: canArchiveProp
+}) => {
+  const { products, categories, activeStore, createProduct, updateProduct, deleteProduct, fetchStoreData, isLoading } =
     useBusinessStore();
   const { hasActiveSubscription } = useAuthStore();
   const { t, locale } = useTranslation();
-  const isReadOnly = !hasActiveSubscription;
+  const isReadOnly = isReadOnlyProp !== undefined ? isReadOnlyProp : !hasActiveSubscription;
+  const canCreate = !isReadOnly && (canCreateProp !== undefined ? canCreateProp : true);
+  const canEdit = !isReadOnly && (canEditProp !== undefined ? canEditProp : true);
+  const canChangeStatus = !isReadOnly && (canChangeStatusProp !== undefined ? canChangeStatusProp : true);
+  const canArchive = !isReadOnly && (canArchiveProp !== undefined ? canArchiveProp : true);
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [archivingProduct, setArchivingProduct] = useState<Product | null>(null);
+
+  const [isCategoriesModalOpen, setIsCategoriesModalOpen] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [editingCategoryName, setEditingCategoryName] = useState('');
+  const [categoryError, setCategoryError] = useState<string | null>(null);
+  const [isSavingCategory, setIsSavingCategory] = useState(false);
+  const [archivingCategory, setArchivingCategory] = useState<ProductCategory | null>(null);
+
+  const handleCreateCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeStore || !newCategoryName.trim()) return;
+    setIsSavingCategory(true);
+    setCategoryError(null);
+    try {
+      const res = await api.products.createCategory(activeStore.id, {
+        name: newCategoryName.trim(),
+        sortOrder: categories.length
+      });
+      if (res.success) {
+        setNewCategoryName('');
+        await fetchStoreData(activeStore.id);
+      }
+    } catch (err: any) {
+      setCategoryError(err?.data?.message || err?.message || 'Не вдалося створити категорію');
+    } finally {
+      setIsSavingCategory(false);
+    }
+  };
+
+  const handleRenameCategory = async (catId: string) => {
+    if (!activeStore || !editingCategoryName.trim()) return;
+    setIsSavingCategory(true);
+    setCategoryError(null);
+    try {
+      const res = await api.products.updateCategory(catId, { name: editingCategoryName.trim() });
+      if (res.success) {
+        setEditingCategoryId(null);
+        setEditingCategoryName('');
+        await fetchStoreData(activeStore.id);
+      }
+    } catch (err: any) {
+      setCategoryError(err?.data?.message || err?.message || 'Не вдалося оновити категорію');
+    } finally {
+      setIsSavingCategory(false);
+    }
+  };
+
+  const handleArchiveCategory = async (cat: ProductCategory) => {
+    if (!activeStore) return;
+    setIsSavingCategory(true);
+    setCategoryError(null);
+    try {
+      await api.products.deleteCategory(cat.id);
+      if (selectedCategory === cat.id) setSelectedCategory('all');
+      setArchivingCategory(null);
+      await fetchStoreData(activeStore.id);
+    } catch (err: any) {
+      setCategoryError(err?.data?.message || err?.message || 'Не вдалося архівувати категорію');
+    } finally {
+      setIsSavingCategory(false);
+    }
+  };
 
   // Form State
   const [name, setName] = useState('');
@@ -96,21 +179,30 @@ export const ProductsView: React.FC = () => {
 
     let success = false;
     if (editingProduct) {
+      const updatePayload: Record<string, unknown> = {};
+      if (canEdit) {
+        updatePayload.name = name;
+        updatePayload.categoryId = categoryId || undefined;
+        updatePayload.sku = sku || undefined;
+        updatePayload.price = priceKopecks;
+        updatePayload.oldPrice = oldPriceKopecks;
+        updatePayload.inventoryCount = invCount;
+        updatePayload.description = description || undefined;
+      }
+      if (canChangeStatus && isActive !== editingProduct.isActive) {
+        updatePayload.isActive = isActive;
+      }
+      if (Object.keys(updatePayload).length === 0 && !imageFile) {
+        setIsModalOpen(false);
+        setEditingProduct(null);
+        return;
+      }
       success = await updateProduct(
         editingProduct.id,
-        {
-          name,
-          categoryId: categoryId || undefined,
-          sku: sku || undefined,
-          price: priceKopecks,
-          oldPrice: oldPriceKopecks,
-          inventoryCount: invCount,
-          description: description || undefined,
-          isActive
-        },
-        imageFile || undefined
+        updatePayload as any,
+        canEdit ? imageFile || undefined : undefined
       );
-    } else {
+    } else if (canCreate) {
       success = await createProduct(
         {
           name,
@@ -120,7 +212,7 @@ export const ProductsView: React.FC = () => {
           oldPrice: oldPriceKopecks,
           inventoryCount: invCount,
           description: description || undefined,
-          isActive
+          isActive: canChangeStatus ? isActive : true
         },
         imageFile || undefined
       );
@@ -161,13 +253,30 @@ export const ProductsView: React.FC = () => {
           </p>
         </div>
 
-        <Button
-          onClick={openCreateModal}
-          disabled={isReadOnly}
-          className="flex items-center gap-1.5 shrink-0 disabled:opacity-50"
-        >
-          <Plus className="w-4 h-4" /> {t('products.addProduct')}
-        </Button>
+        <div className="flex items-center gap-2 shrink-0 flex-wrap">
+          {(canCreate || canEdit || canArchive) && (
+            <Button
+              variant="outline"
+              onClick={() => {
+                setCategoryError(null);
+                setEditingCategoryId(null);
+                setIsCategoriesModalOpen(true);
+              }}
+              className="flex items-center gap-1.5"
+            >
+              <FolderTree className="w-4 h-4" />
+              {locale === 'en' ? `Categories (${categories.length})` : `Категорії (${categories.length})`}
+            </Button>
+          )}
+          {canCreate && (
+            <Button
+              onClick={openCreateModal}
+              className="flex items-center gap-1.5"
+            >
+              <Plus className="w-4 h-4" /> {t('products.addProduct')}
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Filter and Search Bar */}
@@ -241,9 +350,22 @@ export const ProductsView: React.FC = () => {
                   <div>
                     <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
                       <span>{p.sku || 'Без артикулу'}</span>
-                      <Badge variant={p.isActive ? 'success' : 'outline'} className="text-[10px]">
-                        {p.isActive ? 'Активний' : 'Чернетка'}
-                      </Badge>
+                      {canChangeStatus ? (
+                        <button
+                          type="button"
+                          onClick={() => void updateProduct(p.id, { isActive: !p.isActive })}
+                          title={locale === 'en' ? 'Toggle Active / Draft status' : 'Перемкнути статус Активний / Чернетка'}
+                          className="cursor-pointer hover:opacity-80 transition-opacity"
+                        >
+                          <Badge variant={p.isActive ? 'success' : 'outline'} className="text-[10px]">
+                            {p.isActive ? 'Активний' : 'Чернетка'}
+                          </Badge>
+                        </button>
+                      ) : (
+                        <Badge variant={p.isActive ? 'success' : 'outline'} className="text-[10px]">
+                          {p.isActive ? 'Активний' : 'Чернетка'}
+                        </Badge>
+                      )}
                     </div>
                     <h3 className="font-semibold text-slate-900 line-clamp-2 text-sm">{p.name}</h3>
                     {p.description && (
@@ -261,30 +383,32 @@ export const ProductsView: React.FC = () => {
                       )}
                     </div>
 
-                    <div className="flex items-center gap-1.5">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="text-slate-700 hover:bg-slate-50"
-                        onClick={() => openEditModal(p)}
-                        title="Редагувати товар"
-                      >
-                        <Pencil className="w-3.5 h-3.5" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="text-slate-500 hover:text-amber-700 hover:bg-amber-50 hover:border-amber-200"
-                        onClick={() => {
-                          if (confirm(`Архівувати товар "${p.name}"? Товар буде сховано з каталогу, але збережено в системному архіві.`)) {
-                            void deleteProduct(p.id);
-                          }
-                        }}
-                        title="Архівувати товар"
-                      >
-                        <Archive className="w-3.5 h-3.5" />
-                      </Button>
-                    </div>
+                    {(canEdit || canArchive) && (
+                      <div className="flex items-center gap-1.5">
+                        {canEdit && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-slate-700 hover:bg-slate-50"
+                            onClick={() => openEditModal(p)}
+                            title="Редагувати товар"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </Button>
+                        )}
+                        {canArchive && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-slate-500 hover:text-amber-700 hover:bg-amber-50 hover:border-amber-200"
+                            onClick={() => setArchivingProduct(p)}
+                            title="Архівувати товар"
+                          >
+                            <Archive className="w-3.5 h-3.5" />
+                          </Button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -298,9 +422,11 @@ export const ProductsView: React.FC = () => {
           <p className="text-xs text-slate-400 mt-1 mb-4">
             Додайте свій перший товар або змініть критерії пошуку
           </p>
-          <Button onClick={openCreateModal} size="sm">
-            <Plus className="w-4 h-4 mr-1" /> Створити товар
-          </Button>
+          {canCreate && (
+            <Button onClick={openCreateModal} size="sm">
+              <Plus className="w-4 h-4 mr-1" /> Створити товар
+            </Button>
+          )}
         </Card>
       )}
 
@@ -315,7 +441,7 @@ export const ProductsView: React.FC = () => {
         description={
           editingProduct
             ? `Оновіть інформацію та параметри товару «${editingProduct.name}»`
-            : 'Заповніть інформацію про товар та додайте фотографію для бакету R2'
+            : 'Заповніть інформацію про товар та додайте зображення'
         }
       >
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -400,18 +526,20 @@ export const ProductsView: React.FC = () => {
             />
           </div>
 
-          <div className="flex items-center gap-2 pt-1">
-            <input
-              type="checkbox"
-              id="isActiveCheckbox"
-              checked={isActive}
-              onChange={(e) => setIsActive(e.target.checked)}
-              className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-            />
-            <label htmlFor="isActiveCheckbox" className="text-xs font-semibold text-slate-700 cursor-pointer">
-              Товар активний (відображається покупцям у додатку)
-            </label>
-          </div>
+          {canChangeStatus && (
+            <div className="flex items-center gap-2 pt-1">
+              <input
+                type="checkbox"
+                id="isActiveCheckbox"
+                checked={isActive}
+                onChange={(e) => setIsActive(e.target.checked)}
+                className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+              />
+              <label htmlFor="isActiveCheckbox" className="text-xs font-semibold text-slate-700 cursor-pointer">
+                Товар активний (відображається покупцям у додатку)
+              </label>
+            </div>
+          )}
 
           {/* Image Upload Input */}
           <div className="space-y-1">
@@ -431,16 +559,16 @@ export const ProductsView: React.FC = () => {
 
               <div className="flex-1">
                 <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-700 hover:bg-slate-50 shadow-sm">
-                  <Upload className="w-3.5 h-3.5" /> Обрати файл (PNG, JPG, SVG)
+                  <Upload className="w-3.5 h-3.5" /> Обрати файл (PNG, JPG, WebP)
                   <input
                     type="file"
-                    accept="image/*"
+                    accept="image/png,image/jpeg,image/webp,image/gif"
                     onChange={handleImageChange}
                     className="hidden"
                   />
                 </label>
                 <p className="text-[11px] text-slate-400 mt-1">
-                  Файл автоматично завантажиться у Cloudflare R2
+                  Підтримуються формати PNG, JPG, GIF та WebP до 10 МБ
                 </p>
               </div>
             </div>
@@ -463,6 +591,161 @@ export const ProductsView: React.FC = () => {
           </div>
         </form>
       </Modal>
+
+      <ConfirmModal
+        isOpen={Boolean(archivingProduct)}
+        onClose={() => setArchivingProduct(null)}
+        onConfirm={async () => {
+          if (!archivingProduct) return;
+          await deleteProduct(archivingProduct.id);
+          setArchivingProduct(null);
+        }}
+        nested={false}
+        tone="warning"
+        icon={<Archive className="w-4 h-4" />}
+        title="Архівувати товар?"
+        subtitle={archivingProduct?.name}
+        confirmLabel="Архівувати"
+        cancelLabel="Скасувати"
+        confirmVariant="destructive"
+        isLoading={isLoading}
+      >
+        <p className="text-slate-700 leading-relaxed">
+          Товар <strong>«{archivingProduct?.name}»</strong> буде приховано з каталогу та вітрини,
+          але збережено в системному архіві замовлень.
+        </p>
+      </ConfirmModal>
+
+      <Modal
+        isOpen={isCategoriesModalOpen}
+        onClose={() => setIsCategoriesModalOpen(false)}
+        size="md"
+        icon={<FolderTree className="w-4 h-4" />}
+        title={locale === 'en' ? 'Product Categories' : 'Категорії товарів'}
+        subtitle={activeStore?.name}
+      >
+        <div className="space-y-4">
+          {categoryError && (
+            <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-xs text-rose-700 flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{categoryError}</span>
+            </div>
+          )}
+
+          {canCreate && (
+            <form onSubmit={handleCreateCategory} className="flex gap-2">
+              <Input
+                value={newCategoryName}
+                onChange={(e) => setNewCategoryName(e.target.value)}
+                placeholder={locale === 'en' ? 'New category name...' : 'Назва нової категорії...'}
+                className="flex-1"
+              />
+              <Button type="submit" disabled={isSavingCategory || !newCategoryName.trim()}>
+                <Plus className="w-4 h-4 mr-1" />
+                {locale === 'en' ? 'Add' : 'Додати'}
+              </Button>
+            </form>
+          )}
+
+          <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden bg-white">
+            {categories.length === 0 ? (
+              <div className="p-6 text-center text-xs text-slate-500">
+                {locale === 'en' ? 'No categories created yet.' : 'Категорій ще немає.'}
+              </div>
+            ) : (
+              categories.map((cat) => {
+                const isEditing = editingCategoryId === cat.id;
+                const prodCount = products.filter((p) => p.categoryId === cat.id).length;
+                return (
+                  <div key={cat.id} className="p-3 flex items-center justify-between gap-2">
+                    {isEditing ? (
+                      <div className="flex items-center gap-2 flex-1">
+                        <Input
+                          value={editingCategoryName}
+                          onChange={(e) => setEditingCategoryName(e.target.value)}
+                          className="h-8 text-xs flex-1"
+                        />
+                        <Button
+                          type="button"
+                          size="sm"
+                          disabled={isSavingCategory || !editingCategoryName.trim()}
+                          onClick={() => void handleRenameCategory(cat.id)}
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setEditingCategoryId(null)}
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="min-w-0">
+                          <div className="text-xs font-bold text-slate-900 truncate">{cat.name}</div>
+                          <div className="text-[11px] text-slate-400">
+                            {locale === 'en' ? `${prodCount} product(s)` : `Товарів: ${prodCount}`}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          {canEdit && (
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => {
+                                setEditingCategoryId(cat.id);
+                                setEditingCategoryName(cat.name);
+                              }}
+                            >
+                              <Pencil className="w-3.5 h-3.5 text-slate-500" />
+                            </Button>
+                          )}
+                          {canArchive && (
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => setArchivingCategory(cat)}
+                            >
+                              <Archive className="w-3.5 h-3.5 text-rose-500" />
+                            </Button>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      </Modal>
+
+      <ConfirmModal
+        isOpen={Boolean(archivingCategory)}
+        onClose={() => setArchivingCategory(null)}
+        onConfirm={async () => {
+          if (archivingCategory) await handleArchiveCategory(archivingCategory);
+        }}
+        tone="warning"
+        icon={<Archive className="w-4 h-4" />}
+        title={locale === 'en' ? 'Archive category?' : 'Архівувати категорію?'}
+        subtitle={archivingCategory?.name}
+        confirmLabel={locale === 'en' ? 'Archive' : 'Архівувати'}
+        cancelLabel={locale === 'en' ? 'Cancel' : 'Скасувати'}
+        confirmVariant="destructive"
+        isLoading={isSavingCategory}
+      >
+        <p className="text-xs text-slate-700 leading-relaxed">
+          {locale === 'en'
+            ? `Category «${archivingCategory?.name}» will be archived. Products inside it will remain in your catalog.`
+            : `Категорію «${archivingCategory?.name}» буде архівовано. Товари залишаться в каталозі без прив’язки до цієї категорії.`}
+        </p>
+      </ConfirmModal>
     </div>
   );
 };

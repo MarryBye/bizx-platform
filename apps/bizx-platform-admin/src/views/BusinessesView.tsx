@@ -1,96 +1,167 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import type { Store } from '@bizx/common-types';
+import { StatusBadge, Button } from '@bizx/ui';
+import { formatShortDate } from '@bizx/utils';
+import { platformApi } from '../lib/api';
+import { useTranslation } from '../hooks/useTranslation';
 import {
   Building2,
   Search,
   Archive,
   SlidersHorizontal,
-  RefreshCw
+  RefreshCw,
+  ArrowUpDown,
+  Star,
+  Zap,
+  Eye,
+  Clock,
+  ArrowRight
 } from 'lucide-react';
 
 export type ExtendedBusiness = Store & {
   categoryName?: string;
   ownerName?: string;
   ownerEmail?: string;
+  ownerPhone?: string | null;
+  productsCount?: number;
+  activeStrikesCount?: number;
   ordersCount?: number;
   totalGmv?: number;
 };
+
+type BusinessSortKey =
+  | 'newest'
+  | 'oldest'
+  | 'name_asc'
+  | 'name_desc'
+  | 'rating_desc'
+  | 'strikes_desc'
+  | 'status';
 
 interface BusinessesViewProps {
   businesses: ExtendedBusiness[];
   categories: Array<{ id: string; name: string }>;
   onSelectBusiness: (business: ExtendedBusiness) => void;
+  onPreviewStore?: (business: ExtendedBusiness) => Promise<void>;
+  onOpenPendingQueue?: () => void;
   onRefresh: () => Promise<void>;
   isLoading: boolean;
 }
+
+const STATUS_SORT_ORDER: Record<string, number> = {
+  pending: 0,
+  suspended: 1,
+  active: 2,
+  draft: 3,
+  archived: 4
+};
 
 export const BusinessesView: React.FC<BusinessesViewProps> = ({
   businesses,
   categories,
   onSelectBusiness,
+  onPreviewStore,
+  onOpenPendingQueue,
   onRefresh,
   isLoading
 }) => {
+  const { t, locale } = useTranslation();
+  const isEn = locale === 'en';
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
+  const [sortBy, setSortBy] = useState<BusinessSortKey>('newest');
 
-  const filteredBusinesses = businesses.filter((b) => {
-    const matchesSearch =
-      b.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      b.slug.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (b.ownerName && b.ownerName.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (b.ownerEmail && b.ownerEmail.toLowerCase().includes(searchQuery.toLowerCase()));
+  const pendingCount = useMemo(
+    () => businesses.filter((b) => b.status === 'pending').length,
+    [businesses]
+  );
 
-    const matchesStatus = statusFilter === 'all' || b.status === statusFilter;
-    const matchesCategory = categoryFilter === 'all' || b.categoryId === categoryFilter;
+  const filteredBusinesses = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    const list = businesses.filter((b) => {
+      const matchesSearch =
+        !q ||
+        b.name.toLowerCase().includes(q) ||
+        b.slug.toLowerCase().includes(q) ||
+        (b.address && b.address.toLowerCase().includes(q)) ||
+        (b.ownerName && b.ownerName.toLowerCase().includes(q)) ||
+        (b.ownerEmail && b.ownerEmail.toLowerCase().includes(q));
 
-    return matchesSearch && matchesStatus && matchesCategory;
-  });
+      const matchesStatus = statusFilter === 'all' || b.status === statusFilter;
+      const matchesCategory = categoryFilter === 'all' || b.categoryId === categoryFilter;
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
+      return matchesSearch && matchesStatus && matchesCategory;
+    });
+
+    return [...list].sort((a, b) => {
+      const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+
+      switch (sortBy) {
+        case 'oldest':
+          return timeA - timeB;
+        case 'name_asc':
+          return a.name.localeCompare(b.name, 'uk');
+        case 'name_desc':
+          return b.name.localeCompare(a.name, 'uk');
+        case 'rating_desc':
+          return (b.ratingAvg ?? 0) - (a.ratingAvg ?? 0);
+        case 'strikes_desc':
+          return (b.activeStrikesCount ?? 0) - (a.activeStrikesCount ?? 0);
+        case 'status':
+          return (STATUS_SORT_ORDER[a.status] ?? 9) - (STATUS_SORT_ORDER[b.status] ?? 9);
+        case 'newest':
+        default:
+          return timeB - timeA;
+      }
+    });
+  }, [businesses, searchQuery, statusFilter, categoryFilter, sortBy]);
+
+  const getStatusBadge = (b: ExtendedBusiness) => {
+    const label = t(`statuses.store.${b.status}`);
+    switch (b.status) {
       case 'draft':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-300">
-            <span className="w-1.5 h-1.5 rounded-full bg-slate-500" />
-            <span>В розробці</span>
-          </span>
+          <StatusBadge tone="slate" dot>
+            {label}
+          </StatusBadge>
         );
       case 'active':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-            <span>Активний</span>
-          </span>
+          <StatusBadge tone="emerald" dot>
+            {label}
+          </StatusBadge>
         );
       case 'pending':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-            <span>На перевірці</span>
-          </span>
+          <StatusBadge tone="amber" dot>
+            {label}
+          </StatusBadge>
         );
       case 'suspended':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
-            <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-            <span>Призупинено</span>
-          </span>
+          <div className="inline-flex flex-col items-start gap-0.5">
+            <StatusBadge tone="rose" dot>
+              {label}
+            </StatusBadge>
+            <span className="text-[10px] text-rose-600/80 font-medium pl-1 whitespace-nowrap">
+              {b.suspendedUntil
+                ? `${isEn ? 'until' : 'до'} ${formatShortDate(b.suspendedUntil, locale)}`
+                : isEn
+                  ? 'indefinite'
+                  : 'безстроково'}
+            </span>
+          </div>
         );
       case 'archived':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-500 border border-slate-200">
-            <Archive className="w-3 h-3" />
-            <span>В архіві</span>
-          </span>
+          <StatusBadge tone="slate" icon={<Archive className="w-3 h-3" />}>
+            {label}
+          </StatusBadge>
         );
       default:
-        return (
-          <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-700">
-            {status}
-          </span>
-        );
+        return <StatusBadge tone="slate">{b.status}</StatusBadge>;
     }
   };
 
@@ -100,64 +171,90 @@ export const BusinessesView: React.FC<BusinessesViewProps> = ({
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-            База торгових партнерів
+            {isEn ? 'Partner Stores Registry' : 'База торгових партнерів'}
           </span>
           <h1 className="text-2xl font-black tracking-tight text-slate-900 mt-0.5">
-            Торгові точки та бізнеси
+            {t('platform.businessesTitle')}
           </h1>
           <p className="text-xs text-slate-500 mt-1">
-            Керування статусом підключених закладів, модерація та перегляд параметрів точок
+            {t('platform.businessesSubtitle')}
           </p>
         </div>
 
-        <button
-          type="button"
+        <Button
+          variant="outline"
+          size="sm"
           onClick={onRefresh}
           disabled={isLoading}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 hover:border-slate-300 rounded-lg text-xs font-bold text-slate-700 transition-colors shadow-sm self-start sm:self-auto"
+          className="self-start sm:self-auto"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-          <span>Оновити дані</span>
-        </button>
+          <span>{t('common.refresh')}</span>
+        </Button>
       </div>
 
-      {/* Filter and Search Bar */}
-      <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm flex flex-col md:flex-row items-center gap-3">
-        {/* Search Input */}
+      {/* Pending shortcut banner */}
+      {pendingCount > 0 && onOpenPendingQueue && (
+        <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex items-center gap-2 text-xs text-amber-900 font-semibold">
+            <Clock className="w-4 h-4 text-amber-600 shrink-0" />
+            <span>
+              {isEn
+                ? `${pendingCount} store(s) awaiting moderation approval`
+                : pendingCount === 1
+                  ? '1 новий заклад очікує на підтвердження модератором'
+                  : `${pendingCount} нових закладів очікують на підтвердження модератором`}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={onOpenPendingQueue}
+            className="inline-flex items-center gap-1 text-xs font-black text-amber-900 hover:underline self-start sm:self-auto"
+          >
+            <span>{isEn ? 'Open approval queue' : 'Відкрити чергу підтвердження'}</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
+      {/* Filter, Sort & Search Bar */}
+      <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm flex flex-col lg:flex-row items-center gap-3">
         <div className="relative flex-1 w-full">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
-            placeholder="Пошук за назвою закладу, slug або власником..."
+            placeholder={
+              isEn
+                ? 'Search by store name, address or owner...'
+                : 'Пошук за назвою закладу, адресою або власником...'
+            }
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-9 pr-4 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:bg-white focus:border-slate-900 transition-all font-medium"
           />
         </div>
 
-        {/* Filters */}
-        <div className="flex items-center gap-2 w-full md:w-auto">
-          {/* Status Filter */}
+        <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
             className="text-xs font-semibold px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-slate-900 text-slate-700"
           >
-            <option value="all">Всі статуси</option>
-            <option value="active">Активні</option>
-            <option value="pending">На перевірці</option>
-            <option value="suspended">Призупинені</option>
-            <option value="archived">В архіві</option>
+            <option value="all">{t('analytics.allStatuses')}</option>
+            <option value="active">{t('statuses.store.active')}</option>
+            <option value="pending">{t('statuses.store.pending')}</option>
+            <option value="draft">{t('statuses.store.draft')}</option>
+            <option value="suspended">{t('statuses.store.suspended')}</option>
+            <option value="archived">{t('statuses.store.archived')}</option>
           </select>
 
-          {/* Category Filter */}
           {categories.length > 0 && (
             <select
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
-              className="text-xs font-semibold px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-slate-900 text-slate-700 max-w-[160px] truncate"
+              className="text-xs font-semibold px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-slate-900 text-slate-700 max-w-[165px] truncate"
             >
-              <option value="all">Всі категорії</option>
+              <option value="all">{t('products.allCategories')}</option>
               {categories.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
@@ -165,103 +262,161 @@ export const BusinessesView: React.FC<BusinessesViewProps> = ({
               ))}
             </select>
           )}
+
+          <div className="inline-flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-2">
+            <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as BusinessSortKey)}
+              className="text-xs font-semibold bg-transparent focus:outline-none text-slate-700"
+            >
+              <option value="newest">{isEn ? 'Newest first' : 'Спочатку новіші'}</option>
+              <option value="oldest">{isEn ? 'Oldest first' : 'Спочатку старіші'}</option>
+              <option value="name_asc">{isEn ? 'Name: A → Z' : 'Назва: А → Я'}</option>
+              <option value="name_desc">{isEn ? 'Name: Z → A' : 'Назва: Я → А'}</option>
+              <option value="rating_desc">{isEn ? 'Highest rating' : 'Найвищий рейтинг'}</option>
+              <option value="strikes_desc">{isEn ? 'Most strikes' : 'Найбільше страйків'}</option>
+              <option value="status">{isEn ? 'By status' : 'За статусом'}</option>
+            </select>
+          </div>
         </div>
       </div>
 
-      {/* Table */}
+      {/* Table with Stable Column Widths (prevents badge shifting on status change) */}
       <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
+          <table className="w-full text-left text-xs table-fixed min-w-[880px]">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50/70 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                <th className="py-3 px-4">Торгова точка</th>
-                <th className="py-3 px-4">Категорія</th>
-                <th className="py-3 px-4">Власник</th>
-                <th className="py-3 px-4">Статус</th>
-                <th className="py-3 px-4">Дата реєстрації</th>
-                <th className="py-3 px-4 text-right">Дії</th>
+                <th className="py-3 px-4 w-[25%]">{isEn ? 'Store' : 'Торгова точка'}</th>
+                <th className="py-3 px-4 w-[14%]">{isEn ? 'Category' : 'Категорія'}</th>
+                <th className="py-3 px-4 w-[17%]">{isEn ? 'Owner' : 'Власник'}</th>
+                <th className="py-3 px-4 w-[11%]">{isEn ? 'Rating' : 'Рейтинг'}</th>
+                <th className="py-3 px-4 w-[13%]">{isEn ? 'Status' : 'Статус'}</th>
+                <th className="py-3 px-4 w-[9%]">{isEn ? 'Date' : 'Дата'}</th>
+                <th className="py-3 px-4 w-[11%] text-right">{t('common.actions')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filteredBusinesses.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-12 text-center text-slate-400">
+                  <td colSpan={7} className="py-12 text-center text-slate-400">
                     <Building2 className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                    <div className="font-semibold text-xs">Закладів не знайдено</div>
+                    <div className="font-semibold text-xs">
+                      {isEn ? 'No stores found' : 'Закладів не знайдено'}
+                    </div>
                     <div className="text-[11px] text-slate-400 mt-0.5">
-                      Спробуйте змінити пошуковий запит або параметри фільтрації
+                      {isEn
+                        ? 'Try adjusting your search query or filters'
+                        : 'Спробуйте змінити пошуковий запит або параметри фільтрації'}
                     </div>
                   </td>
                 </tr>
               ) : (
-                filteredBusinesses.map((b) => (
-                  <tr
-                    key={b.id}
-                    className="hover:bg-slate-50/80 transition-colors group"
-                  >
-                    {/* Store Title */}
-                    <td className="py-3.5 px-4 font-medium">
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-xl bg-slate-900 text-white font-bold flex items-center justify-center text-xs shrink-0 shadow-sm overflow-hidden">
-                          {b.logoUrl ? (
-                            <img
-                              src={b.logoUrl}
-                              alt={b.name}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            b.name.slice(0, 2).toUpperCase()
+                filteredBusinesses.map((b) => {
+                  const logoSrc = b.logoUrl ? platformApi.storage.resolveMediaUrl(b.logoUrl) : null;
+                  const strikes = b.activeStrikesCount ?? 0;
+
+                  return (
+                    <tr key={b.id} className="hover:bg-slate-50/80 transition-colors">
+                      {/* Store Title */}
+                      <td className="py-3.5 px-4 font-medium align-middle">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-9 h-9 rounded-xl bg-slate-900 text-white font-bold flex items-center justify-center text-xs shrink-0 shadow-sm overflow-hidden">
+                            {logoSrc ? (
+                              <img
+                                src={logoSrc}
+                                alt={b.name}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              b.name.slice(0, 2).toUpperCase()
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="font-black text-slate-900 text-xs truncate">{b.name}</div>
+                            <div className="text-[10px] text-slate-400 font-mono truncate">
+                              /{b.slug}
+                              {typeof b.productsCount === 'number' && ` · ${b.productsCount} тов.`}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Category */}
+                      <td className="py-3.5 px-4 text-slate-600 font-medium align-middle">
+                        <span className="inline-block px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-[11px] truncate max-w-full">
+                          {b.categoryName || 'Торгівля'}
+                        </span>
+                      </td>
+
+                      {/* Owner */}
+                      <td className="py-3.5 px-4 align-middle">
+                        <div className="text-slate-900 font-semibold text-xs truncate">
+                          {b.ownerName || 'Партнер BizX'}
+                        </div>
+                        {b.ownerEmail && (
+                          <div className="text-[10px] text-slate-400 font-mono truncate">
+                            {b.ownerEmail}
+                          </div>
+                        )}
+                      </td>
+
+                      {/* Rating & Strikes */}
+                      <td className="py-3.5 px-4 align-middle whitespace-nowrap">
+                        <div className="flex items-center gap-1.5">
+                          <span className="inline-flex items-center gap-1 text-xs font-bold text-slate-700">
+                            <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-400 shrink-0" />
+                            <span>{(b.ratingAvg ?? 0).toFixed(1)}</span>
+                          </span>
+                          {strikes > 0 && (
+                            <StatusBadge
+                              tone={strikes >= 2 ? 'rose' : 'amber'}
+                              size="xs"
+                              icon={<Zap className="w-2.5 h-2.5" />}
+                            >
+                              {strikes}/3
+                            </StatusBadge>
                           )}
                         </div>
-                        <div>
-                          <div className="font-black text-slate-900 text-xs flex items-center gap-1.5">
-                            <span>{b.name}</span>
-                          </div>
-                          <div className="text-[10px] text-slate-400 font-mono">/{b.slug}</div>
+                      </td>
+
+                      {/* Status */}
+                      <td className="py-3.5 px-4 align-middle whitespace-nowrap">
+                        {getStatusBadge(b)}
+                      </td>
+
+                      {/* Created At */}
+                      <td className="py-3.5 px-4 text-slate-500 font-mono text-[11px] align-middle whitespace-nowrap">
+                        {b.createdAt ? new Date(b.createdAt).toLocaleDateString('uk-UA') : '—'}
+                      </td>
+
+                      {/* Actions */}
+                      <td className="py-3.5 px-4 text-right align-middle whitespace-nowrap">
+                        <div className="inline-flex items-center gap-1.5">
+                          {onPreviewStore && (
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              title="Попередній перегляд вітрини"
+                              onClick={() => onPreviewStore(b)}
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                            </Button>
+                          )}
+                          <Button
+                            variant="neutral"
+                            size="icon"
+                            title="Керування закладом"
+                            onClick={() => onSelectBusiness(b)}
+                          >
+                            <SlidersHorizontal className="w-3.5 h-3.5" />
+                          </Button>
                         </div>
-                      </div>
-                    </td>
-
-                    {/* Category */}
-                    <td className="py-3.5 px-4 text-slate-600 font-medium">
-                      <span className="inline-block px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-[11px]">
-                        {b.categoryName || 'Торгівля'}
-                      </span>
-                    </td>
-
-                    {/* Owner */}
-                    <td className="py-3.5 px-4">
-                      <div className="text-slate-900 font-semibold text-xs">
-                        {b.ownerName || 'Партнер BizX'}
-                      </div>
-                      {b.ownerEmail && (
-                        <div className="text-[10px] text-slate-400 font-mono truncate max-w-[150px]">
-                          {b.ownerEmail}
-                        </div>
-                      )}
-                    </td>
-
-                    {/* Status */}
-                    <td className="py-3.5 px-4">{getStatusBadge(b.status)}</td>
-
-                    {/* Created At */}
-                    <td className="py-3.5 px-4 text-slate-500 font-mono text-[11px]">
-                      {b.createdAt ? new Date(b.createdAt).toLocaleDateString('uk-UA') : '—'}
-                    </td>
-
-                    {/* Uniform Action Button */}
-                    <td className="py-3.5 px-4 text-right">
-                      <button
-                        type="button"
-                        onClick={() => onSelectBusiness(b)}
-                        className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-900 hover:text-white hover:border-slate-900 text-slate-700 font-bold text-xs transition-all shadow-sm w-28"
-                      >
-                        <SlidersHorizontal className="w-3.5 h-3.5" />
-                        <span>Керування</span>
-                      </button>
-                    </td>
-                  </tr>
-                ))
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -269,10 +424,10 @@ export const BusinessesView: React.FC<BusinessesViewProps> = ({
 
         {/* Footer info */}
         <div className="p-3 bg-slate-50 border-t border-slate-100 text-[11px] text-slate-400 flex items-center justify-between px-4">
-          <div>Всього закладів у базі: {filteredBusinesses.length}</div>
-          <div className="flex items-center gap-2">
-            <span>● Доступ лише для BizX Staff</span>
+          <div>
+            Показано закладів: {filteredBusinesses.length} з {businesses.length}
           </div>
+          <div>● Доступ лише для команди BizX</div>
         </div>
       </div>
     </div>

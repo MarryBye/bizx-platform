@@ -1,20 +1,33 @@
-import { isSubscriptionActive, getMaxAllowedStores, isBusinessSubscriptionTier } from '../subscriptions/subscriptions.constants.js';
 import {
   Injectable,
   NotFoundException,
   ConflictException,
-  ForbiddenException
+  ForbiddenException,
+  BadRequestException
 } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
+import { randomBytes } from 'node:crypto';
+import * as dns from 'node:dns/promises';
 import { DatabaseService } from '../database/database.service.js';
+import { RbacService } from '../rbac/rbac.service.js';
+import { InboxService } from '../inbox/inbox.service.js';
 import {
   stores,
   storeCategories,
   storeMembers,
+  storeReviews,
+  storeStrikes,
+  products,
+  productCategories,
+  roles,
   users,
   eq,
   and,
+  or,
+  gt,
   ilike,
   desc,
+  asc,
   count,
   isNull,
   inArray,
@@ -27,12 +40,14 @@ import type {
   StoreFilterQuery,
   CreateStoreCategoryDto,
   UpdateStoreCategoryDto,
-  UserRole,
-  SystemRole,
-  StoreMemberRole,
-  AddStoreMemberDto,
-  StoreMember,
-  PaginatedResult
+  PaginatedResult,
+  StoreReviewsResponse,
+  UpdateStoreDomainDto,
+  DomainVerificationResult,
+  RejectStoreDto,
+  PlatformStoresSummary,
+  StorePreviewTokenResponse,
+  StorePreviewResponse
 } from '@bizx/common-types';
 
 export interface StoreListItem {
@@ -48,22 +63,37 @@ export interface StoreListItem {
   phone: string | null;
   email: string | null;
   status: string;
+  customDomain?: string | null;
+  customDomainVerified?: boolean;
+  domainVerificationToken?: string | null;
+  suspendedUntil?: Date | null;
+  suspensionReason?: string | null;
+  payoutBalance?: number;
+  ratingAvg: number;
+  ratingCount: number;
+  activeStrikesCount?: number;
   createdAt: Date;
   categoryName: string | null;
-  memberRole?: string;
+  myRoleName?: string | null;
+  myRoleIcon?: string | null;
 }
 
 export interface StoreDetailItem extends StoreListItem {
   updatedAt: Date;
   ownerName: string | null;
-  ownerEmail: string | null;
+  ownerEmail?: string | null;
 }
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 @Injectable()
 export class StoresService {
-  constructor(private readonly databaseService: DatabaseService) {}
+  constructor(
+    private readonly databaseService: DatabaseService,
+    private readonly rbacService: RbacService,
+    private readonly inboxService: InboxService,
+    private readonly jwtService: JwtService
+  ) {}
 
   // ==================== КАТЕГОРИИ МАГАЗИНОВ ====================
 
@@ -169,53 +199,7 @@ export class StoresService {
     maxAllowedStores: number;
     isStaff: boolean;
   }> {
-    const [owner] = await this.databaseService.db
-      .select()
-      .from(users)
-      .where(eq(users.id, ownerId));
-
-    if (!owner) {
-      return { hasActiveBizSub: false, maxAllowedStores: 0, isStaff: false };
-    }
-
-    const isStaff = owner.systemRole === 'platform_admin' || owner.role === 'admin';
-    let currentStatus = owner.subscriptionStatus;
-
-    if (
-      owner.subscriptionExpiresAt &&
-      new Date(owner.subscriptionExpiresAt).getTime() <= Date.now() &&
-      currentStatus === 'active'
-    ) {
-      currentStatus = 'expired';
-      await this.databaseService.db
-        .update(users)
-        .set({ subscriptionStatus: 'expired', updatedAt: new Date() })
-        .where(eq(users.id, ownerId));
-    }
-
-    const hasActiveBizSub =
-      isSubscriptionActive({
-        subscriptionTier: owner.subscriptionTier,
-        subscriptionExpiresAt: owner.subscriptionExpiresAt,
-        subscriptionStatus: currentStatus
-      }) && isBusinessSubscriptionTier(owner.subscriptionTier);
-
-    const maxAllowedStores = hasActiveBizSub ? getMaxAllowedStores(owner.subscriptionTier) : 0;
-
-    if (!isStaff && !hasActiveBizSub) {
-      await this.databaseService.db
-        .update(stores)
-        .set({ status: 'suspended', updatedAt: new Date() })
-        .where(
-          and(
-            eq(stores.ownerId, ownerId),
-            inArray(stores.status, ['active', 'pending']),
-            isNull(stores.archivedAt)
-          )
-        );
-    }
-
-    return { hasActiveBizSub, maxAllowedStores, isStaff };
+    return this.rbacService.reconcileOwnerStores(ownerId);
   }
 
   // ==================== МАГАЗИНЫ ====================
@@ -278,12 +262,13 @@ export class StoresService {
         })
         .returning();
 
-      await tx.update(users).set({ role: 'business_owner', updatedAt: new Date() }).where(eq(users.id, ownerId));
+      const { ownerRoleId } = await this.rbacService.provisionDefaultStoreRoles(tx, insertedStore.id);
 
       await tx.insert(storeMembers).values({
         storeId: insertedStore.id,
         userId: ownerId,
-        role: 'owner'
+        roleId: ownerRoleId,
+        isCustom: false
       });
 
       return insertedStore;
@@ -297,16 +282,11 @@ export class StoresService {
     const pageSize = query.pageSize || 20;
     const offset = (page - 1) * pageSize;
 
-    const conditions = [isNull(stores.archivedAt)];
+    // Публічний каталог завжди показує тільки активні неархівовані магазини
+    const conditions = [isNull(stores.archivedAt), eq(stores.status, 'active')];
 
     if (query.categoryId) {
       conditions.push(eq(stores.categoryId, query.categoryId));
-    }
-
-    if (query.status) {
-      conditions.push(eq(stores.status, query.status));
-    } else {
-      conditions.push(eq(stores.status, 'active'));
     }
 
     if (query.search) {
@@ -320,7 +300,7 @@ export class StoresService {
       .from(stores)
       .where(whereClause);
 
-    const items = await this.databaseService.db
+    const itemsRaw = await this.databaseService.db
       .select({
         id: stores.id,
         ownerId: stores.ownerId,
@@ -334,6 +314,10 @@ export class StoresService {
         phone: stores.phone,
         email: stores.email,
         status: stores.status,
+        customDomain: stores.customDomain,
+        customDomainVerified: stores.customDomainVerified,
+        ratingAvg: stores.ratingAvg,
+        ratingCount: stores.ratingCount,
         createdAt: stores.createdAt,
         categoryName: storeCategories.name
       })
@@ -343,6 +327,11 @@ export class StoresService {
       .orderBy(desc(stores.createdAt))
       .limit(pageSize)
       .offset(offset);
+
+    const items = itemsRaw.map((s) => ({
+      ...s,
+      ratingAvg: Number((Number(s.ratingAvg || 0) / 100).toFixed(2))
+    }));
 
     return {
       items,
@@ -370,22 +359,28 @@ export class StoresService {
         phone: stores.phone,
         email: stores.email,
         status: stores.status,
+        customDomain: stores.customDomain,
+        customDomainVerified: stores.customDomainVerified,
+        ratingAvg: stores.ratingAvg,
+        ratingCount: stores.ratingCount,
         createdAt: stores.createdAt,
         updatedAt: stores.updatedAt,
         categoryName: storeCategories.name,
-        ownerName: users.name,
-        ownerEmail: users.email
+        ownerName: users.name
       })
       .from(stores)
       .leftJoin(storeCategories, eq(stores.categoryId, storeCategories.id))
       .leftJoin(users, eq(stores.ownerId, users.id))
-      .where(condition);
+      .where(and(condition, isNull(stores.archivedAt)));
 
-    if (!store) {
-      throw new NotFoundException('Магазин не найден');
+    if (!store || store.status !== 'active') {
+      throw new NotFoundException('Магазин не знайдено або ще не опубліковано');
     }
 
-    return store;
+    return {
+      ...store,
+      ratingAvg: Number((Number(store.ratingAvg || 0) / 100).toFixed(2))
+    };
   }
 
   async getMyStores(userId: string): Promise<StoreListItem[]> {
@@ -406,13 +401,24 @@ export class StoresService {
         phone: stores.phone,
         email: stores.email,
         status: stores.status,
+        customDomain: stores.customDomain,
+        customDomainVerified: stores.customDomainVerified,
+        domainVerificationToken: stores.domainVerificationToken,
+        suspendedUntil: stores.suspendedUntil,
+        suspensionReason: stores.suspensionReason,
+        payoutBalance: stores.payoutBalance,
+        ratingAvg: stores.ratingAvg,
+        ratingCount: stores.ratingCount,
         createdAt: stores.createdAt,
         categoryName: storeCategories.name,
-        memberRole: storeMembers.role
+        myRoleName: roles.name,
+        myRoleIcon: roles.icon,
+        isCustom: storeMembers.isCustom
       })
       .from(storeMembers)
       .innerJoin(stores, eq(storeMembers.storeId, stores.id))
       .leftJoin(storeCategories, eq(stores.categoryId, storeCategories.id))
+      .leftJoin(roles, eq(storeMembers.roleId, roles.id))
       .where(
         and(
           eq(storeMembers.userId, userId),
@@ -422,227 +428,194 @@ export class StoresService {
       )
       .orderBy(desc(stores.createdAt));
 
-    return rows;
-  }
-
-  async assertStoreAccess(
-    storeId: string,
-    userId: string,
-    allowedRoles?: StoreMemberRole[],
-    systemRole?: SystemRole,
-    options?: { write?: boolean }
-  ): Promise<{ store: StoreRecord; memberRole?: StoreMemberRole }> {
-    const [initialStore] = await this.databaseService.db
-      .select()
-      .from(stores)
-      .where(eq(stores.id, storeId));
-
-    if (!initialStore) {
-      throw new NotFoundException('Магазин не знайдено');
-    }
-
-    if (systemRole === 'platform_admin') {
-      return { store: initialStore, memberRole: 'owner' };
-    }
-
-    const [member] = await this.databaseService.db
-      .select()
-      .from(storeMembers)
-      .where(
-        and(
-          eq(storeMembers.storeId, storeId),
-          eq(storeMembers.userId, userId),
-          isNull(storeMembers.archivedAt)
+    const storeIds = rows.map((r) => r.id);
+    const strikesByStore = new Map<string, number>();
+    if (storeIds.length > 0) {
+      const now = new Date();
+      const activeStrikes = await this.databaseService.db
+        .select({ storeId: storeStrikes.storeId, cnt: count() })
+        .from(storeStrikes)
+        .where(
+          and(
+            inArray(storeStrikes.storeId, storeIds),
+            isNull(storeStrikes.revokedAt),
+            or(isNull(storeStrikes.expiresAt), gt(storeStrikes.expiresAt, now))
+          )
         )
-      );
-
-    let resolvedRole: StoreMemberRole | undefined;
-    if (member) {
-      resolvedRole = member.role as StoreMemberRole;
-    } else if (initialStore.ownerId === userId) {
-      resolvedRole = 'owner';
-    } else {
-      throw new ForbiddenException('У вас немає доступу до керування цим магазином');
+        .groupBy(storeStrikes.storeId);
+      for (const row of activeStrikes) {
+        strikesByStore.set(row.storeId, Number(row.cnt));
+      }
     }
 
-    if (allowedRoles && allowedRoles.length > 0 && !allowedRoles.includes(resolvedRole)) {
-      throw new ForbiddenException('Недостатньо прав для виконання цієї операції в магазині');
-    }
-
-    // Завжди синхронізуємо підписку власника (прострочена підписка одразу переведе магазин у 'suspended')
-    const { hasActiveBizSub, isStaff } = await this.reconcileOwnerStores(initialStore.ownerId);
-
-    const [store] = await this.databaseService.db
-      .select()
-      .from(stores)
-      .where(eq(stores.id, storeId));
-
-    // Для операцій редагування (write: true) вимагаємо активну бізнес-підписку власника
-    if (options?.write && !isStaff && !hasActiveBizSub) {
-      throw new ForbiddenException(
-        'Термін дії бізнес-підписки власника закладу завершився або підписка відсутня. Редагування заблоковано (доступний лише перегляд).'
-      );
-    }
-
-    return { store: store || initialStore, memberRole: resolvedRole };
-  }
-
-  async assertStoreOwnership(
-    storeId: string,
-    userId: string,
-    userRole?: UserRole,
-    systemRole?: SystemRole,
-    options?: { write?: boolean }
-  ): Promise<StoreRecord> {
-    const { store } = await this.assertStoreAccess(storeId, userId, ['owner'], systemRole, options);
-    return store;
-  }
-
-  async getStoreMembers(
-    storeId: string,
-    userId: string,
-    systemRole?: SystemRole
-  ): Promise<StoreMember[]> {
-    await this.assertStoreAccess(storeId, userId, ['owner', 'manager'], systemRole);
-
-    const members = await this.databaseService.db
-      .select({
-        id: storeMembers.id,
-        storeId: storeMembers.storeId,
-        userId: storeMembers.userId,
-        role: storeMembers.role,
-        createdAt: storeMembers.createdAt,
-        updatedAt: storeMembers.updatedAt,
-        userName: users.name,
-        userEmail: users.email,
-        userAvatarUrl: users.avatarUrl
-      })
-      .from(storeMembers)
-      .innerJoin(users, eq(storeMembers.userId, users.id))
-      .where(
-        and(
-          eq(storeMembers.storeId, storeId),
-          isNull(storeMembers.archivedAt)
-        )
-      )
-      .orderBy(desc(storeMembers.createdAt));
-
-    return members.map((m) => ({
-      ...m,
-      role: m.role as StoreMemberRole,
-      createdAt: m.createdAt.toISOString(),
-      updatedAt: m.updatedAt.toISOString()
+    return rows.map(({ isCustom, ...rest }) => ({
+      ...rest,
+      ratingAvg: Number((Number(rest.ratingAvg || 0) / 100).toFixed(2)),
+      activeStrikesCount: strikesByStore.get(rest.id) ?? 0,
+      myRoleName: isCustom ? 'Custom' : rest.myRoleName
     }));
-  }
-
-  async addStoreMember(
-    storeId: string,
-    callerUserId: string,
-    dto: AddStoreMemberDto,
-    systemRole?: SystemRole
-  ): Promise<StoreMember> {
-    await this.assertStoreAccess(storeId, callerUserId, ['owner'], systemRole, { write: true });
-
-    const [targetUser] = await this.databaseService.db
-      .select()
-      .from(users)
-      .where(eq(users.email, dto.email.toLowerCase()));
-
-    if (!targetUser) {
-      throw new NotFoundException('Користувача з такою електронною поштою не знайдено в BizX');
-    }
-
-    const [existingMember] = await this.databaseService.db
-      .select()
-      .from(storeMembers)
-      .where(
-        and(
-          eq(storeMembers.storeId, storeId),
-          eq(storeMembers.userId, targetUser.id)
-        )
-      );
-
-    if (existingMember) {
-      throw new ConflictException('Користувач вже є учасником цього магазину');
-    }
-
-    const [newMember] = await this.databaseService.db
-      .insert(storeMembers)
-      .values({
-        storeId,
-        userId: targetUser.id,
-        role: dto.role
-      })
-      .returning();
-
-    return {
-      id: newMember.id,
-      storeId: newMember.storeId,
-      userId: newMember.userId,
-      role: newMember.role as StoreMemberRole,
-      userName: targetUser.name,
-      userEmail: targetUser.email,
-      userAvatarUrl: targetUser.avatarUrl,
-      createdAt: newMember.createdAt.toISOString(),
-      updatedAt: newMember.updatedAt.toISOString()
-    };
-  }
-
-  async removeStoreMember(
-    storeId: string,
-    callerUserId: string,
-    memberId: string,
-    systemRole?: SystemRole
-  ): Promise<{ message: string }> {
-    await this.assertStoreAccess(storeId, callerUserId, ['owner'], systemRole, { write: true });
-
-    const [member] = await this.databaseService.db
-      .select()
-      .from(storeMembers)
-      .where(
-        and(
-          eq(storeMembers.id, memberId),
-          eq(storeMembers.storeId, storeId)
-        )
-      );
-
-    if (!member) {
-      throw new NotFoundException('Учасника не знайдено в цьому магазині');
-    }
-
-    if (member.userId === callerUserId) {
-      throw new ConflictException('Ви не можете видалити самого себе з магазину');
-    }
-
-    await this.databaseService.db
-      .update(storeMembers)
-      .set({
-        archivedAt: new Date(),
-        updatedAt: new Date()
-      })
-      .where(eq(storeMembers.id, memberId));
-
-    return { message: 'Учасника успішно архівовано' };
   }
 
   async updateStore(
     storeId: string,
     userId: string,
-    userRole?: UserRole,
-    dto?: UpdateStoreDto,
-    systemRole?: SystemRole
+    dto?: UpdateStoreDto
   ): Promise<StoreRecord> {
-    const store = await this.assertStoreOwnership(storeId, userId, userRole, systemRole, {
-      write: true
-    });
+    const hasStatusChange = dto?.status !== undefined;
+    const hasDataChange = Boolean(
+      dto &&
+        (dto.name !== undefined ||
+          dto.slug !== undefined ||
+          dto.categoryId !== undefined ||
+          dto.description !== undefined ||
+          dto.logoUrl !== undefined ||
+          dto.bannerUrl !== undefined ||
+          dto.address !== undefined ||
+          dto.phone !== undefined ||
+          dto.email !== undefined)
+    );
 
-    if (dto?.status && systemRole !== 'platform_admin') {
-      if (dto.status === 'active') {
-        throw new ForbiddenException(
-          'Активація магазину можлива лише після схвалення адміністраторами платформи BizX'
-        );
+    let store: StoreRecord;
+    let viaPlatform = false;
+
+    if (dto?.status === 'archived') {
+      // Архівація магазину — виключно право платформи platform.stores.archive
+      await this.rbacService.assertPlatformPermission(userId, 'platform.stores.archive');
+      const [found] = await this.databaseService.db
+        .select()
+        .from(stores)
+        .where(eq(stores.id, storeId));
+      if (!found) {
+        throw new NotFoundException('Магазин не знайдено');
+      }
+      store = found;
+      viaPlatform = true;
+    } else if (hasStatusChange) {
+      const check = await this.rbacService.assertStorePermission(
+        storeId,
+        userId,
+        'store.status.manage',
+        {
+          write: true,
+          allowWhenSuspended: true,
+          allowPlatformPermission: 'platform.stores.moderate'
+        }
+      );
+      store = check.store;
+      viaPlatform = check.viaPlatform;
+    } else {
+      const check = await this.rbacService.assertStorePermission(storeId, userId, 'store.edit', {
+        write: true
+      });
+      store = check.store;
+    }
+
+    if (hasStatusChange && hasDataChange) {
+      // Навіть модератор платформи не має права змінювати назву/дані мерчанта без права store.edit
+      await this.rbacService.assertStorePermission(storeId, userId, 'store.edit', { write: true });
+    }
+
+    const nowCheck = new Date();
+    const isActuallyChangingStatus = Boolean(dto?.status && dto.status !== store.status);
+
+    // Строга матриця переходів статусів (захист від багатоступеневого обходу прав!)
+    if (isActuallyChangingStatus && dto?.status) {
+      const fromStatus = store.status;
+      const toStatus = dto.status;
+
+      // 1. Будь-який вихід з 'archived' (в активний, чернетку, перевірку тощо) — виключно платформа з правом unblock/archive
+      if (fromStatus === 'archived' || store.archivedAt) {
+        if (!viaPlatform) {
+          throw new ForbiddenException(
+            'Архівований заклад не може бути відновлений власником. Зверніться до адміністрації BizX.'
+          );
+        }
+        const platAccess = await this.rbacService.getPlatformMemberAccess(userId);
+        const canRestore =
+          platAccess.permissions.includes('platform.stores.unblock') ||
+          platAccess.permissions.includes('platform.stores.archive');
+        if (!canRestore) {
+          throw new ForbiddenException(
+            'Відновлення архівованого закладу вимагає права розблокування або архівації закладів.'
+          );
+        }
       }
 
+      // 2. Будь-який перехід у 'active' (з pending, draft чи closed) — вимагає platform.stores.approve
+      if (toStatus === 'active' && ['pending', 'draft', 'closed'].includes(fromStatus)) {
+        await this.rbacService.assertPlatformPermission(userId, 'platform.stores.approve');
+      }
+
+      // 3. Будь-який вихід із 'suspended' (у active, pending, draft, closed — НЕ тільки active/pending!)
+      if (fromStatus === 'suspended' && toStatus !== 'archived') {
+        const [strikeRes] = await this.databaseService.db
+          .select({ cnt: count() })
+          .from(storeStrikes)
+          .where(
+            and(
+              eq(storeStrikes.storeId, storeId),
+              isNull(storeStrikes.revokedAt),
+              or(isNull(storeStrikes.expiresAt), gt(storeStrikes.expiresAt, nowCheck))
+            )
+          );
+        const activeStrikesCount = Number(strikeRes?.cnt || 0);
+        const stillLockedByTime = Boolean(store.suspendedUntil && store.suspendedUntil > nowCheck);
+        const isPlatformLock = Boolean(store.suspensionReason || stillLockedByTime);
+        const platAccess = await this.rbacService.getPlatformMemberAccess(userId);
+
+        if (activeStrikesCount >= 3) {
+          if (!platAccess.permissions.includes('platform.strikes.revoke')) {
+            throw new ForbiddenException(
+              'Заклад заблоковано через 3 активні страйки. Достроково зняти блокування може лише уповноважений співробітник BizX із правом зняття страйків.'
+            );
+          }
+        } else if (viaPlatform || isPlatformLock) {
+          const canUnblock =
+            platAccess.permissions.includes('platform.stores.unblock') ||
+            platAccess.permissions.includes('platform.strikes.revoke');
+          if (!canUnblock) {
+            throw new ForbiddenException(
+              'Дострокове розблокування призупиненого закладу доступне лише співробітнику BizX із правом розблокування закладів.'
+            );
+          }
+        } else if (!viaPlatform && toStatus !== 'pending') {
+          throw new ForbiddenException(
+            'Призупинений заклад можна перевести лише на повторну модерацію BizX'
+          );
+        }
+      }
+
+      // 4. Власнику дозволені лише явні переходи: draft->pending, active->suspended/closed, closed->draft, self-suspended->pending
+      if (!viaPlatform) {
+        if (toStatus === 'active') {
+          throw new ForbiddenException(
+            'Активація магазину можлива лише після схвалення адміністраторами платформи BizX'
+          );
+        }
+        const allowedOwnerTransitions: Record<string, string[]> = {
+          draft: ['pending'],
+          active: ['suspended', 'closed'],
+          closed: ['draft'],
+          suspended: ['pending']
+        };
+        if (!(allowedOwnerTransitions[fromStatus] || []).includes(toStatus)) {
+          throw new ForbiddenException(
+            `Недопустимий перехід статусу закладу з «${fromStatus}» у «${toStatus}»`
+          );
+        }
+      }
+    }
+
+    if (dto?.status === 'suspended' && viaPlatform) {
+      const reason = dto.suspensionReason?.trim();
+      if (!reason || reason.length < 5) {
+        throw new BadRequestException(
+          'Вкажіть причину призупинення закладу (мінімум 5 символів)'
+        );
+      }
+    }
+
+    if (dto?.status && !viaPlatform) {
       if (dto.status === 'pending' && store.status !== 'pending') {
         const { maxAllowedStores, isStaff } = await this.reconcileOwnerStores(store.ownerId);
         if (!isStaff) {
@@ -681,18 +654,133 @@ export class StoresService {
       const [category] = await this.databaseService.db
         .select({ id: storeCategories.id })
         .from(storeCategories)
-        .where(eq(storeCategories.id, dto.categoryId));
+        .where(and(eq(storeCategories.id, dto.categoryId), isNull(storeCategories.archivedAt)));
 
       if (!category) {
         throw new NotFoundException('Указанная категория магазина не найдена');
       }
     }
 
+    const { suspensionDays, suspensionReason, ...storeFields } = dto ?? {};
+    const nowUpdate = new Date();
+
+    const suspensionPatch: {
+      suspendedUntil?: Date | null;
+      suspensionReason?: string | null;
+    } = {};
+
+    if (dto?.status === 'suspended') {
+      suspensionPatch.suspendedUntil =
+        viaPlatform && typeof suspensionDays === 'number' && suspensionDays > 0
+          ? new Date(nowUpdate.getTime() + suspensionDays * 24 * 60 * 60 * 1000)
+          : null;
+      suspensionPatch.suspensionReason = viaPlatform ? suspensionReason?.trim() || null : null;
+    } else if (isActuallyChangingStatus) {
+      suspensionPatch.suspendedUntil = null;
+      suspensionPatch.suspensionReason = null;
+    }
+
     const [updated] = await this.databaseService.db
       .update(stores)
       .set({
-        ...dto,
-        slug: dto?.slug ? dto.slug.toLowerCase() : undefined,
+        ...storeFields,
+        ...suspensionPatch,
+        slug: storeFields.slug ? storeFields.slug.toLowerCase() : undefined,
+        ...(dto?.status === 'archived'
+          ? { archivedAt: nowUpdate }
+          : dto?.status !== undefined
+            ? { archivedAt: null }
+            : {}),
+        updatedAt: nowUpdate
+      })
+      .where(eq(stores.id, storeId))
+      .returning();
+
+    if (viaPlatform && dto?.status === 'suspended' && store.status !== 'suspended') {
+      const durationLabel = suspensionPatch.suspendedUntil
+        ? `на ${suspensionDays} дн. (до ${suspensionPatch.suspendedUntil.toLocaleDateString('uk-UA')})`
+        : 'безстроково (до ручного зняття модератором)';
+      await this.inboxService
+        .sendOfficialBizxMessage({
+          userId: store.ownerId,
+          senderName: 'BizX Модерація',
+          subject: `Роботу закладу «${store.name}» призупинено`,
+          body: `Модератор BizX призупинив роботу закладу «${store.name}» ${durationLabel}.\n\nПричина:\n${suspensionPatch.suspensionReason || 'Порушення правил платформи'}\n\nЯкщо ви вважаєте це помилкою, зверніться до підтримки BizX.`,
+          relatedStoreId: store.id,
+          canReply: false
+        })
+        .catch(() => {});
+    }
+
+    if (!viaPlatform && dto?.status === 'pending' && store.status !== 'pending') {
+      await this.inboxService
+        .sendOfficialBizxMessage({
+          userId: store.ownerId,
+          senderName: 'BizX Модерація',
+          subject: `Заявку «${store.name}» прийнято на перевірку`,
+          body: `Ваш заклад «${store.name}» успішно відправлено на модерацію BizX. Після перевірки сторінки ви отримаєте повідомлення з результатом у цій скриньці.`,
+          relatedStoreId: store.id,
+          canReply: false
+        })
+        .catch(() => {});
+    }
+
+    return updated;
+  }
+
+  async deleteStore(
+    storeId: string,
+    userId: string
+  ): Promise<{ message: string }> {
+    // Видалення (архівація) магазину заборонено для бізнес-ролей — доступно лише за правом platform.stores.archive
+    await this.rbacService.assertPlatformPermission(userId, 'platform.stores.archive');
+
+    const [archived] = await this.databaseService.db
+      .update(stores)
+      .set({
+        status: 'archived',
+        archivedAt: new Date(),
+        updatedAt: new Date()
+      })
+      .where(eq(stores.id, storeId))
+      .returning({ id: stores.id });
+
+    if (!archived) {
+      throw new NotFoundException('Магазин не знайдено');
+    }
+
+    return { message: 'Магазин успішно архівовано' };
+  }
+
+  // ==================== ВЛАСНИЙ ДОМЕН ТА ВІТРИНА ====================
+
+  async updateStoreDomain(
+    storeId: string,
+    userId: string,
+    dto: UpdateStoreDomainDto
+  ): Promise<StoreRecord> {
+    await this.rbacService.assertStorePermission(storeId, userId, 'store.edit', { write: true });
+
+    const normalized = dto.customDomain ? dto.customDomain.trim().toLowerCase() : null;
+
+    if (normalized) {
+      const [existing] = await this.databaseService.db
+        .select({ id: stores.id })
+        .from(stores)
+        .where(eq(stores.customDomain, normalized));
+      if (existing && existing.id !== storeId) {
+        throw new ConflictException('Цей домен вже прив’язаний до іншого закладу');
+      }
+    }
+
+    const token = normalized ? `bizx-verify=${randomBytes(12).toString('hex')}` : null;
+
+    const [updated] = await this.databaseService.db
+      .update(stores)
+      .set({
+        customDomain: normalized,
+        customDomainVerified: false,
+        domainVerificationToken: token,
         updatedAt: new Date()
       })
       .where(eq(stores.id, storeId))
@@ -701,23 +789,479 @@ export class StoresService {
     return updated;
   }
 
-  async deleteStore(
-    storeId: string,
-    userId: string,
-    userRole?: UserRole,
-    systemRole?: SystemRole
-  ): Promise<{ message: string }> {
-    await this.assertStoreOwnership(storeId, userId, userRole, systemRole, { write: true });
+  async verifyStoreDomain(storeId: string, userId: string): Promise<DomainVerificationResult> {
+    const { store } = await this.rbacService.assertStorePermission(storeId, userId, 'store.edit', {
+      write: true
+    });
 
-    await this.databaseService.db
-      .update(stores)
-      .set({
-        status: 'archived',
-        archivedAt: new Date(),
-        updatedAt: new Date()
+    const cnameTarget = 'shops.bizx.ua';
+    if (!store.customDomain || !store.domainVerificationToken) {
+      return {
+        customDomain: null,
+        verified: false,
+        txtRecordName: null,
+        txtRecordValue: null,
+        cnameTarget,
+        txtMatched: false,
+        cnameMatched: false,
+        message: 'Спочатку вкажіть та збережіть власний домен'
+      };
+    }
+
+    const txtHost = `_bizx-verify.${store.customDomain}`;
+    let txtMatched = false;
+    let cnameMatched = false;
+
+    try {
+      const records = await dns.resolveTxt(txtHost);
+      const flat = records.map((r) => r.join(''));
+      txtMatched = flat.some((val) => val.trim() === store.domainVerificationToken);
+    } catch {
+      // Fallback: check root TXT record too
+      try {
+        const rootRecords = await dns.resolveTxt(store.customDomain);
+        const flatRoot = rootRecords.map((r) => r.join(''));
+        txtMatched = flatRoot.some((val) => val.trim() === store.domainVerificationToken);
+      } catch {
+        txtMatched = false;
+      }
+    }
+
+    try {
+      const cnames = await dns.resolveCname(store.customDomain);
+      cnameMatched = cnames.some(
+        (c) => c.toLowerCase().replace(/\.$/, '') === cnameTarget
+      );
+    } catch {
+      cnameMatched = false;
+    }
+
+    const verified = txtMatched;
+    if (verified && !store.customDomainVerified) {
+      await this.databaseService.db
+        .update(stores)
+        .set({ customDomainVerified: true, updatedAt: new Date() })
+        .where(eq(stores.id, storeId));
+    }
+
+    return {
+      customDomain: store.customDomain,
+      verified,
+      txtRecordName: txtHost,
+      txtRecordValue: store.domainVerificationToken,
+      cnameTarget,
+      txtMatched,
+      cnameMatched,
+      message: verified
+        ? cnameMatched
+          ? 'Домен успішно підтверджено та підключено!'
+          : 'Право власності (TXT) підтверджено! Також додайте CNAME запис на shops.bizx.ua для маршрутизації трафіку.'
+        : 'TXT-запис підтвердження ще не знайдено в DNS. Оновлення DNS зазвичай триває від 5 хвилин до кількох годин.'
+    };
+  }
+
+  async resolveHost(rawHost: string): Promise<{ slug: string; storeId: string; name: string } | null> {
+    const cleanHost = rawHost.split(':')[0].trim().toLowerCase();
+    if (!cleanHost || cleanHost === 'localhost' || cleanHost === '127.0.0.1' || cleanHost === 'bizx.ua' || cleanHost === 'www.bizx.ua') {
+      return null;
+    }
+
+    // 1. Subdomain pattern: <slug>.bizx.ua OR <slug>.localhost
+    let candidateSlug: string | null = null;
+    if (cleanHost.endsWith('.bizx.ua')) {
+      candidateSlug = cleanHost.slice(0, -'.bizx.ua'.length);
+    } else if (cleanHost.endsWith('.localhost')) {
+      candidateSlug = cleanHost.slice(0, -'.localhost'.length);
+    }
+
+    if (candidateSlug && !candidateSlug.includes('.') && !['www', 'admin', 'panel', 'api', 'shops'].includes(candidateSlug)) {
+      const [subStore] = await this.databaseService.db
+        .select({ id: stores.id, slug: stores.slug, name: stores.name })
+        .from(stores)
+        .where(and(eq(stores.slug, candidateSlug), eq(stores.status, 'active'), isNull(stores.archivedAt)));
+      if (subStore) {
+        return { slug: subStore.slug, storeId: subStore.id, name: subStore.name };
+      }
+      return null;
+    }
+
+    // 2. Verified custom domain lookup
+    const [customStore] = await this.databaseService.db
+      .select({ id: stores.id, slug: stores.slug, name: stores.name })
+      .from(stores)
+      .where(
+        and(
+          eq(stores.customDomain, cleanHost),
+          eq(stores.customDomainVerified, true),
+          eq(stores.status, 'active'),
+          isNull(stores.archivedAt)
+        )
+      );
+
+    if (!customStore) return null;
+    return { slug: customStore.slug, storeId: customStore.id, name: customStore.name };
+  }
+
+  // ==================== ВІДГУКИ ТА РЕЙТИНГ ЗАКЛАДУ ====================
+
+  async getStoreReviews(storeIdOrSlug: string): Promise<StoreReviewsResponse> {
+    const isUuid = UUID_REGEX.test(storeIdOrSlug);
+    const [store] = await this.databaseService.db
+      .select({
+        id: stores.id,
+        status: stores.status,
+        ratingAvg: stores.ratingAvg,
+        ratingCount: stores.ratingCount
       })
+      .from(stores)
+      .where(
+        and(
+          isUuid ? eq(stores.id, storeIdOrSlug) : eq(stores.slug, storeIdOrSlug.toLowerCase()),
+          isNull(stores.archivedAt)
+        )
+      );
+
+    if (!store || store.status !== 'active') {
+      throw new NotFoundException('Магазин не знайдено або ще не опубліковано');
+    }
+
+    const rows = await this.databaseService.db
+      .select({
+        id: storeReviews.id,
+        storeId: storeReviews.storeId,
+        orderId: storeReviews.orderId,
+        customerId: storeReviews.customerId,
+        customerName: users.name,
+        rating: storeReviews.rating,
+        comment: storeReviews.comment,
+        createdAt: storeReviews.createdAt
+      })
+      .from(storeReviews)
+      .leftJoin(users, eq(storeReviews.customerId, users.id))
+      .where(eq(storeReviews.storeId, store.id))
+      .orderBy(desc(storeReviews.createdAt));
+
+    const distribution: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    for (const r of rows) {
+      if (r.rating >= 1 && r.rating <= 5) {
+        distribution[r.rating] = (distribution[r.rating] || 0) + 1;
+      }
+    }
+
+    return {
+      ratingAvg: Number((Number(store.ratingAvg || 0) / 100).toFixed(2)),
+      ratingCount: Number(store.ratingCount || 0),
+      distribution,
+      reviews: rows.map((r) => ({
+        id: r.id,
+        storeId: r.storeId,
+        orderId: r.orderId,
+        customerId: r.customerId,
+        customerName: r.customerName || 'Покупець BizX',
+        rating: r.rating,
+        comment: r.comment,
+        createdAt: r.createdAt.toISOString()
+      }))
+    };
+  }
+
+  // ==================== МОДЕРАЦІЯ ЗАЯВОК ТА ПОПЕРЕДНІЙ ПЕРЕГЛЯД ВІТРИНИ ====================
+
+  async getPlatformStoresSummary(userId: string): Promise<PlatformStoresSummary> {
+    await this.rbacService.assertPlatformPermission(userId, 'platform.stores.read');
+
+    const grouped = await this.databaseService.db
+      .select({ status: stores.status, cnt: count() })
+      .from(stores)
+      .groupBy(stores.status);
+
+    const summary: PlatformStoresSummary = {
+      pendingCount: 0,
+      activeCount: 0,
+      draftCount: 0,
+      suspendedCount: 0,
+      archivedCount: 0,
+      totalCount: 0
+    };
+
+    for (const row of grouped) {
+      const n = Number(row.cnt || 0);
+      summary.totalCount += n;
+      if (row.status === 'pending') summary.pendingCount = n;
+      else if (row.status === 'active') summary.activeCount = n;
+      else if (row.status === 'draft') summary.draftCount = n;
+      else if (row.status === 'suspended') summary.suspendedCount = n;
+      else if (row.status === 'archived') summary.archivedCount = n;
+    }
+
+    return summary;
+  }
+
+  async approveStore(storeId: string, userId: string): Promise<StoreRecord> {
+    await this.rbacService.assertPlatformPermission(userId, 'platform.stores.approve');
+
+    const [store] = await this.databaseService.db
+      .select()
+      .from(stores)
       .where(eq(stores.id, storeId));
 
-    return { message: 'Магазин успішно архівовано' };
+    if (!store) {
+      throw new NotFoundException('Заклад не знайдено');
+    }
+    if (store.status !== 'pending') {
+      throw new BadRequestException('Підтвердити можна лише заклад у статусі очікування перевірки');
+    }
+
+    const [updated] = await this.databaseService.db
+      .update(stores)
+      .set({
+        status: 'active',
+        archivedAt: null,
+        updatedAt: new Date()
+      })
+      .where(eq(stores.id, storeId))
+      .returning();
+
+    await this.inboxService.sendOfficialBizxMessage({
+      userId: store.ownerId,
+      senderName: 'BizX Модерація',
+      subject: `Заклад «${store.name}» схвалено та опубліковано!`,
+      body: `Вітаємо! Ваш заклад «${store.name}» успішно пройшов перевірку модераторами BizX і тепер доступний покупцям у каталозі та за адресою ${store.slug}.bizx.ua.`,
+      relatedStoreId: store.id,
+      canReply: false
+    });
+
+    return updated;
+  }
+
+  async rejectStore(
+    storeId: string,
+    userId: string,
+    dto: RejectStoreDto
+  ): Promise<StoreRecord> {
+    await this.rbacService.assertPlatformPermission(userId, 'platform.stores.approve');
+
+    const [store] = await this.databaseService.db
+      .select()
+      .from(stores)
+      .where(eq(stores.id, storeId));
+
+    if (!store) {
+      throw new NotFoundException('Заклад не знайдено');
+    }
+    if (store.status !== 'pending') {
+      throw new BadRequestException('Відхилити можна лише заклад у статусі очікування перевірки');
+    }
+
+    const reason = dto.reason.trim();
+    const [updated] = await this.databaseService.db
+      .update(stores)
+      .set({
+        status: 'draft',
+        updatedAt: new Date()
+      })
+      .where(eq(stores.id, storeId))
+      .returning();
+
+    await this.inboxService.sendOfficialBizxMessage({
+      userId: store.ownerId,
+      senderName: 'BizX Модерація',
+      subject: `Заявку на публікацію «${store.name}» відхилено`,
+      body: `Модератор BizX повернув заклад «${store.name}» на доопрацювання (статус чернетки).\n\nПричина відхилення:\n${reason}\n\nБудь ласка, внесіть необхідні зміни в панелі бізнесу та надішліть заклад на повторну перевірку.`,
+      relatedStoreId: store.id,
+      canReply: false
+    });
+
+    return updated;
+  }
+
+  private async canUserPreviewStore(storeId: string, userId: string): Promise<boolean> {
+    const platAccess = await this.rbacService.getPlatformMemberAccess(userId);
+    if (
+      platAccess.isMember &&
+      (platAccess.permissions.includes('platform.stores.read') ||
+        platAccess.permissions.includes('platform.stores.approve') ||
+        platAccess.permissions.includes('platform.stores.moderate'))
+    ) {
+      return true;
+    }
+
+    const [membership] = await this.databaseService.db
+      .select({ id: storeMembers.id })
+      .from(storeMembers)
+      .where(
+        and(
+          eq(storeMembers.storeId, storeId),
+          eq(storeMembers.userId, userId),
+          isNull(storeMembers.archivedAt)
+        )
+      );
+
+    return Boolean(membership);
+  }
+
+  async createPreviewToken(
+    storeId: string,
+    userId: string
+  ): Promise<StorePreviewTokenResponse> {
+    const [store] = await this.databaseService.db
+      .select({ id: stores.id })
+      .from(stores)
+      .where(eq(stores.id, storeId));
+
+    if (!store) {
+      throw new NotFoundException('Заклад не знайдено');
+    }
+
+    const allowed = await this.canUserPreviewStore(store.id, userId);
+    if (!allowed) {
+      throw new ForbiddenException('Немає прав на попередній перегляд цього закладу');
+    }
+
+    const previewSecret = `${process.env.JWT_SECRET || 'bizx-jwt-dev-secret-key-32chars-min!'}:store_preview`;
+    const previewToken = this.jwtService.sign(
+      { type: 'store_preview', storeId: store.id, actorId: userId },
+      { secret: previewSecret, expiresIn: '15m' }
+    );
+
+    return {
+      previewToken,
+      expiresInSeconds: 900
+    };
+  }
+
+  async getStorePreview(
+    idOrSlug: string,
+    options: { previewToken?: string; authHeader?: string }
+  ): Promise<StorePreviewResponse> {
+    const isUuid = UUID_REGEX.test(idOrSlug);
+    const condition = isUuid ? eq(stores.id, idOrSlug) : eq(stores.slug, idOrSlug.toLowerCase());
+
+    const [storeRow] = await this.databaseService.db
+      .select({
+        id: stores.id,
+        ownerId: stores.ownerId,
+        categoryId: stores.categoryId,
+        name: stores.name,
+        slug: stores.slug,
+        description: stores.description,
+        logoUrl: stores.logoUrl,
+        bannerUrl: stores.bannerUrl,
+        address: stores.address,
+        phone: stores.phone,
+        email: stores.email,
+        status: stores.status,
+        customDomain: stores.customDomain,
+        customDomainVerified: stores.customDomainVerified,
+        ratingAvg: stores.ratingAvg,
+        ratingCount: stores.ratingCount,
+        createdAt: stores.createdAt,
+        updatedAt: stores.updatedAt,
+        categoryName: storeCategories.name,
+        ownerName: users.name,
+        ownerEmail: users.email
+      })
+      .from(stores)
+      .leftJoin(storeCategories, eq(stores.categoryId, storeCategories.id))
+      .leftJoin(users, eq(stores.ownerId, users.id))
+      .where(condition);
+
+    if (!storeRow) {
+      throw new NotFoundException('Заклад не знайдено');
+    }
+
+    let authorized = false;
+
+    if (options.previewToken) {
+      try {
+        const previewSecret = `${process.env.JWT_SECRET || 'bizx-jwt-dev-secret-key-32chars-min!'}:store_preview`;
+        const decoded = this.jwtService.verify<{
+          type?: string;
+          storeId?: string;
+          actorId?: string;
+        }>(options.previewToken, { secret: previewSecret });
+        if (decoded?.type === 'store_preview' && decoded?.storeId === storeRow.id) {
+          authorized = true;
+        }
+      } catch {
+        authorized = false;
+      }
+    }
+
+    if (!authorized && options.authHeader && options.authHeader.startsWith('Bearer ')) {
+      try {
+        const bearer = options.authHeader.slice(7).trim();
+        const decoded = this.jwtService.verify<{ sub?: string; tokenType?: string }>(bearer);
+        if (decoded?.tokenType === 'access' && decoded?.sub) {
+          authorized = await this.canUserPreviewStore(storeRow.id, decoded.sub);
+        }
+      } catch {
+        authorized = false;
+      }
+    }
+
+    if (!authorized) {
+      throw new ForbiddenException(
+        'Попередній перегляд вітрини доступний лише співробітникам модерації BizX або команді закладу'
+      );
+    }
+
+    const [catRows, prodRows] = await Promise.all([
+      this.databaseService.db
+        .select()
+        .from(productCategories)
+        .where(and(eq(productCategories.storeId, storeRow.id), isNull(productCategories.archivedAt)))
+        .orderBy(asc(productCategories.sortOrder), asc(productCategories.name)),
+      this.databaseService.db
+        .select()
+        .from(products)
+        .where(and(eq(products.storeId, storeRow.id), isNull(products.archivedAt)))
+        .orderBy(desc(products.createdAt))
+    ]);
+
+    const hasLogo = Boolean(
+      storeRow.logoUrl && !storeRow.logoUrl.includes('/defaults/')
+    );
+    const hasBanner = Boolean(
+      storeRow.bannerUrl && !storeRow.bannerUrl.includes('/defaults/')
+    );
+    const hasDescription = Boolean(storeRow.description && storeRow.description.trim().length >= 10);
+    const hasContacts = Boolean(
+      (storeRow.phone && storeRow.phone.trim().length >= 5) ||
+        (storeRow.email && storeRow.email.trim().length >= 5)
+    );
+    const hasAddress = Boolean(storeRow.address && storeRow.address.trim().length >= 4);
+    const activeProductsCount = prodRows.filter((p) => p.isActive).length;
+
+    return {
+      store: {
+        ...storeRow,
+        status: storeRow.status as StorePreviewResponse['store']['status'],
+        ratingAvg: Number((Number(storeRow.ratingAvg || 0) / 100).toFixed(2)),
+        createdAt: storeRow.createdAt.toISOString(),
+        updatedAt: storeRow.updatedAt.toISOString()
+      },
+      categories: catRows.map((c) => ({
+        ...c,
+        createdAt: c.createdAt.toISOString(),
+        archivedAt: c.archivedAt ? c.archivedAt.toISOString() : null
+      })),
+      products: prodRows.map((p) => ({
+        ...p,
+        createdAt: p.createdAt.toISOString(),
+        updatedAt: p.updatedAt.toISOString(),
+        archivedAt: p.archivedAt ? p.archivedAt.toISOString() : null
+      })),
+      readiness: {
+        hasLogo,
+        hasBanner,
+        hasDescription,
+        hasContacts,
+        hasAddress,
+        productsCount: prodRows.length,
+        activeProductsCount
+      },
+      isPreviewMode: true
+    };
   }
 }

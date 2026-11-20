@@ -22,7 +22,7 @@ export type SubscriptionStatus = z.infer<typeof subscriptionStatusSchema>;
 
 export const subscribeDtoSchema = z.object({
   tier: subscriptionTierSchema,
-  periodDays: z.number().int().positive().default(30).optional()
+  periodDays: z.number().int().min(1).max(365).default(30).optional()
 });
 export type SubscribeDto = z.infer<typeof subscribeDtoSchema>;
 
@@ -33,6 +33,7 @@ export const subscriptionPlanSchema = z.object({
   priceUah: z.number(),
   period: z.string(),
   maxStores: z.number(),
+  dailyBroadcastLimit: z.number().int().min(0).optional(),
   badge: z.string().optional(),
   popular: z.boolean().optional(),
   features: z.array(z.string())
@@ -54,17 +55,25 @@ export const userSubscriptionDetailsSchema = z.object({
 });
 export type UserSubscriptionDetails = z.infer<typeof userSubscriptionDetailsSchema>;
 
-export const SUBSCRIPTION_TIER_LIMITS: Record<SubscriptionTier, { maxStores: number; target: 'client' | 'business' }> = {
-  free: { maxStores: 0, target: 'client' },
-  client_premium: { maxStores: 0, target: 'client' },
-  business_starter: { maxStores: 1, target: 'business' },
-  business_pro: { maxStores: 3, target: 'business' },
-  business_enterprise: { maxStores: 10, target: 'business' }
+export const SUBSCRIPTION_TIER_LIMITS: Record<
+  SubscriptionTier,
+  { maxStores: number; dailyBroadcastLimit: number; target: 'client' | 'business' }
+> = {
+  free: { maxStores: 0, dailyBroadcastLimit: 0, target: 'client' },
+  client_premium: { maxStores: 0, dailyBroadcastLimit: 0, target: 'client' },
+  business_starter: { maxStores: 1, dailyBroadcastLimit: 1, target: 'business' },
+  business_pro: { maxStores: 3, dailyBroadcastLimit: 3, target: 'business' },
+  business_enterprise: { maxStores: 10, dailyBroadcastLimit: 10, target: 'business' }
 };
 
 export function getMaxAllowedStoresForTier(tier?: string | null): number {
   if (!tier || !(tier in SUBSCRIPTION_TIER_LIMITS)) return 0;
   return SUBSCRIPTION_TIER_LIMITS[tier as SubscriptionTier].maxStores;
+}
+
+export function getDailyBroadcastLimitForTier(tier?: string | null): number {
+  if (!tier || !(tier in SUBSCRIPTION_TIER_LIMITS)) return 0;
+  return SUBSCRIPTION_TIER_LIMITS[tier as SubscriptionTier].dailyBroadcastLimit;
 }
 
 export function isBusinessTier(tier?: string | null): boolean {
@@ -113,22 +122,258 @@ export const createUserDtoSchema = z.object({
 
 export type CreateUserDto = z.infer<typeof createUserDtoSchema>;
 
-export type UserRole = 'client' | 'business_owner' | 'admin';
-export const userRoleSchema = z.enum(['client', 'business_owner', 'admin']);
+/**
+ * ==========================================
+ * RBAC: РОЛИ, ПРИОРИТЕТЫ И ГРАНУЛЯРНЫЕ ДОСТУПЫ
+ * ==========================================
+ */
+export type PermissionScope = 'store' | 'platform';
+export const permissionScopeSchema = z.enum(['store', 'platform']);
 
-export type SystemRole = 'user' | 'platform_admin';
-export const systemRoleSchema = z.enum(['user', 'platform_admin']);
+export const ROLE_ICON_KEYS = [
+  'crown',
+  'shield',
+  'briefcase',
+  'zap',
+  'headphones',
+  'coffee',
+  'package',
+  'bar-chart',
+  'shopping-bag',
+  'wrench',
+  'users',
+  'key',
+  'star',
+  'flame',
+  'award',
+  'sliders',
+  'truck',
+  'tag'
+] as const;
 
-export type StoreMemberRole = 'owner' | 'manager' | 'staff';
-export const storeMemberRoleSchema = z.enum(['owner', 'manager', 'staff']);
+export type RoleIconKey = (typeof ROLE_ICON_KEYS)[number];
+
+export interface PermissionDefinition {
+  id: number;
+  code: string;
+  scope: PermissionScope;
+  category: string;
+  action: 'read' | 'write' | 'edit' | 'manage' | 'export' | 'archive';
+  ownerOnly: boolean;
+}
+
+export const STORE_PERMISSIONS: PermissionDefinition[] = [
+  // Адміністрування (повний доступ однією галочкою, крім ownerOnly та ієрархії)
+  { id: 100, code: 'store.admin', scope: 'store', category: 'admin', action: 'manage', ownerOnly: false },
+  // Товари та каталог
+  { id: 101, code: 'products.read', scope: 'store', category: 'products', action: 'read', ownerOnly: false },
+  { id: 102, code: 'products.write', scope: 'store', category: 'products', action: 'write', ownerOnly: false },
+  { id: 103, code: 'products.edit', scope: 'store', category: 'products', action: 'edit', ownerOnly: false },
+  { id: 104, code: 'products.status', scope: 'store', category: 'products', action: 'manage', ownerOnly: false },
+  { id: 105, code: 'products.archive', scope: 'store', category: 'products', action: 'archive', ownerOnly: false },
+  // Замовлення
+  { id: 111, code: 'orders.read', scope: 'store', category: 'orders', action: 'read', ownerOnly: false },
+  { id: 112, code: 'orders.edit', scope: 'store', category: 'orders', action: 'edit', ownerOnly: false },
+  { id: 113, code: 'orders.refund', scope: 'store', category: 'orders', action: 'manage', ownerOnly: false },
+  // Статистика та аналітика
+  { id: 121, code: 'analytics.read', scope: 'store', category: 'analytics', action: 'read', ownerOnly: false },
+  { id: 122, code: 'analytics.export', scope: 'store', category: 'analytics', action: 'export', ownerOnly: false },
+  // Дані магазину
+  { id: 131, code: 'store.read', scope: 'store', category: 'store', action: 'read', ownerOnly: false },
+  { id: 132, code: 'store.edit', scope: 'store', category: 'store', action: 'edit', ownerOnly: false },
+  { id: 133, code: 'store.status.manage', scope: 'store', category: 'store', action: 'manage', ownerOnly: true },
+  // Команда
+  { id: 141, code: 'staff.read', scope: 'store', category: 'staff', action: 'read', ownerOnly: false },
+  { id: 142, code: 'staff.write', scope: 'store', category: 'staff', action: 'write', ownerOnly: false },
+  { id: 143, code: 'staff.edit', scope: 'store', category: 'staff', action: 'edit', ownerOnly: false },
+  { id: 144, code: 'staff.archive', scope: 'store', category: 'staff', action: 'archive', ownerOnly: false },
+  // Ролі
+  { id: 151, code: 'roles.read', scope: 'store', category: 'roles', action: 'read', ownerOnly: false },
+  { id: 152, code: 'roles.write', scope: 'store', category: 'roles', action: 'write', ownerOnly: false },
+  { id: 153, code: 'roles.edit', scope: 'store', category: 'roles', action: 'edit', ownerOnly: false },
+  { id: 154, code: 'roles.archive', scope: 'store', category: 'roles', action: 'archive', ownerOnly: false },
+  // Маркетинг та розсилки
+  { id: 161, code: 'marketing.broadcasts.read', scope: 'store', category: 'marketing', action: 'read', ownerOnly: false },
+  { id: 162, code: 'marketing.broadcasts.send', scope: 'store', category: 'marketing', action: 'manage', ownerOnly: false }
+];
+
+export const PLATFORM_PERMISSIONS: PermissionDefinition[] = [
+  // Адміністрування платформи (повний доступ однією галочкою з урахуванням ієрархії)
+  { id: 200, code: 'platform.admin', scope: 'platform', category: 'platform_admin', action: 'manage', ownerOnly: false },
+  // Торгові точки
+  { id: 201, code: 'platform.stores.read', scope: 'platform', category: 'platform_stores', action: 'read', ownerOnly: false },
+  { id: 202, code: 'platform.stores.moderate', scope: 'platform', category: 'platform_stores', action: 'manage', ownerOnly: false },
+  { id: 205, code: 'platform.stores.approve', scope: 'platform', category: 'platform_stores', action: 'manage', ownerOnly: false },
+  { id: 206, code: 'platform.stores.unblock', scope: 'platform', category: 'platform_stores', action: 'manage', ownerOnly: false },
+  { id: 203, code: 'platform.categories.manage', scope: 'platform', category: 'platform_stores', action: 'edit', ownerOnly: false },
+  { id: 204, code: 'platform.stores.archive', scope: 'platform', category: 'platform_stores', action: 'archive', ownerOnly: false },
+  // Користувачі BizX
+  { id: 211, code: 'platform.users.read', scope: 'platform', category: 'platform_users', action: 'read', ownerOnly: false },
+  { id: 212, code: 'platform.users.edit', scope: 'platform', category: 'platform_users', action: 'edit', ownerOnly: false },
+  { id: 213, code: 'platform.users.archive', scope: 'platform', category: 'platform_users', action: 'archive', ownerOnly: false },
+  { id: 214, code: 'platform.users.unblock', scope: 'platform', category: 'platform_users', action: 'manage', ownerOnly: false },
+  { id: 215, code: 'platform.users.subscriptions', scope: 'platform', category: 'platform_users', action: 'manage', ownerOnly: false },
+  // Аналітика платформи
+  { id: 221, code: 'platform.analytics.read', scope: 'platform', category: 'platform_analytics', action: 'read', ownerOnly: false },
+  { id: 222, code: 'platform.analytics.export', scope: 'platform', category: 'platform_analytics', action: 'export', ownerOnly: false },
+  // Команда BizX
+  { id: 231, code: 'platform.staff.read', scope: 'platform', category: 'platform_staff', action: 'read', ownerOnly: false },
+  { id: 232, code: 'platform.staff.write', scope: 'platform', category: 'platform_staff', action: 'write', ownerOnly: false },
+  { id: 233, code: 'platform.staff.edit', scope: 'platform', category: 'platform_staff', action: 'edit', ownerOnly: false },
+  { id: 234, code: 'platform.staff.archive', scope: 'platform', category: 'platform_staff', action: 'archive', ownerOnly: false },
+  // Ролі платформи
+  { id: 241, code: 'platform.roles.read', scope: 'platform', category: 'platform_roles', action: 'read', ownerOnly: false },
+  { id: 242, code: 'platform.roles.write', scope: 'platform', category: 'platform_roles', action: 'write', ownerOnly: false },
+  { id: 243, code: 'platform.roles.edit', scope: 'platform', category: 'platform_roles', action: 'edit', ownerOnly: false },
+  { id: 244, code: 'platform.roles.archive', scope: 'platform', category: 'platform_roles', action: 'archive', ownerOnly: false },
+  // Скарги та арбітраж
+  { id: 251, code: 'platform.disputes.read', scope: 'platform', category: 'platform_disputes', action: 'read', ownerOnly: false },
+  { id: 252, code: 'platform.disputes.resolve', scope: 'platform', category: 'platform_disputes', action: 'manage', ownerOnly: false },
+  { id: 253, code: 'platform.strikes.revoke', scope: 'platform', category: 'platform_disputes', action: 'manage', ownerOnly: false },
+  { id: 254, code: 'platform.strikes.issue', scope: 'platform', category: 'platform_disputes', action: 'manage', ownerOnly: false },
+  // Комунікації, розсилки та підтримка
+  { id: 261, code: 'platform.broadcasts.read', scope: 'platform', category: 'platform_communications', action: 'read', ownerOnly: false },
+  { id: 262, code: 'platform.broadcasts.send', scope: 'platform', category: 'platform_communications', action: 'manage', ownerOnly: false },
+  { id: 263, code: 'platform.support.read', scope: 'platform', category: 'platform_communications', action: 'read', ownerOnly: false },
+  { id: 264, code: 'platform.support.reply', scope: 'platform', category: 'platform_communications', action: 'manage', ownerOnly: false }
+];
+
+export const ALL_PERMISSIONS: PermissionDefinition[] = [
+  ...STORE_PERMISSIONS,
+  ...PLATFORM_PERMISSIONS
+];
+
+export type StorePermissionCode =
+  | 'store.admin'
+  | 'products.read'
+  | 'products.write'
+  | 'products.edit'
+  | 'products.status'
+  | 'products.archive'
+  | 'orders.read'
+  | 'orders.edit'
+  | 'orders.refund'
+  | 'analytics.read'
+  | 'analytics.export'
+  | 'store.read'
+  | 'store.edit'
+  | 'store.status.manage'
+  | 'staff.read'
+  | 'staff.write'
+  | 'staff.edit'
+  | 'staff.archive'
+  | 'roles.read'
+  | 'roles.write'
+  | 'roles.edit'
+  | 'roles.archive'
+  | 'marketing.broadcasts.read'
+  | 'marketing.broadcasts.send';
+
+export type PlatformPermissionCode =
+  | 'platform.admin'
+  | 'platform.stores.read'
+  | 'platform.stores.moderate'
+  | 'platform.stores.approve'
+  | 'platform.stores.unblock'
+  | 'platform.categories.manage'
+  | 'platform.stores.archive'
+  | 'platform.users.read'
+  | 'platform.users.edit'
+  | 'platform.users.archive'
+  | 'platform.users.unblock'
+  | 'platform.users.subscriptions'
+  | 'platform.analytics.read'
+  | 'platform.analytics.export'
+  | 'platform.staff.read'
+  | 'platform.staff.write'
+  | 'platform.staff.edit'
+  | 'platform.staff.archive'
+  | 'platform.roles.read'
+  | 'platform.roles.write'
+  | 'platform.roles.edit'
+  | 'platform.roles.archive'
+  | 'platform.disputes.read'
+  | 'platform.disputes.resolve'
+  | 'platform.strikes.revoke'
+  | 'platform.strikes.issue'
+  | 'platform.broadcasts.read'
+  | 'platform.broadcasts.send'
+  | 'platform.support.read'
+  | 'platform.support.reply';
+
+export const OWNER_ROLE_PRIORITY = 10000;
+
+export interface RoleItem {
+  id: string;
+  scope: PermissionScope;
+  storeId: string | null;
+  name: string;
+  icon: string | null;
+  color: string;
+  priority: number;
+  isSystem: boolean;
+  permissionIds: number[];
+  permissionCodes: string[];
+  membersCount: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface MemberAccessSummary {
+  isOwner: boolean;
+  isMember: boolean;
+  priority: number;
+  roleId: string | null;
+  roleName: string | null;
+  isCustom: boolean;
+  permissionIds: number[];
+  permissions: string[];
+}
+
+export interface PermissionsResponse {
+  catalog: PermissionDefinition[];
+  myAccess: MemberAccessSummary;
+  ownerHasActiveSubscription?: boolean;
+}
+
+export const createRoleDtoSchema = z.object({
+  name: z.string().min(2, 'Назва ролі має містити мінімум 2 символи').max(100),
+  icon: z.string().max(50).nullable().optional(),
+  color: z.string().min(4).max(20).default('#334155').optional(),
+  priority: z.number().int().min(1).max(OWNER_ROLE_PRIORITY - 1).optional(),
+  permissionIds: z.array(z.number().int().positive()).default([])
+});
+export type CreateRoleDto = z.infer<typeof createRoleDtoSchema>;
+
+export const updateRoleDtoSchema = z.object({
+  name: z.string().min(2, 'Назва ролі має містити мінімум 2 символи').max(100).optional(),
+  icon: z.string().max(50).nullable().optional(),
+  color: z.string().min(4).max(20).optional(),
+  priority: z.number().int().min(1).max(OWNER_ROLE_PRIORITY - 1).optional(),
+  permissionIds: z.array(z.number().int().positive()).optional()
+});
+export type UpdateRoleDto = z.infer<typeof updateRoleDtoSchema>;
+
+export const reorderRolesDtoSchema = z.object({
+  orderedRoleIds: z.array(z.string().uuid()).min(1)
+});
+export type ReorderRolesDto = z.infer<typeof reorderRolesDtoSchema>;
 
 export const storeMemberSchema = z.object({
   id: z.string().uuid(),
   storeId: z.string().uuid(),
   userId: z.string().uuid(),
-  role: storeMemberRoleSchema,
+  roleId: z.string().uuid().nullable().optional(),
+  roleName: z.string().nullable().optional(),
+  roleIcon: z.string().nullable().optional(),
+  roleColor: z.string().nullable().optional(),
+  priority: z.number().int().optional(),
+  isCustom: z.boolean().optional(),
+  isOwner: z.boolean().optional(),
+  permissionIds: z.array(z.number().int()).optional(),
   userName: z.string().optional(),
   userEmail: z.string().optional(),
+  userPhone: z.string().nullable().optional(),
   userAvatarUrl: z.string().nullable().optional(),
   archivedAt: z.string().datetime().nullable().optional(),
   createdAt: z.string().datetime().optional(),
@@ -137,18 +382,71 @@ export const storeMemberSchema = z.object({
 
 export type StoreMember = z.infer<typeof storeMemberSchema>;
 
-export const addStoreMemberDtoSchema = z.object({
-  email: z.string().email({ message: 'Некоректний email' }),
-  role: storeMemberRoleSchema.default('staff')
-});
+export const addStoreMemberDtoSchema = z
+  .object({
+    email: z.string().email({ message: 'Некоректний email' }).optional(),
+    phone: z.string().min(7, { message: 'Некоректний номер телефону' }).optional(),
+    roleId: z.string().uuid().nullable().optional(),
+    isCustom: z.boolean().optional().default(false),
+    permissionIds: z.array(z.number().int().positive()).optional().default([])
+  })
+  .refine((data) => Boolean(data.email || data.phone), {
+    message: 'Вкажіть email або номер телефону працівника',
+    path: ['email']
+  });
 
 export type AddStoreMemberDto = z.infer<typeof addStoreMemberDtoSchema>;
 
 export const updateStoreMemberDtoSchema = z.object({
-  role: storeMemberRoleSchema
+  roleId: z.string().uuid().nullable().optional(),
+  isCustom: z.boolean().optional(),
+  permissionIds: z.array(z.number().int().positive()).optional()
 });
 
 export type UpdateStoreMemberDto = z.infer<typeof updateStoreMemberDtoSchema>;
+
+export interface PlatformMember {
+  id: string;
+  userId: string;
+  roleId: string | null;
+  roleName: string | null;
+  roleIcon: string | null;
+  roleColor: string | null;
+  priority: number;
+  isCustom: boolean;
+  isOwner: boolean;
+  department: string | null;
+  permissionIds: number[];
+  userName: string;
+  userEmail: string;
+  userPhone: string | null;
+  userAvatarUrl: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const addPlatformMemberDtoSchema = z
+  .object({
+    email: z.string().email({ message: 'Некоректний email' }).optional(),
+    phone: z.string().min(7, { message: 'Некоректний номер телефону' }).optional(),
+    department: z.string().max(100).optional(),
+    roleId: z.string().uuid().nullable().optional(),
+    isCustom: z.boolean().optional().default(false),
+    permissionIds: z.array(z.number().int().positive()).optional().default([])
+  })
+  .refine((data) => Boolean(data.email || data.phone), {
+    message: 'Вкажіть email або номер телефону співробітника',
+    path: ['email']
+  });
+export type AddPlatformMemberDto = z.infer<typeof addPlatformMemberDtoSchema>;
+
+export const updatePlatformMemberDtoSchema = z.object({
+  department: z.string().max(100).nullable().optional(),
+  roleId: z.string().uuid().nullable().optional(),
+  isCustom: z.boolean().optional(),
+  permissionIds: z.array(z.number().int().positive()).optional()
+});
+export type UpdatePlatformMemberDto = z.infer<typeof updatePlatformMemberDtoSchema>;
 
 
 
@@ -156,8 +454,9 @@ export const userProfileSchema = z.object({
   id: z.string().uuid(),
   email: z.string().email({ message: 'Некорректный email адрес' }),
   name: z.string().min(2, { message: 'Имя должно содержать минимум 2 символа' }),
-  role: userRoleSchema.default('client'),
-  systemRole: systemRoleSchema.default('user'),
+  isPlatformStaff: z.boolean().default(false),
+  isBusinessOwner: z.boolean().default(false),
+  hasStoreAccess: z.boolean().default(false),
   phone: z.string().nullable().optional(),
   avatarUrl: z.string().nullable().optional(),
   preferredLanguage: supportedLocaleSchema.default('uk').optional(),
@@ -198,8 +497,7 @@ export const registerDtoSchema = z.object({
   email: z.string().email({ message: 'Некорректный email адрес' }),
   password: z.string().min(6, { message: 'Пароль должен содержать минимум 6 символов' }),
   name: z.string().min(2, { message: 'Имя должно содержать минимум 2 символа' }),
-  phone: z.string().nullable().optional(),
-  role: z.literal('client').optional().default('client')
+  phone: z.string().nullable().optional()
 });
 
 export type RegisterDto = z.infer<typeof registerDtoSchema>;
@@ -284,7 +582,18 @@ export const storeSchema = z.object({
   phone: z.string().nullable().optional(),
   email: z.string().email().nullable().optional(),
   status: storeStatusSchema.default('draft'),
-  memberRole: storeMemberRoleSchema.optional(),
+  customDomain: z.string().nullable().optional(),
+  customDomainVerified: z.boolean().optional(),
+  domainVerificationToken: z.string().nullable().optional(),
+  suspendedUntil: z.string().datetime().nullable().optional(),
+  suspensionReason: z.string().nullable().optional(),
+  payoutBalance: z.number().int().optional(),
+  ratingAvg: z.number().optional(),
+  ratingCount: z.number().int().optional(),
+  autoDiscountBroadcastEnabled: z.boolean().optional(),
+  activeStrikesCount: z.number().int().optional(),
+  myRoleName: z.string().nullable().optional(),
+  myRoleIcon: z.string().nullable().optional(),
   archivedAt: z.string().datetime().nullable().optional(),
   createdAt: z.string().datetime().optional(),
   updatedAt: z.string().datetime().optional()
@@ -308,7 +617,9 @@ export const createStoreDtoSchema = z.object({
 export type CreateStoreDto = z.infer<typeof createStoreDtoSchema>;
 
 export const updateStoreDtoSchema = createStoreDtoSchema.partial().extend({
-  status: storeStatusSchema.optional()
+  status: storeStatusSchema.optional(),
+  suspensionDays: z.number().int().min(1).max(3650).nullable().optional(),
+  suspensionReason: z.string().trim().max(1500).nullable().optional()
 });
 export type UpdateStoreDto = z.infer<typeof updateStoreDtoSchema>;
 
@@ -335,10 +646,33 @@ export const productCategorySchema = z.object({
 export type ProductCategory = z.infer<typeof productCategorySchema>;
 
 export const createProductCategoryDtoSchema = z.object({
-  name: z.string().min(1, 'Название категории обязательно'),
-  sortOrder: z.number().int().optional().default(0)
+  name: z.string().trim().min(1, 'Название категории обязательно').max(120),
+  sortOrder: z.number().int().min(0).max(10_000).optional().default(0)
 });
 export type CreateProductCategoryDto = z.infer<typeof createProductCategoryDtoSchema>;
+
+export const updateProductCategoryDtoSchema = z.object({
+  name: z.string().trim().min(1, 'Название категории обязательно').max(120).optional(),
+  sortOrder: z.number().int().min(0).max(10_000).optional()
+});
+export type UpdateProductCategoryDto = z.infer<typeof updateProductCategoryDtoSchema>;
+
+export const changePasswordDtoSchema = z.object({
+  currentPassword: z.string().min(1, 'Вкажіть поточний пароль'),
+  newPassword: z.string().min(6, 'Новий пароль має містити щонайменше 6 символів').max(128)
+});
+export type ChangePasswordDto = z.infer<typeof changePasswordDtoSchema>;
+
+export interface StoreCustomerSummaryItem {
+  customerId: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  ordersCount: number;
+  totalSpent: number;
+  lastOrderAt: string;
+  marketingSubscribed: boolean;
+}
 
 /**
  * Товары
@@ -361,15 +695,26 @@ export const productSchema = z.object({
 });
 export type Product = z.infer<typeof productSchema>;
 
+const safeMediaUrlSchema = z
+  .string()
+  .trim()
+  .refine(
+    (v) =>
+      v === '' ||
+      v.startsWith('/storage/') ||
+      /^https?:\/\/[^\s]+$/i.test(v),
+    { message: 'Недопустимий формат посилання' }
+  );
+
 export const createProductDtoSchema = z.object({
-  name: z.string().min(2, 'Название товара должно быть не короче 2 символов'),
-  categoryId: z.string().uuid().optional(),
-  sku: z.string().optional(),
-  description: z.string().optional(),
-  price: z.number().int().positive('Цена должна быть больше нуля (в копейках)'),
-  oldPrice: z.number().int().positive().optional(),
-  imageUrl: z.string().optional(),
-  inventoryCount: z.number().int().nonnegative().optional().default(0),
+  name: z.string().trim().min(2, 'Название товара должно быть не короче 2 символов'),
+  categoryId: z.string().uuid().nullable().optional(),
+  sku: z.string().trim().max(120).nullable().optional(),
+  description: z.string().trim().max(4000).nullable().optional(),
+  price: z.number().int().positive('Цена должна быть больше нуля (в копейках)').max(2_000_000_000),
+  oldPrice: z.number().int().positive().max(2_000_000_000).nullable().optional(),
+  imageUrl: safeMediaUrlSchema.nullable().optional(),
+  inventoryCount: z.number().int().nonnegative().max(10_000_000).optional().default(0),
   isActive: z.boolean().optional().default(true)
 });
 export type CreateProductDto = z.infer<typeof createProductDtoSchema>;
@@ -381,7 +726,10 @@ export const productFilterQuerySchema = z.object({
   storeId: z.string().uuid().optional(),
   categoryId: z.string().uuid().optional(),
   search: z.string().optional(),
-  isActive: z.coerce.boolean().optional(),
+  isActive: z.preprocess(
+    (v) => (v === 'true' || v === true ? true : v === 'false' || v === false ? false : undefined),
+    z.boolean().optional()
+  ),
   page: z.coerce.number().int().positive().default(1),
   pageSize: z.coerce.number().int().positive().max(100).default(20)
 });
@@ -400,23 +748,25 @@ export const orderStatusSchema = z.enum([
 ]);
 export type OrderStatus = z.infer<typeof orderStatusSchema>;
 
-export const paymentStatusSchema = z.enum(['pending', 'paid', 'failed']);
+export const paymentStatusSchema = z.enum(['pending', 'paid', 'failed', 'refunded']);
 export type PaymentStatus = z.infer<typeof paymentStatusSchema>;
 
 export const createOrderItemDtoSchema = z.object({
   productId: z.string().uuid('Некорректный ID товара'),
-  quantity: z.number().int().positive('Количество должно быть не менее 1')
+  quantity: z.number().int().positive('Количество должно быть не менее 1').max(10_000)
 });
 export type CreateOrderItemDto = z.infer<typeof createOrderItemDtoSchema>;
 
 export const createOrderDtoSchema = z.object({
   storeId: z.string().uuid('Некорректный ID магазина'),
-  contactName: z.string().min(2, 'Укажите контактное имя'),
-  contactPhone: z.string().min(5, 'Укажите контактный телефон'),
-  deliveryAddress: z.string().optional(),
+  contactName: z.string().trim().min(2, 'Укажите контактное имя').max(200),
+  contactPhone: z.string().trim().min(5, 'Укажите контактный телефон').max(40),
+  deliveryAddress: z.string().trim().max(500).optional(),
   paymentMethod: z.enum(['card', 'cash', 'online']).default('card'),
-  notes: z.string().optional(),
-  items: z.array(createOrderItemDtoSchema).min(1, 'Корзина не может быть пустой')
+  notes: z.string().trim().max(2000).optional(),
+  /** Явна згода (strict opt-in) на акційні розсилки закладу на першому замовленні */
+  subscribeToStoreMarketing: z.boolean().optional(),
+  items: z.array(createOrderItemDtoSchema).min(1, 'Корзина не может быть пустой').max(100)
 });
 export type CreateOrderDto = z.infer<typeof createOrderDtoSchema>;
 
@@ -450,6 +800,11 @@ export const orderResponseSchema = z.object({
   contactName: z.string(),
   paymentStatus: paymentStatusSchema,
   paymentMethod: z.string(),
+  payoutStatus: z.enum(['held', 'released', 'refunded', 'clawback']).optional(),
+  refundOfferStatus: z.enum(['pending_customer', 'accepted', 'declined']).nullable().optional(),
+  refundOfferAmount: z.number().int().nullable().optional(),
+  refundOfferReason: z.string().nullable().optional(),
+  refundOfferedAt: z.string().nullable().optional(),
   notes: z.string().nullable().optional(),
   items: z.array(orderItemResponseSchema).optional(),
   createdAt: z.string(),
@@ -463,14 +818,19 @@ export type OrderResponse = z.infer<typeof orderResponseSchema>;
 export const analyticsPeriodSchema = z.enum(['day', 'week', 'month', 'year', 'all']);
 export type AnalyticsPeriod = z.infer<typeof analyticsPeriodSchema>;
 
+const validDateStringSchema = z
+  .string()
+  .refine((s) => !Number.isNaN(Date.parse(s)), { message: 'Некоректний формат дати' });
+
 export const analyticsQuerySchema = z.object({
   period: analyticsPeriodSchema.default('month'),
-  startDate: z.string().optional(),
-  endDate: z.string().optional(),
+  startDate: validDateStringSchema.optional(),
+  endDate: validDateStringSchema.optional(),
   status: orderStatusSchema.optional(),
-  minAmount: z.coerce.number().int().nonnegative().optional(),
-  maxAmount: z.coerce.number().int().nonnegative().optional(),
-  storeId: z.string().uuid().optional()
+  minAmount: z.coerce.number().int().nonnegative().max(2_000_000_000).optional(),
+  maxAmount: z.coerce.number().int().nonnegative().max(2_000_000_000).optional(),
+  storeId: z.string().uuid().optional(),
+  topLimit: z.coerce.number().int().min(1).max(500).optional()
 });
 export type AnalyticsQuery = z.infer<typeof analyticsQuerySchema>;
 
@@ -526,8 +886,8 @@ export interface PlatformAnalytics {
  */
 export const presignedUploadDtoSchema = z.object({
   folder: z.enum(['avatars', 'stores/logos', 'stores/banners', 'products']),
-  fileName: z.string().min(1, 'Имя файла обязательно'),
-  contentType: z.enum(['image/jpeg', 'image/png', 'image/webp', 'image/svg+xml', 'image/gif'])
+  fileName: z.string().trim().min(1, 'Имя файла обязательно').max(255),
+  contentType: z.enum(['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
 });
 export type PresignedUploadDto = z.infer<typeof presignedUploadDtoSchema>;
 
@@ -562,4 +922,531 @@ export interface PaginatedResult<T> {
   total: number;
   page: number;
   pageSize: number;
+}
+
+/**
+ * ============================================================================
+ * Чат по замовленням, спори, швидкі повернення, страйки, відгуки та домени
+ * ============================================================================
+ */
+
+export function formatCompactCount(count: number): string {
+  if (!count || count <= 0) return '';
+  if (count < 1000) return String(count);
+  if (count < 10000) return `${(count / 1000).toFixed(1).replace(/\.0$/, '')}k`;
+  if (count < 1_000_000) return `${Math.floor(count / 1000)}k`;
+  return `${(count / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
+}
+
+export const orderMessageAttachmentSchema = z.object({
+  url: z
+    .string()
+    .trim()
+    .min(1)
+    .refine((v) => v.startsWith('/storage/') || /^https?:\/\/[^\s]+$/i.test(v), {
+      message: 'Недопустиме посилання на вкладення'
+    }),
+  fileName: z.string().trim().min(1).max(255),
+  mimeType: z.string().trim().min(1).max(120),
+  size: z.number().int().nonnegative().max(15 * 1024 * 1024).optional()
+});
+export type OrderMessageAttachmentDto = z.infer<typeof orderMessageAttachmentSchema>;
+
+export const sendOrderMessageDtoSchema = z
+  .object({
+    body: z.string().max(4000).optional(),
+    attachments: z.array(orderMessageAttachmentSchema).max(6).default([]).optional()
+  })
+  .refine(
+    (v) => Boolean((v.body && v.body.trim().length > 0) || (v.attachments && v.attachments.length > 0)),
+    { message: 'Повідомлення не може бути порожнім' }
+  );
+export type SendOrderMessageDto = z.infer<typeof sendOrderMessageDtoSchema>;
+
+export type OrderMessageSenderType = 'customer' | 'store' | 'platform' | 'system';
+
+export interface OrderMessageItem {
+  id: string;
+  orderId: string;
+  senderId: string | null;
+  senderName: string | null;
+  senderType: OrderMessageSenderType;
+  body: string | null;
+  attachments: OrderMessageAttachmentDto[];
+  readByCustomerAt: string | null;
+  readByStoreAt: string | null;
+  createdAt: string;
+}
+
+export const createRefundOfferDtoSchema = z.object({
+  amount: z.number().int().positive().optional(),
+  reason: z.string().min(2, 'Вкажіть причину повернення').max(1000)
+});
+export type CreateRefundOfferDto = z.infer<typeof createRefundOfferDtoSchema>;
+
+export const respondRefundOfferDtoSchema = z.object({
+  accept: z.boolean()
+});
+export type RespondRefundOfferDto = z.infer<typeof respondRefundOfferDtoSchema>;
+
+export const disputeCategorySchema = z.enum([
+  'not_received',
+  'damaged',
+  'wrong_item',
+  'missing_items',
+  'poor_quality',
+  'other'
+]);
+export type DisputeCategory = z.infer<typeof disputeCategorySchema>;
+
+export const DISPUTE_CATEGORIES: DisputeCategory[] = [
+  'not_received',
+  'damaged',
+  'wrong_item',
+  'missing_items',
+  'poor_quality',
+  'other'
+];
+
+export const disputeStatusSchema = z.enum([
+  'open_store',
+  'escalated_platform',
+  'withdrawn',
+  'resolved_refund',
+  'resolved_business',
+  'resolved_customer'
+]);
+export type DisputeStatus = z.infer<typeof disputeStatusSchema>;
+
+export const createDisputeDtoSchema = z.object({
+  category: disputeCategorySchema,
+  description: z.string().min(5, 'Опишіть проблему детальніше (мін. 5 символів)').max(2000)
+});
+export type CreateDisputeDto = z.infer<typeof createDisputeDtoSchema>;
+
+export const escalateDisputeDtoSchema = z.object({
+  reason: z.string().max(1000).optional()
+});
+export type EscalateDisputeDto = z.infer<typeof escalateDisputeDtoSchema>;
+
+export const resolveDisputeDtoSchema = z.object({
+  decision: z.enum(['business', 'customer']),
+  resolutionNote: z.string().trim().min(3, 'Вкажіть обґрунтування рішення').max(2000),
+  issueStrike: z.boolean().optional(),
+  strikeReason: z.string().trim().max(1000).optional(),
+  /** Кількість днів блокування при 3-му страйку (null або 0 = до ручного зняття) */
+  suspensionDays: z.number().int().min(1).max(3650).nullable().optional()
+});
+export type ResolveDisputeDto = z.infer<typeof resolveDisputeDtoSchema>;
+
+export const revokeStrikeDtoSchema = z.object({
+  revokeReason: z.string().min(3, 'Вкажіть причину зняття страйку').max(1000),
+  liftSuspension: z.boolean().default(true).optional()
+});
+export type RevokeStrikeDto = z.infer<typeof revokeStrikeDtoSchema>;
+
+export interface OrderDisputeItem {
+  id: string;
+  orderId: string;
+  storeId: string;
+  customerId: string | null;
+  category: DisputeCategory;
+  description: string;
+  status: DisputeStatus;
+  escalatedAt: string | null;
+  escalationReason: string | null;
+  resolvedAt: string | null;
+  resolvedByUserId: string | null;
+  resolutionNote: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StoreStrikeItem {
+  id: string;
+  storeId: string;
+  disputeId: string | null;
+  issuedByUserId: string | null;
+  issuedByName?: string | null;
+  reason: string;
+  suspensionDays: number | null;
+  expiresAt: string | null;
+  revokedAt: string | null;
+  revokedByUserId: string | null;
+  revokedByName?: string | null;
+  revokeReason: string | null;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface PlatformDisputeListItem extends OrderDisputeItem {
+  orderNumber: string;
+  orderTotalAmount: number;
+  orderStatus: string;
+  orderPayoutStatus: string;
+  storeName: string;
+  storeSlug: string;
+  storeStatus: string;
+  storeSuspendedUntil: string | null;
+  storeActiveStrikes: number;
+  customerName: string;
+  customerEmail: string | null;
+  customerPhone: string | null;
+  messagesCount: number;
+}
+
+export const createStoreReviewDtoSchema = z.object({
+  rating: z.number().int().min(1).max(5),
+  comment: z.string().max(1000).optional()
+});
+export type CreateStoreReviewDto = z.infer<typeof createStoreReviewDtoSchema>;
+
+export interface StoreReviewItem {
+  id: string;
+  storeId: string;
+  orderId: string;
+  customerId: string | null;
+  customerName: string;
+  rating: number;
+  comment: string | null;
+  createdAt: string;
+}
+
+export interface StoreReviewsResponse {
+  ratingAvg: number;
+  ratingCount: number;
+  distribution: Record<number, number>;
+  reviews: StoreReviewItem[];
+}
+
+export const updateStoreDomainDtoSchema = z.object({
+  customDomain: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .max(255)
+    .nullable()
+    .refine(
+      (val) => {
+        if (!val) return true;
+        return /^(?!-)[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(val) && !val.endsWith('.bizx.ua') && val !== 'bizx.ua';
+      },
+      { message: 'Введіть коректне доменне ім’я (наприклад, shop.example.ua)' }
+    )
+});
+export type UpdateStoreDomainDto = z.infer<typeof updateStoreDomainDtoSchema>;
+
+export interface DomainVerificationResult {
+  customDomain: string | null;
+  verified: boolean;
+  txtRecordName: string | null;
+  txtRecordValue: string | null;
+  cnameTarget: string;
+  txtMatched: boolean;
+  cnameMatched: boolean;
+  message: string;
+}
+
+export const CUSTOMER_QUICK_REPLIES = {
+  uk: [
+    'Вітаю! Є питання щодо мого замовлення',
+    'Підкажіть, коли очікувати відправку?',
+    'Чи можна змінити адресу доставки?',
+    'Дякую, все зрозуміло!'
+  ],
+  en: [
+    'Hello! I have a question about my order',
+    'Could you tell me when it will ship?',
+    'Can I update my delivery address?',
+    'Thank you, got it!'
+  ]
+} as const;
+
+export const STORE_QUICK_REPLIES = {
+  uk: [
+    'Вітаємо! Дякуємо за замовлення, чим можемо допомогти?',
+    'Уточнюємо інформацію, відповімо за хвилину',
+    'Замовлення зібрано та передано у доставку',
+    'Перепрошуємо за незручності, вирішуємо питання!'
+  ],
+  en: [
+    'Hello! Thanks for your order — how can we help?',
+    'Checking the details, we will get back to you shortly',
+    'Your order is packed and handed over for delivery',
+    'Sorry for the inconvenience, we are resolving this right away!'
+  ]
+} as const;
+
+/**
+ * ============================================================================
+ * Модерація бізнесів (підтвердження / відхилення / прев'ю) та Пошта акаунту
+ * ============================================================================
+ */
+
+export const rejectStoreDtoSchema = z.object({
+  reason: z.string().trim().min(5, 'Вкажіть причину відхилення (мін. 5 символів)').max(1500)
+});
+export type RejectStoreDto = z.infer<typeof rejectStoreDtoSchema>;
+
+export interface PlatformStoresSummary {
+  pendingCount: number;
+  activeCount: number;
+  draftCount: number;
+  suspendedCount: number;
+  archivedCount: number;
+  totalCount: number;
+}
+
+export interface StorePreviewTokenResponse {
+  previewToken: string;
+  expiresInSeconds: number;
+}
+
+export interface StorePreviewReadiness {
+  hasLogo: boolean;
+  hasBanner: boolean;
+  hasDescription: boolean;
+  hasContacts: boolean;
+  hasAddress: boolean;
+  productsCount: number;
+  activeProductsCount: number;
+}
+
+export interface StorePreviewResponse {
+  store: Store & {
+    categoryName?: string | null;
+    ownerName?: string | null;
+    ownerEmail?: string | null;
+  };
+  categories: ProductCategory[];
+  products: Product[];
+  readiness: StorePreviewReadiness;
+  isPreviewMode: boolean;
+}
+
+export type InboxSenderType = 'bizx' | 'support' | 'promo' | 'user';
+export type InboxBadgeType = 'bizx' | 'support' | 'promo' | null;
+export type InboxMessageRole = 'system_bizx' | 'support_staff' | 'promo_business' | 'recipient';
+
+export interface InboxThreadItem {
+  id: string;
+  userId: string;
+  senderType: InboxSenderType;
+  senderStoreId: string | null;
+  senderName: string;
+  senderAvatarUrl: string | null;
+  badgeType: InboxBadgeType;
+  subject: string;
+  canReply: boolean;
+  relatedStoreId: string | null;
+  lastMessagePreview: string | null;
+  lastMessageAt: string;
+  unreadCount: number;
+  createdAt: string;
+}
+
+export interface InboxMessageItem {
+  id: string;
+  threadId: string;
+  senderUserId: string | null;
+  senderRole: InboxMessageRole;
+  senderName: string;
+  body: string | null;
+  attachments: OrderMessageAttachmentDto[];
+  readByRecipientAt: string | null;
+  readByStaffAt: string | null;
+  createdAt: string;
+}
+
+export interface InboxUnreadSummary {
+  totalUnreadMessages: number;
+  unreadThreadsCount: number;
+}
+
+export const sendInboxMessageDtoSchema = z
+  .object({
+    body: z.string().max(4000).optional(),
+    attachments: z.array(orderMessageAttachmentSchema).max(6).default([]).optional()
+  })
+  .refine(
+    (v) => Boolean((v.body && v.body.trim().length > 0) || (v.attachments && v.attachments.length > 0)),
+    { message: 'Повідомлення не може бути порожнім' }
+  );
+export type SendInboxMessageDto = z.infer<typeof sendInboxMessageDtoSchema>;
+
+export const createSupportThreadDtoSchema = z.object({
+  subject: z.string().trim().min(3, 'Вкажіть тему звернення').max(200),
+  body: z.string().trim().min(5, 'Опишіть ваше питання (мін. 5 символів)').max(4000)
+});
+export type CreateSupportThreadDto = z.infer<typeof createSupportThreadDtoSchema>;
+
+export const issueStoreStrikeDtoSchema = z.object({
+  reason: z.string().trim().min(5, 'Вкажіть причину видачі страйку (мін. 5 символів)').max(1500),
+  /** Кількість днів блокування при досягненні 3-го страйку (null = до ручного зняття) */
+  suspensionDays: z.number().int().min(1).max(3650).nullable().optional()
+});
+export type IssueStoreStrikeDto = z.infer<typeof issueStoreStrikeDtoSchema>;
+
+export const updatePlatformUserStatusDtoSchema = z.object({
+  status: z.enum(['active', 'suspended', 'archived']),
+  /** Кількість днів блокування (null = назавжди / до ручного розблокування) */
+  suspensionDays: z.number().int().min(1).max(3650).nullable().optional(),
+  suspensionReason: z.string().trim().max(1500).nullable().optional()
+});
+export type UpdatePlatformUserStatusDto = z.infer<typeof updatePlatformUserStatusDtoSchema>;
+
+export const updatePlatformUserSubscriptionDtoSchema = z.object({
+  subscriptionTier: subscriptionTierSchema,
+  subscriptionStatus: z.enum(['none', 'active', 'expired', 'cancelled']),
+  subscriptionExpiresAt: z.string().datetime().nullable().optional(),
+  note: z.string().trim().max(1000).optional()
+});
+export type UpdatePlatformUserSubscriptionDto = z.infer<
+  typeof updatePlatformUserSubscriptionDtoSchema
+>;
+
+/**
+ * ============================================================================
+ * Маркетингові підписки на заклади, розсилки (BizX + Бізнес), авто-знижки та підтримка
+ * ============================================================================
+ */
+
+export const marketingSubscriptionStatusSchema = z.enum(['subscribed', 'unsubscribed', 'none']);
+export type MarketingSubscriptionStatus = z.infer<typeof marketingSubscriptionStatusSchema>;
+
+export const updateStoreMarketingSubscriptionDtoSchema = z.object({
+  subscribed: z.boolean(),
+  source: z
+    .enum(['storefront_button', 'inbox_unsubscribe', 'checkout_opt_in'])
+    .default('storefront_button')
+    .optional()
+});
+export type UpdateStoreMarketingSubscriptionDto = z.infer<
+  typeof updateStoreMarketingSubscriptionDtoSchema
+>;
+
+export interface StoreMarketingSubscriptionState {
+  storeId: string;
+  subscribed: boolean;
+  status: MarketingSubscriptionStatus;
+  /** Чи вже показували/фіксували вибір на 1-му замовленні (щоб не нав'язувати повторно) */
+  promptShown: boolean;
+  hasOrderedBefore: boolean;
+  /** Чи показувати необов'язковий неотмічений чекбокс підписки на поточному checkout */
+  showCheckoutOptIn: boolean;
+  updatedAt: string | null;
+}
+
+export const broadcastCampaignTypeSchema = z.enum([
+  'technical',
+  'official',
+  'promo',
+  'auto_discount'
+]);
+export type BroadcastCampaignType = z.infer<typeof broadcastCampaignTypeSchema>;
+
+export const platformBroadcastAudienceSchema = z
+  .object({
+    kind: z.enum(['all', 'business_owners', 'tier', 'store_owner', 'user']),
+    tier: subscriptionTierSchema.optional(),
+    storeId: z.string().uuid().optional(),
+    userId: z.string().uuid().optional()
+  })
+  .refine(
+    (v) =>
+      (v.kind !== 'tier' || Boolean(v.tier)) &&
+      (v.kind !== 'store_owner' || Boolean(v.storeId)) &&
+      (v.kind !== 'user' || Boolean(v.userId)),
+    { message: 'Оберіть конкретну цільову аудиторію для вибраного типу' }
+  );
+export type PlatformBroadcastAudience = z.infer<typeof platformBroadcastAudienceSchema>;
+
+export const sendPlatformBroadcastDtoSchema = z.object({
+  type: z.enum(['technical', 'official']).default('technical'),
+  targetAudience: platformBroadcastAudienceSchema,
+  subject: z.string().trim().min(3, 'Вкажіть тему розсилки (мін. 3 символи)').max(200),
+  body: z.string().trim().min(5, 'Вкажіть текст повідомлення (мін. 5 символів)').max(4000),
+  attachmentUrl: safeMediaUrlSchema.nullable().optional()
+});
+export type SendPlatformBroadcastDto = z.infer<typeof sendPlatformBroadcastDtoSchema>;
+
+export const sendStoreBroadcastDtoSchema = z.object({
+  subject: z.string().trim().min(3, 'Вкажіть заголовок акції (мін. 3 символи)').max(200),
+  body: z.string().trim().min(5, 'Вкажіть текст акції (мін. 5 символів)').max(4000),
+  attachmentUrl: safeMediaUrlSchema.nullable().optional(),
+  relatedProductId: z.string().uuid().nullable().optional()
+});
+export type SendStoreBroadcastDto = z.infer<typeof sendStoreBroadcastDtoSchema>;
+
+export const updateStoreBroadcastSettingsDtoSchema = z.object({
+  autoDiscountBroadcastEnabled: z.boolean()
+});
+export type UpdateStoreBroadcastSettingsDto = z.infer<
+  typeof updateStoreBroadcastSettingsDtoSchema
+>;
+
+export interface BroadcastCampaignItem {
+  id: string;
+  scope: 'platform' | 'store';
+  storeId: string | null;
+  storeName?: string | null;
+  createdByUserId: string | null;
+  createdByName?: string | null;
+  createdByEmail?: string | null;
+  type: BroadcastCampaignType;
+  targetAudience: {
+    kind: string;
+    tier?: string;
+    userId?: string;
+    storeId?: string;
+  };
+  subject: string;
+  body: string;
+  attachmentUrl: string | null;
+  relatedProductId: string | null;
+  relatedProductName?: string | null;
+  recipientsCount: number;
+  createdAt: string;
+}
+
+export interface StoreBroadcastSummary {
+  storeId: string;
+  storeName: string;
+  storeStatus: string;
+  ownerTier: SubscriptionTier;
+  subscribersCount: number;
+  checkoutSubscribersCount: number;
+  storefrontSubscribersCount: number;
+  unsubscribedCount: number;
+  dailyLimit: number;
+  usedToday: number;
+  remainingToday: number;
+  autoDiscountBroadcastEnabled: boolean;
+  campaigns: BroadcastCampaignItem[];
+}
+
+export interface PlatformBroadcastAudienceCounts {
+  allUsers: number;
+  businessOwners: number;
+  byTier: Record<SubscriptionTier, number>;
+}
+
+export interface PlatformBroadcastSummary {
+  audienceCounts: PlatformBroadcastAudienceCounts;
+  campaigns: BroadcastCampaignItem[];
+}
+
+export interface PlatformSupportThreadItem extends InboxThreadItem {
+  userName: string | null;
+  userEmail: string | null;
+  userPhone: string | null;
+  userAvatarUrl: string | null;
+  unreadByStaffCount: number;
+  messagesCount: number;
+}
+
+export interface PlatformSupportUnreadSummary {
+  unreadThreadsCount: number;
+  unreadMessagesCount: number;
+  totalThreadsCount: number;
 }

@@ -1,39 +1,57 @@
 'use client';
 
-import { AuthCard, LanguageSelector, PhoneInput } from '@bizx/ui';
+import {
+  AuthCard,
+  LanguageSelector,
+  PhoneInput,
+  Modal,
+  ConfirmModal,
+  CountBadge,
+  AlertBanner,
+  Button
+} from '@bizx/ui';
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { api } from '../lib/api';
 import { SiteHeader } from '../components/SiteHeader';
+import { AccountInbox } from './components/AccountInbox';
+import { AccountOrders } from './components/AccountOrders';
+import { AccountBusinesses } from './components/AccountBusinesses';
+import { AccountSubscriptions } from './components/AccountSubscriptions';
 import { useTranslation } from '../hooks/useTranslation';
-import { translateApiError, type SupportedLocale } from '@bizx/utils';
-import type { UserProfile, Store, SubscriptionPlan, UserSubscriptionDetails, SubscriptionTier } from '@bizx/common-types';
+import { translateApiError, getInitials, type SupportedLocale } from '@bizx/utils';
+import type {
+  UserProfile,
+  Store,
+  SubscriptionPlan,
+  UserSubscriptionDetails,
+  SubscriptionTier
+} from '@bizx/common-types';
 import {
   User,
   Shield,
   Building2,
-  Bell,
-  Plug,
   Lock,
   CheckCircle2,
   ExternalLink,
   Save,
-  Key,
   LogOut,
   AlertCircle,
   CreditCard,
   Store as StoreIcon,
-  X
+  Mail,
+  ShoppingBag
 } from 'lucide-react';
 
-type AccountTab = 'profile' | 'businesses' | 'subscriptions' | 'security' | 'privacy' | 'integrations';
+type AccountTab = 'profile' | 'orders' | 'inbox' | 'businesses' | 'subscriptions' | 'security';
 
 export default function AccountPage() {
   const { t, locale, setLocale } = useTranslation();
   const [user, setUser] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<AccountTab>('profile');
+  const [inboxUnreadCount, setInboxUnreadCount] = useState(0);
   const [languageNotice, setLanguageNotice] = useState<string | null>(null);
 
   const handleLanguageChange = async (newLocale: SupportedLocale) => {
@@ -62,17 +80,9 @@ export default function AccountPage() {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [passwordNotice, setPasswordNotice] = useState<string | null>(null);
-
-  // Privacy toggles
-  const [emailOrders, setEmailOrders] = useState(true);
-  const [emailMarketing, setEmailMarketing] = useState(false);
-  const [smsDelivery, setSmsDelivery] = useState(true);
-  const [publicProfile, setPublicProfile] = useState(true);
-
-  // Webhook State
-  const [webhookUrl, setWebhookUrl] = useState('https://crm.mybusiness.ua/api/webhooks/bizx');
-  const [apiKeyVisible, setApiKeyVisible] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
 
   // Stores
   const [myStores, setMyStores] = useState<Store[]>([]);
@@ -153,11 +163,24 @@ export default function AccountPage() {
   };
 
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const tabParam = new URLSearchParams(window.location.search).get('tab');
+      if (
+        tabParam &&
+        ['profile', 'orders', 'inbox', 'businesses', 'subscriptions', 'security'].includes(
+          tabParam
+        )
+      ) {
+        setActiveTab(tabParam as AccountTab);
+      }
+    }
+
     loadData();
 
     const handleUnauthorized = () => {
       setUser(null);
       setMyStores([]);
+      setInboxUnreadCount(0);
     };
 
     window.addEventListener('bizx:unauthorized', handleUnauthorized);
@@ -165,6 +188,26 @@ export default function AccountPage() {
       window.removeEventListener('bizx:unauthorized', handleUnauthorized);
     };
   }, []);
+
+  useEffect(() => {
+    if (!user) {
+      setInboxUnreadCount(0);
+      return;
+    }
+    const fetchInboxCount = () => {
+      api.inbox
+        .getUnreadSummary()
+        .then((res) => {
+          if (res.success && res.data) {
+            setInboxUnreadCount(res.data.totalUnreadMessages || 0);
+          }
+        })
+        .catch(() => {});
+    };
+    fetchInboxCount();
+    const timer = window.setInterval(fetchInboxCount, 15000);
+    return () => window.clearInterval(timer);
+  }, [user]);
 
   const handleAvatarFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -211,19 +254,49 @@ export default function AccountPage() {
     }
   };
 
-  const handlePasswordSubmit = (e: React.FormEvent) => {
+  const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (newPassword !== confirmPassword) {
-      setPasswordNotice(
-        locale === 'en' ? 'New password and confirmation do not match' : 'Новий пароль та підтвердження не співпадають'
+    setPasswordNotice(null);
+    setPasswordError(null);
+    if (newPassword.length < 6) {
+      setPasswordError(
+        locale === 'en'
+          ? 'New password must be at least 6 characters'
+          : 'Новий пароль має містити щонайменше 6 символів'
       );
       return;
     }
-    setPasswordNotice(locale === 'en' ? 'Password updated successfully' : 'Пароль успішно оновлено');
-    setCurrentPassword('');
-    setNewPassword('');
-    setConfirmPassword('');
-    setTimeout(() => setPasswordNotice(null), 3000);
+    if (newPassword !== confirmPassword) {
+      setPasswordError(
+        locale === 'en'
+          ? 'New password and confirmation do not match'
+          : 'Новий пароль та підтвердження не співпадають'
+      );
+      return;
+    }
+    setIsChangingPassword(true);
+    try {
+      const res = await api.auth.changePassword({ currentPassword, newPassword });
+      if (res.success) {
+        setPasswordNotice(
+          locale === 'en'
+            ? 'Password updated successfully! Other active sessions have been signed out.'
+            : 'Пароль успішно оновлено! Інші активні сесії завершено.'
+        );
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
+      }
+    } catch (err: unknown) {
+      const errObj = err as { data?: { message?: string }; message?: string };
+      setPasswordError(
+        errObj?.data?.message ||
+          errObj?.message ||
+          (locale === 'en' ? 'Failed to update password' : 'Не вдалося змінити пароль')
+      );
+    } finally {
+      setIsChangingPassword(false);
+    }
   };
 
   const handleLogout = async () => {
@@ -267,7 +340,11 @@ export default function AccountPage() {
         await loadData();
         return;
       }
-      setCreateStoreError('Не вдалося зареєструвати бізнес. Перевірте унікальність slug.');
+      setCreateStoreError(
+        locale === 'en'
+          ? 'Failed to create store. Please choose a different page URL.'
+          : 'Не вдалося створити заклад. Перевірте унікальність адреси сторінки.'
+      );
     } catch (err: unknown) {
       const errObj = err as { data?: { message?: string }; message?: string };
       setCreateStoreError(errObj.data?.message || errObj.message || 'Помилка створення бізнесу');
@@ -346,26 +423,27 @@ export default function AccountPage() {
     }
   };
 
-  const getInitials = (val?: string) => {
-    if (!val) return 'U';
-    const parts = val.trim().split(/\s+/);
-    if (parts.length >= 2) {
-      return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
-    }
-    return val.slice(0, 2).toUpperCase();
-  };
+  const isBusinessUser = Boolean(user?.hasStoreAccess || user?.isBusinessOwner || myStores.length > 0);
 
-  const isBusinessUser = user?.role === 'business_owner' || myStores.length > 0;
-
-  const isPlatformStaff = user?.role === 'admin' || user?.systemRole === 'platform_admin';
+  const isPlatformStaff = Boolean(user?.isPlatformStaff);
 
   const menuItems = [
     { id: 'profile' as const, label: t('account.profileTab'), desc: t('account.profileTabDesc'), icon: User },
+    {
+      id: 'orders' as const,
+      label: locale === 'en' ? 'My Orders' : 'Мої замовлення',
+      desc: locale === 'en' ? 'Purchases across all stores' : 'Покупки в усіх закладах',
+      icon: ShoppingBag
+    },
+    {
+      id: 'inbox' as const,
+      label: locale === 'en' ? 'Inbox' : 'Пошта',
+      desc: locale === 'en' ? 'BizX notices, support & ads' : 'Листи BizX, підтримка та реклама',
+      icon: Mail
+    },
     { id: 'businesses' as const, label: t('account.businessesTab'), desc: t('account.businessesTabDesc'), icon: Building2 },
     { id: 'subscriptions' as const, label: t('account.subscriptionsTab'), desc: t('account.subscriptionsTabDesc'), icon: CreditCard },
-    { id: 'security' as const, label: t('account.securityTab'), desc: t('account.securityTabDesc'), icon: Shield },
-    { id: 'privacy' as const, label: t('account.privacyTab'), desc: t('account.privacyTabDesc'), icon: Bell },
-    { id: 'integrations' as const, label: t('account.integrationsTab'), desc: t('account.integrationsTabDesc'), icon: Plug }
+    { id: 'security' as const, label: t('account.securityTab'), desc: t('account.securityTabDesc'), icon: Shield }
   ];
 
   return (
@@ -409,8 +487,7 @@ export default function AccountPage() {
                       name: data.name || '',
                       email: data.email,
                       phone: data.phone || undefined,
-                      password: data.password,
-                      role: 'client'
+                      password: data.password
                     });
                     if (res.success && res.data) {
                       await loadData();
@@ -508,6 +585,9 @@ export default function AccountPage() {
                           </div>
                         </div>
                       </div>
+                      {item.id === 'inbox' && (
+                        <CountBadge count={inboxUnreadCount} tone="blue" inverted={isActive} />
+                      )}
                       {showBusinessAlert && (
                         <span className="shrink-0 px-1.5 py-0.5 rounded-full text-[10px] font-black bg-amber-500 text-white">
                           !
@@ -559,6 +639,14 @@ export default function AccountPage() {
 
             {/* Right Main Content Panel */}
             <section className="md:col-span-8 bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
+              {/* Tab: My Orders */}
+              {activeTab === 'orders' && <AccountOrders locale={locale} />}
+
+              {/* Tab: Inbox */}
+              {activeTab === 'inbox' && (
+                <AccountInbox locale={locale} onUnreadChanged={setInboxUnreadCount} />
+              )}
+
               {/* Tab: Profile */}
               {activeTab === 'profile' && (
                 <div className="space-y-6">
@@ -616,8 +704,8 @@ export default function AccountPage() {
                         </label>
                         <div className="text-[11px] text-slate-400 mt-1">
                           {locale === 'en'
-                            ? 'JPG, PNG, WebP and SVG formats supported'
-                            : 'Підтримуються формати JPG, PNG, WebP та SVG'}
+                            ? 'JPG, PNG and WebP formats supported'
+                            : 'Підтримуються формати JPG, PNG та WebP'}
                         </div>
                       </div>
                     </div>
@@ -700,327 +788,32 @@ export default function AccountPage() {
 
               {/* Tab: Businesses */}
               {activeTab === 'businesses' && (
-                <div className="space-y-6">
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-100 pb-4">
-                    <div>
-                      <h2 className="text-lg font-black text-slate-900">{t('account.myStoresTitle')}</h2>
-                      <p className="text-xs text-slate-500 mt-0.5">
-                        {t('account.businessesTabDesc')}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowCreateStoreModal(true);
-                        setCreateStoreError(null);
-                      }}
-                      className="self-start sm:self-auto inline-flex items-center gap-1.5 px-3 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold transition-colors shadow-sm"
-                    >
-                      <StoreIcon className="w-4 h-4 shrink-0" />
-                      <span>{t('account.createStore')}</span>
-                    </button>
-                  </div>
-
-                  {moderationNotice && (
-                    <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-800 flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4 text-blue-600 shrink-0" />
-                      <span>{moderationNotice}</span>
-                    </div>
-                  )}
-
-                  {(subDetails?.needsStoreSelection || subDetails?.hasExceededStoreLimit) && (
-                    <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl space-y-1.5 text-xs text-amber-900">
-                      <div className="flex items-center gap-2 font-bold text-amber-950">
-                        <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-                        <span>
-                          {locale === 'en'
-                            ? `Action required: select up to ${subDetails.maxAllowedStores} store(s) for your current plan`
-                            : `Потрібна дія: оберіть до ${subDetails.maxAllowedStores} заклад(ів) для вашого поточного тарифу`}
-                        </span>
-                      </div>
-                      <p className="text-[11px] leading-relaxed">
-                        {locale === 'en'
-                          ? 'Your stores were temporarily paused after a plan downgrade. Submit the stores you want to keep active for BizX review, or upgrade your subscription.'
-                          : 'Через пониження тарифу всі заклади було тимчасово призупинено. Оберіть заклади в межах ліміту та відправте їх на перевірку в BizX, або підвищте тариф.'}
-                      </p>
-                    </div>
-                  )}
-
-                  {myStores.length === 0 ? (
-                    <div className="p-8 text-center border border-dashed border-slate-200 rounded-xl space-y-3">
-                      <Building2 className="w-8 h-8 text-slate-400 mx-auto" />
-                      <div className="text-xs font-bold text-slate-800">
-                        {t('account.noStoresYet')}
-                      </div>
-                      <p className="text-[11px] text-slate-500 max-w-sm mx-auto">
-                        {t('account.createFirstStoreHint')}
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowCreateStoreModal(true);
-                          setCreateStoreError(null);
-                        }}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 text-white rounded-lg text-xs font-bold hover:bg-slate-800 transition-colors"
-                      >
-                        <StoreIcon className="w-4 h-4 shrink-0" />
-                        <span>{t('account.createStore')}</span>
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {myStores.map((st) => {
-                        const isDraft = st.status === 'draft';
-                        const isPending = st.status === 'pending';
-                        const isActive = st.status === 'active';
-
-                        return (
-                          <div
-                            key={st.id}
-                            className="p-4 border border-slate-200 rounded-xl bg-slate-50/50 space-y-3"
-                          >
-                            <div className="flex items-center justify-between">
-                              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                                Торгова точка
-                              </span>
-                              {isDraft && (
-                                <span className="text-[10px] font-bold text-amber-800 bg-amber-100 border border-amber-200 px-2 py-0.5 rounded uppercase">
-                                  В розробці
-                                </span>
-                              )}
-                              {isPending && (
-                                <span className="text-[10px] font-bold text-blue-800 bg-blue-100 border border-blue-200 px-2 py-0.5 rounded uppercase">
-                                  На перевірці
-                                </span>
-                              )}
-                              {isActive && (
-                                <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded uppercase">
-                                  Активний
-                                </span>
-                              )}
-                              {!isDraft && !isPending && !isActive && (
-                                <span className="text-[10px] font-bold text-slate-700 bg-slate-200 px-2 py-0.5 rounded uppercase">
-                                  {st.status}
-                                </span>
-                              )}
-                            </div>
-
-                            <div>
-                              <div className="text-sm font-bold text-slate-900">{st.name}</div>
-                              <div className="text-[11px] text-slate-500 font-mono">/{st.slug}</div>
-                              {st.description && (
-                                <p className="text-xs text-slate-600 mt-1 line-clamp-2">
-                                  {st.description}
-                                </p>
-                              )}
-                            </div>
-
-                            {isDraft && (
-                              <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-lg space-y-2">
-                                <div className="text-[11px] text-amber-900 leading-tight">
-                                  Заклад у статусі чернетки. Надішліть його на перевірку адміністраторам BizX, коли будете готові.
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={() => handleSubmitForModeration(st.id)}
-                                  className="w-full py-1.5 px-2 bg-amber-600 hover:bg-amber-700 text-white rounded text-xs font-bold transition-colors"
-                                >
-                                  Відправити на модерацію в BizX
-                                </button>
-                              </div>
-                            )}
-
-                            {isPending && (
-                              <div className="p-2.5 bg-blue-50 border border-blue-200 rounded-lg text-[11px] text-blue-900 leading-tight">
-                                Заявку надіслано на розгляд модераторам BizX. Заклад очікує підтвердження.
-                              </div>
-                            )}
-
-                            <div className="pt-2 border-t border-slate-200 flex items-center justify-between gap-2">
-                              <span className="text-[11px] font-semibold text-slate-700">
-                                Власник
-                              </span>
-                              <div className="flex items-center gap-2">
-                                {st.status === 'active' && (
-                                  <button
-                                    type="button"
-                                    onClick={() => setStoreToSuspend(st)}
-                                    className="text-[11px] font-bold text-slate-600 hover:text-red-600 transition-colors"
-                                  >
-                                    {t('subscriptions.suspendStore')}
-                                  </button>
-                                )}
-                                {st.status === 'suspended' && (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleToggleStoreStatus(st.id, st.status)}
-                                    className="text-[11px] font-bold text-emerald-700 hover:underline transition-colors"
-                                  >
-                                    {locale === 'en' ? 'Submit for BizX review' : 'На перевірку в BizX'}
-                                  </button>
-                                )}
-                                <a
-                                  href="http://localhost:3102"
-                                  className="text-xs font-bold text-slate-900 hover:underline inline-flex items-center gap-1"
-                                >
-                                  <span>Панель</span>
-                                  <ExternalLink className="w-3 h-3" />
-                                </a>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
+                <AccountBusinesses
+                  locale={locale}
+                  t={t}
+                  myStores={myStores}
+                  subDetails={subDetails}
+                  moderationNotice={moderationNotice}
+                  onOpenCreateStoreModal={() => {
+                    setShowCreateStoreModal(true);
+                    setCreateStoreError(null);
+                  }}
+                  onSubmitForModeration={handleSubmitForModeration}
+                  onSelectStoreToSuspend={setStoreToSuspend}
+                  onToggleStoreStatus={handleToggleStoreStatus}
+                />
               )}
 
-                            {/* Tab: Subscriptions */}
+              {/* Tab: Subscriptions */}
               {activeTab === 'subscriptions' && (
-                <div className="space-y-6">
-                  <div className="border-b border-slate-100 pb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                    <div>
-                      <h2 className="text-lg font-black text-slate-900">{t('account.subscriptionsTab')}</h2>
-                      <p className="text-xs text-slate-500 mt-0.5">
-                        {t('account.subscriptionsTabDesc')}
-                      </p>
-                    </div>
-                    <Link
-                      href="/pricing"
-                      className="text-xs font-bold text-slate-900 hover:underline inline-flex items-center gap-1 self-start sm:self-auto"
-                    >
-                      <span>{t('landing.ctaPricing')}</span>
-                      <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
-                    </Link>
-                  </div>
-
-                  {subNotice && (
-                    <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-800 flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                      <span>{subNotice}</span>
-                    </div>
-                  )}
-
-                  {/* Current Active Plan Card */}
-                  <div className="p-5 bg-slate-900 text-white rounded-2xl shadow-sm space-y-4">
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                      <div>
-                        <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                          Поточний статус облікового запису
-                        </div>
-                        <div className="text-2xl font-black mt-0.5">
-                          {user?.subscriptionTier === 'free' && 'Базовий клієнт (Free)'}
-                          {user?.subscriptionTier === 'client_premium' && 'BizX Premium'}
-                          {user?.subscriptionTier === 'business_starter' && 'BizX Business Starter'}
-                          {user?.subscriptionTier === 'business_pro' && 'BizX Business Pro'}
-                          {user?.subscriptionTier === 'business_enterprise' && 'BizX Business Enterprise'}
-                          {!user?.subscriptionTier && 'Базовий'}
-                        </div>
-                      </div>
-
-                      <div className="self-start sm:self-auto px-3 py-1.5 rounded-full text-xs font-bold bg-white/10 text-white border border-white/20">
-                        {user?.subscriptionStatus === 'active' && '🟢 Активна підписка'}
-                        {user?.subscriptionStatus === 'expired' && '🔴 Термін дії минув'}
-                        {user?.subscriptionStatus === 'cancelled' && '🟡 Скасована'}
-                        {(!user?.subscriptionStatus || user?.subscriptionStatus === 'none') && '⚪️ Безкоштовний план'}
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3 border-t border-slate-800 text-xs">
-                      <div className="p-3 rounded-xl bg-slate-800/60 border border-slate-700/60">
-                        <div className="text-[10px] font-bold text-slate-400 uppercase">Днів активності</div>
-                        <div className="text-base font-black mt-0.5 text-white">
-                          {user?.subscriptionDaysLeft ?? 0} днів
-                        </div>
-                      </div>
-
-                      <div className="p-3 rounded-xl bg-slate-800/60 border border-slate-700/60">
-                        <div className="text-[10px] font-bold text-slate-400 uppercase">Діє до</div>
-                        <div className="text-xs font-bold mt-1 text-slate-200">
-                          {user?.subscriptionExpiresAt
-                            ? new Date(user.subscriptionExpiresAt).toLocaleDateString('uk-UA')
-                            : 'Не обмежено'}
-                        </div>
-                      </div>
-
-                      <div className="p-3 rounded-xl bg-slate-800/60 border border-slate-700/60">
-                        <div className="text-[10px] font-bold text-slate-400 uppercase">Ліміт закладів</div>
-                        <div className="text-base font-black mt-0.5 text-white">
-                          {subDetails?.activeStoresCount ?? 0} з {user?.maxAllowedStores ?? 0} бізнесів
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Warning: Exceeded Store Limit */}
-                  {subDetails?.hasExceededStoreLimit && (
-                    <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl space-y-2 text-xs text-amber-900">
-                      <div className="flex items-center gap-2 font-bold text-amber-950">
-                        <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-                        <span>Увага: перевищено ліміт активних закладів для вашого тарифу</span>
-                      </div>
-                      <p className="leading-relaxed">
-                        Ви маєте <strong>{subDetails.activeStoresCount}</strong> активних закладів, тоді як поточний тариф дозволяє максимум <strong>{subDetails.maxAllowedStores}</strong>. Будь ласка, перейдіть у вкладку <strong>«Мої бізнеси та ролі»</strong> та призупиніть зайві заклади, або підвищіть тарифний план нижче.
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Upgrade / Change Plan Cards */}
-                  <div className="space-y-3 pt-2">
-                    <h3 className="text-sm font-bold text-slate-900">Змінити тарифний план</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                      {allPlans
-                        .filter((p) => p.target === 'business')
-                        .map((plan) => {
-                          const isCurrent = user?.subscriptionTier === plan.id;
-                          return (
-                            <div
-                              key={plan.id}
-                              className={`p-4 border rounded-xl flex flex-col justify-between space-y-3 ${
-                                isCurrent
-                                  ? 'border-slate-900 bg-slate-50/70 ring-1 ring-slate-900'
-                                  : 'border-slate-200 bg-white hover:border-slate-300'
-                              }`}
-                            >
-                              <div>
-                                <div className="flex items-center justify-between">
-                                  <span className="text-xs font-bold text-slate-900">{plan.name}</span>
-                                  {plan.badge && (
-                                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-900 text-white uppercase">
-                                      {plan.badge}
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="text-lg font-black text-slate-900 mt-2">
-                                  {plan.priceUah} ₴ <span className="text-[10px] text-slate-400 font-normal">/ міс</span>
-                                </div>
-                                <div className="text-[11px] font-semibold text-slate-600 mt-1">
-                                  Ліміт: {plan.maxStores} {plan.maxStores === 1 ? 'заклад' : 'заклади'}
-                                </div>
-                              </div>
-
-                              <div>
-                                {isCurrent ? (
-                                  <div className="w-full py-1.5 text-center text-xs font-bold text-slate-500 bg-slate-200/60 rounded-lg">
-                                    Поточний план
-                                  </div>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    onClick={() => setSelectedPlanForUpgrade(plan)}
-                                    className="w-full py-2 px-3 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-lg transition-colors shadow-sm"
-                                  >
-                                    Перейти на цей план
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
-                    </div>
-                  </div>
-                </div>
+                <AccountSubscriptions
+                  t={t}
+                  user={user}
+                  subDetails={subDetails}
+                  allPlans={allPlans}
+                  subNotice={subNotice}
+                  onSelectPlanForUpgrade={setSelectedPlanForUpgrade}
+                />
               )}
 
               {activeTab === 'security' && (
@@ -1032,6 +825,9 @@ export default function AccountPage() {
                     </p>
                   </div>
 
+                  {passwordError && (
+                    <AlertBanner tone="danger">{passwordError}</AlertBanner>
+                  )}
                   {passwordNotice && (
                     <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-800 flex items-center gap-2">
                       <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
@@ -1041,7 +837,9 @@ export default function AccountPage() {
 
                   <form onSubmit={handlePasswordSubmit} className="space-y-4 max-w-md">
                     <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-700">Поточний пароль</label>
+                      <label className="text-xs font-bold text-slate-700">
+                        {locale === 'en' ? 'Current password' : 'Поточний пароль'}
+                      </label>
                       <input
                         type="password"
                         value={currentPassword}
@@ -1053,12 +851,15 @@ export default function AccountPage() {
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-700">Новий пароль</label>
+                      <label className="text-xs font-bold text-slate-700">
+                        {locale === 'en' ? 'New password' : 'Новий пароль'}
+                      </label>
                       <input
                         type="password"
                         value={newPassword}
                         onChange={(e) => setNewPassword(e.target.value)}
                         placeholder="••••••••"
+                        minLength={6}
                         className="w-full text-xs px-3 py-2 bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-slate-900"
                         required
                       />
@@ -1066,13 +867,14 @@ export default function AccountPage() {
 
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-slate-700">
-                        Підтвердження нового пароля
+                        {locale === 'en' ? 'Confirm new password' : 'Підтвердження нового пароля'}
                       </label>
                       <input
                         type="password"
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
                         placeholder="••••••••"
+                        minLength={6}
                         className="w-full text-xs px-3 py-2 bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-slate-900"
                         required
                       />
@@ -1081,407 +883,198 @@ export default function AccountPage() {
                     <div className="pt-2">
                       <button
                         type="submit"
-                        className="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-lg text-xs font-bold hover:bg-slate-800 transition-colors"
+                        disabled={isChangingPassword}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-lg text-xs font-bold hover:bg-slate-800 transition-colors disabled:opacity-50"
                       >
                         <Lock className="w-4 h-4" />
-                        <span>Оновити пароль</span>
+                        <span>
+                          {isChangingPassword
+                            ? t('common.saving')
+                            : locale === 'en'
+                              ? 'Update password'
+                              : 'Оновити пароль'}
+                        </span>
                       </button>
                     </div>
                   </form>
-                </div>
-              )}
-
-              {/* Tab: Privacy */}
-              {activeTab === 'privacy' && (
-                <div className="space-y-6">
-                  <div className="border-b border-slate-100 pb-4">
-                    <h2 className="text-lg font-black text-slate-900">
-                      {t('account.privacyTab')}
-                    </h2>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      {t('account.privacyTabDesc')}
-                    </p>
-                  </div>
-
-                  <div className="space-y-3">
-                    <label className="flex items-start gap-3 p-3 border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={emailOrders}
-                        onChange={(e) => setEmailOrders(e.target.checked)}
-                        className="mt-0.5 rounded border-slate-300 text-slate-900 focus:ring-slate-900"
-                      />
-                      <div>
-                        <div className="text-xs font-bold text-slate-800">
-                          Email сповіщення про зміну статусів замовлень
-                        </div>
-                        <div className="text-[11px] text-slate-400">
-                          Листи при надходженні замовлення, підтвердженні та завершенні доставки
-                        </div>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start gap-3 p-3 border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={smsDelivery}
-                        onChange={(e) => setSmsDelivery(e.target.checked)}
-                        className="mt-0.5 rounded border-slate-300 text-slate-900 focus:ring-slate-900"
-                      />
-                      <div>
-                        <div className="text-xs font-bold text-slate-800">
-                          SMS / Viber інформування
-                        </div>
-                        <div className="text-[11px] text-slate-400">
-                          Термінові повідомлення про оплати та прибуття курʼєра
-                        </div>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start gap-3 p-3 border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={publicProfile}
-                        onChange={(e) => setPublicProfile(e.target.checked)}
-                        className="mt-0.5 rounded border-slate-300 text-slate-900 focus:ring-slate-900"
-                      />
-                      <div>
-                        <div className="text-xs font-bold text-slate-800">
-                          Видимість контактів у каталозі
-                        </div>
-                        <div className="text-[11px] text-slate-400">
-                          Дозволити клієнтам бачити робочий номер телефону на сторінці магазину
-                        </div>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start gap-3 p-3 border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={emailMarketing}
-                        onChange={(e) => setEmailMarketing(e.target.checked)}
-                        className="mt-0.5 rounded border-slate-300 text-slate-900 focus:ring-slate-900"
-                      />
-                      <div>
-                        <div className="text-xs font-bold text-slate-800">
-                          Новини та дайджести платформи BizX
-                        </div>
-                        <div className="text-[11px] text-slate-400">
-                          Оновлення функціоналу, акції та корисні матеріали для розвитку бізнесу
-                        </div>
-                      </div>
-                    </label>
-                  </div>
-                </div>
-              )}
-
-              {/* Tab: Integrations */}
-              {activeTab === 'integrations' && (
-                <div className="space-y-6">
-                  <div className="border-b border-slate-100 pb-4">
-                    <h2 className="text-lg font-black text-slate-900">{t('account.integrationsTab')}</h2>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      {t('account.integrationsTabDesc')}
-                    </p>
-                  </div>
-
-                  <div className="space-y-4">
-                    <div className="p-4 border border-slate-200 rounded-xl space-y-3">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Plug className="w-4 h-4 text-slate-700" />
-                          <h4 className="text-xs font-bold text-slate-900">
-                            Webhook URL подій магазину
-                          </h4>
-                        </div>
-                        <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded uppercase">
-                          Активно
-                        </span>
-                      </div>
-                      <input
-                        type="url"
-                        value={webhookUrl}
-                        onChange={(e) => setWebhookUrl(e.target.value)}
-                        className="w-full text-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg font-mono focus:outline-none focus:border-slate-900"
-                      />
-                      <p className="text-[11px] text-slate-400">
-                        BizX відправлятиме HTTP POST запити при зміні статусу кожного замовлення.
-                      </p>
-                    </div>
-
-                    <div className="p-4 border border-slate-200 rounded-xl space-y-3">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Key className="w-4 h-4 text-slate-700" />
-                          <h4 className="text-xs font-bold text-slate-900">
-                            Персональний API Token
-                          </h4>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setApiKeyVisible(!apiKeyVisible)}
-                          className="text-[11px] font-bold text-slate-600 hover:text-slate-900"
-                        >
-                          {apiKeyVisible ? 'Приховати' : 'Показати'}
-                        </button>
-                      </div>
-                      <div className="font-mono text-xs bg-slate-50 border border-slate-200 p-2.5 rounded-lg text-slate-700 select-all">
-                        {apiKeyVisible
-                          ? 'bizx_live_sec_89f3a92c4b01e74a88301d'
-                          : '••••••••••••••••••••••••••••••••••••••••'}
-                      </div>
-                    </div>
-                  </div>
                 </div>
               )}
             </section>
           </div>
         )}
 
-      {/* Modal: Create Business */}
-      {showCreateStoreModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
-          <div className="w-full max-w-lg bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden">
-            <div className="px-6 py-4 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="px-2 py-0.5 rounded bg-slate-900 text-white font-extrabold text-[11px] uppercase tracking-wider">
-                  BIZX BUSINESS
-                </span>
-                <span className="text-xs font-bold text-slate-700">Створення нового закладу</span>
+      {/* Modal: Create Business — Unified Light Modal */}
+      <Modal
+        isOpen={showCreateStoreModal}
+        onClose={() => setShowCreateStoreModal(false)}
+        size="lg"
+        icon={<StoreIcon className="w-4 h-4" />}
+        title="Створення нового закладу"
+        subtitle="BIZX BUSINESS"
+      >
+        <form onSubmit={handleCreateStore} className="space-y-4">
+          {createStoreError && <AlertBanner tone="danger">{createStoreError}</AlertBanner>}
+
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-slate-700">Назва закладу / бізнесу *</label>
+            <input
+              type="text"
+              required
+              value={newStoreName}
+              onChange={(e) => {
+                const val = e.target.value;
+                setNewStoreName(val);
+                if (!newStoreSlug || newStoreSlug === newStoreName.toLowerCase().replace(/[^a-z0-9]+/g, '-')) {
+                  setNewStoreSlug(val.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''));
+                }
+              }}
+              placeholder="Кав'ярня 'Аромат'"
+              className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:border-slate-900"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-slate-700">Адреса сторінки *</label>
+            <input
+              type="text"
+              required
+              pattern="[a-z0-9-]+"
+              value={newStoreSlug}
+              onChange={(e) => setNewStoreSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+              placeholder="aromat-cafe"
+              className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:border-slate-900 font-mono"
+            />
+            <p className="text-[10px] text-slate-400">Тільки малі латинські літери, цифри та дефіси</p>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-slate-700">Короткий опис</label>
+            <textarea
+              rows={2}
+              value={newStoreDesc}
+              onChange={(e) => setNewStoreDesc(e.target.value)}
+              placeholder="Свіжообсмажена кава, випічка та десерти"
+              className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:border-slate-900"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-slate-700">{t('account.storePhoneLabel')}</label>
+              <PhoneInput
+                value={newStorePhone}
+                onChange={setNewStorePhone}
+                locale={locale}
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-slate-700">Контактний Email</label>
+              <input
+                type="email"
+                value={newStoreEmail}
+                onChange={(e) => setNewStoreEmail(e.target.value)}
+                placeholder="contact@business.ua"
+                className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:border-slate-900"
+              />
+            </div>
+          </div>
+
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-[11px] text-slate-600">
+            Створений бізнес спочатку буде збережено в статусі чернетки <strong>«В розробці»</strong>. Ви зможете налаштувати каталог та відправити заклад на модерацію BizX у будь-який зручний момент.
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+            <Button variant="outline" onClick={() => setShowCreateStoreModal(false)}>
+              Скасувати
+            </Button>
+            <Button type="submit" variant="primary" disabled={isCreatingStore}>
+              {isCreatingStore ? 'Створення...' : 'Зареєструвати заклад'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Modal: Upgrade Subscription — Unified Light ConfirmModal */}
+      <ConfirmModal
+        isOpen={Boolean(selectedPlanForUpgrade)}
+        onClose={() => setSelectedPlanForUpgrade(null)}
+        onConfirm={handleConfirmSubscriptionChange}
+        nested={false}
+        tone="info"
+        icon={<CreditCard className="w-4 h-4" />}
+        title="Зміна тарифного плану"
+        subtitle="BIZX PAY"
+        confirmLabel="Підтвердити зміну тарифу"
+        cancelLabel="Скасувати"
+        confirmVariant="primary"
+        isLoading={isActivatingSub}
+      >
+        {selectedPlanForUpgrade && (
+          <>
+            <div className="border border-slate-200 rounded-xl p-4 bg-slate-50/50 space-y-2 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-slate-600">Новий тариф:</span>
+                <span className="font-black text-slate-900">{selectedPlanForUpgrade.name}</span>
               </div>
-              <button
-                type="button"
-                onClick={() => setShowCreateStoreModal(false)}
-                className="text-slate-400 hover:text-slate-700 text-sm font-bold p-1"
-              >
-                ✕
-              </button>
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-slate-600">Вартість:</span>
+                <span className="font-black text-slate-900">{selectedPlanForUpgrade.priceUah} ₴ / міс</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-slate-600">Термін:</span>
+                <span className="font-semibold text-slate-700">30 днів</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-slate-600">Ліміт закладів:</span>
+                <span className="font-semibold text-slate-700">До {selectedPlanForUpgrade.maxStores} закладів</span>
+              </div>
             </div>
 
-            <form onSubmit={handleCreateStore} className="p-6 space-y-4">
-              {createStoreError && (
-                <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg">
-                  {createStoreError}
-                </div>
+            <AlertBanner tone="info">
+              Підписку буде активовано одразу після підтвердження на 30 днів.
+            </AlertBanner>
+          </>
+        )}
+      </ConfirmModal>
+
+      {/* Modal: Confirm Suspend Store — Unified Light ConfirmModal */}
+      <ConfirmModal
+        isOpen={Boolean(storeToSuspend)}
+        onClose={() => setStoreToSuspend(null)}
+        onConfirm={handleConfirmSuspendStore}
+        nested={false}
+        tone="danger"
+        icon={<AlertCircle className="w-4 h-4" />}
+        title={locale === 'en' ? 'Suspend store?' : 'Призупинити роботу закладу?'}
+        subtitle={storeToSuspend?.name}
+        confirmLabel={t('subscriptions.suspendStore')}
+        cancelLabel={t('common.cancel')}
+        confirmVariant="destructive"
+        isLoading={isSuspendingStore}
+      >
+        {storeToSuspend && (
+          <>
+            <p className="leading-relaxed text-slate-700">
+              {locale === 'en' ? (
+                <>
+                  You are about to pause <strong>{storeToSuspend.name}</strong>. It will be
+                  immediately hidden from customers.
+                </>
+              ) : (
+                <>
+                  Ви збираєтесь призупинити роботу закладу <strong>«{storeToSuspend.name}»</strong>.
+                  Він буде миттєво прихований від покупців.
+                </>
               )}
-
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700">Назва закладу / бізнесу *</label>
-                <input
-                  type="text"
-                  required
-                  value={newStoreName}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setNewStoreName(val);
-                    if (!newStoreSlug || newStoreSlug === newStoreName.toLowerCase().replace(/[^a-z0-9]+/g, '-')) {
-                      setNewStoreSlug(val.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''));
-                    }
-                  }}
-                  placeholder="Кав'ярня 'Аромат'"
-                  className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:border-slate-900"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700">URL-ідентифікатор (Slug) *</label>
-                <input
-                  type="text"
-                  required
-                  pattern="[a-z0-9-]+"
-                  value={newStoreSlug}
-                  onChange={(e) => setNewStoreSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
-                  placeholder="aromat-cafe"
-                  className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:border-slate-900 font-mono"
-                />
-                <p className="text-[10px] text-slate-400">Тільки малі латинські літери, цифри та дефіси</p>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700">Короткий опис</label>
-                <textarea
-                  rows={2}
-                  value={newStoreDesc}
-                  onChange={(e) => setNewStoreDesc(e.target.value)}
-                  placeholder="Свіжообсмажена кава, випічка та десерти"
-                  className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:border-slate-900"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700">{t('account.storePhoneLabel')}</label>
-                  <PhoneInput
-                    value={newStorePhone}
-                    onChange={setNewStorePhone}
-                    locale={locale}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700">Контактний Email</label>
-                  <input
-                    type="email"
-                    value={newStoreEmail}
-                    onChange={(e) => setNewStoreEmail(e.target.value)}
-                    placeholder="contact@business.ua"
-                    className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:border-slate-900"
-                  />
-                </div>
-              </div>
-
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-[11px] text-slate-600">
-                Створений бізнес спочатку буде збережено в статусі чернетки <strong>«В розробці»</strong>. Ви зможете налаштувати каталог та відправити заклад на модерацію BizX у будь-який зручний момент.
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowCreateStoreModal(false)}
-                  className="px-3 py-2 border border-slate-200 text-xs font-semibold text-slate-700 rounded-lg hover:bg-slate-50"
-                >
-                  Скасувати
-                </button>
-                <button
-                  type="submit"
-                  disabled={isCreatingStore}
-                  className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-lg disabled:opacity-50 transition-colors shadow-sm"
-                >
-                  {isCreatingStore ? 'Створення...' : 'Зареєструвати заклад'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Modal: Upgrade Subscription */}
-      {selectedPlanForUpgrade && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
-          <div className="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden">
-            <div className="px-6 py-4 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="px-2 py-0.5 rounded bg-slate-900 text-white font-black text-[10px] tracking-wider uppercase">
-                  BIZX PAY
-                </span>
-                <span className="text-xs font-bold text-slate-700">Зміна тарифного плану</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSelectedPlanForUpgrade(null)}
-                className="text-slate-400 hover:text-slate-700 text-sm font-bold p-1"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="p-6 space-y-4">
-              <div className="border border-slate-200 rounded-xl p-4 bg-slate-50/50 space-y-2 text-xs">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-slate-600">Новий тариф:</span>
-                  <span className="font-black text-slate-900">{selectedPlanForUpgrade.name}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-slate-600">Вартість:</span>
-                  <span className="font-black text-slate-900">{selectedPlanForUpgrade.priceUah} ₴ / міс</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-slate-600">Термін:</span>
-                  <span className="font-semibold text-slate-700">30 днів (тестова активація)</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-slate-600">Ліміт закладів:</span>
-                  <span className="font-semibold text-slate-700">До {selectedPlanForUpgrade.maxStores} закладів</span>
-                </div>
-              </div>
-
-              <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-[11px] text-blue-900 leading-relaxed">
-                ℹ️ <strong>Тестова оплата:</strong> Справжні кошти не знімаються. Підписку буде миттєво активовано на 30 днів.
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setSelectedPlanForUpgrade(null)}
-                  className="px-3 py-2 border border-slate-200 text-xs font-semibold text-slate-700 rounded-lg hover:bg-slate-50"
-                >
-                  Скасувати
-                </button>
-                <button
-                  type="button"
-                  disabled={isActivatingSub}
-                  onClick={handleConfirmSubscriptionChange}
-                  className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-lg disabled:opacity-50 transition-colors shadow-sm"
-                >
-                  {isActivatingSub ? 'Активація...' : 'Підтвердити зміну тарифу'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal: Confirm Suspend Store */}
-      {storeToSuspend && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
-          <div className="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden">
-            <div className="px-6 py-4 bg-red-50 border-b border-red-100 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
-                <span className="text-xs font-bold text-red-900">
-                  {locale === 'en' ? 'Suspend store?' : 'Призупинити роботу закладу?'}
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setStoreToSuspend(null)}
-                className="text-red-400 hover:text-red-700 p-1"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <div className="p-6 space-y-4 text-xs text-slate-700">
-              <p className="leading-relaxed">
-                {locale === 'en' ? (
-                  <>
-                    You are about to pause <strong>{storeToSuspend.name}</strong>. It will be
-                    immediately hidden from customers.
-                  </>
-                ) : (
-                  <>
-                    Ви збираєтесь призупинити роботу закладу <strong>«{storeToSuspend.name}»</strong>.
-                    Він буде миттєво прихований від покупців.
-                  </>
-                )}
-              </p>
-              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-900 leading-relaxed">
-                <strong>{locale === 'en' ? 'Important:' : 'Важливо:'}</strong>{' '}
-                {locale === 'en'
-                  ? 'You cannot reactivate the store yourself. To turn it back on later, it must be submitted for BizX moderation review.'
-                  : 'Самостійно повернути заклад в активний стан неможливо — для повторного запуску заклад обов’язково проходитиме перевірку модераторами BizX.'}
-              </div>
-              <div className="flex items-center justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setStoreToSuspend(null)}
-                  className="px-3.5 py-2 border border-slate-200 rounded-lg font-semibold text-slate-700 hover:bg-slate-50"
-                >
-                  {t('common.cancel')}
-                </button>
-                <button
-                  type="button"
-                  disabled={isSuspendingStore}
-                  onClick={handleConfirmSuspendStore}
-                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold disabled:opacity-50 transition-colors"
-                >
-                  {isSuspendingStore
-                    ? t('common.saving')
-                    : t('subscriptions.suspendStore')}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+            </p>
+            <AlertBanner tone="warning" title={locale === 'en' ? 'Important' : 'Важливо'}>
+              {locale === 'en'
+                ? 'You cannot reactivate the store yourself. To turn it back on later, it must be submitted for BizX moderation review.'
+                : 'Самостійно повернути заклад в активний стан неможливо — для повторного запуску заклад обов’язково проходитиме перевірку модераторами BizX.'}
+            </AlertBanner>
+          </>
+        )}
+      </ConfirmModal>
 
       </main>
 

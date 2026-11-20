@@ -1,5 +1,4 @@
 import { pgTable, uuid, varchar, text, integer, boolean, timestamp } from 'drizzle-orm/pg-core';
-import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
 
 export const storeCategories = pgTable('store_categories', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -13,9 +12,6 @@ export const storeCategories = pgTable('store_categories', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull()
 });
-
-export const insertStoreCategorySchema = createInsertSchema(storeCategories);
-export const selectStoreCategorySchema = createSelectSchema(storeCategories);
 
 export type StoreCategoryRecord = typeof storeCategories.$inferSelect;
 export type NewStoreCategoryRecord = typeof storeCategories.$inferInsert;

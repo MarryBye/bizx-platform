@@ -66,7 +66,11 @@ export const LanguageSelector: React.FC<LanguageSelectorProps> = ({
   return (
     <div
       ref={containerRef}
-      className={cn('relative inline-block text-left', variant === 'full' && 'w-full', className)}
+      className={cn(
+        'relative inline-block text-left',
+        (variant === 'full' || variant === 'sidebar') && 'w-full',
+        className
+      )}
     >
       {variant === 'minimal' && (
         <button

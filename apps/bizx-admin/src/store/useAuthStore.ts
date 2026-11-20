@@ -17,7 +17,7 @@ interface AuthState {
 
 export function hasActiveBusinessSubscription(user: UserProfile | null): boolean {
   if (!user) return false;
-  if (user.role === 'admin' || user.systemRole === 'platform_admin') {
+  if (user.isPlatformStaff) {
     return true;
   }
   const isBizTier = ['business_starter', 'business_pro', 'business_enterprise'].includes(

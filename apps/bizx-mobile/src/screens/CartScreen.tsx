@@ -1,18 +1,25 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
-  TextInput,
-  Image,
-  ActivityIndicator
+  TextInput
 } from 'react-native';
 import { MaterialIcon } from '../components/MaterialIcon';
 import { SafeImage } from '../components/SafeImage';
+import { MobilePhoneInput } from '../components/MobilePhoneInput';
+import {
+  MobileButton,
+  MobileAlertBanner,
+  MobileEmptyState,
+  MobileSectionHeader
+} from '../components/MobilePrimitives';
 import { useCartStore } from '../store/useCartStore';
 import { useMobileAuthStore } from '../store/useMobileAuthStore';
 import { mobileApi } from '../lib/api';
+import { formatMoney } from '@bizx/utils';
+import type { StoreMarketingSubscriptionState } from '@bizx/common-types';
 
 interface CartScreenProps {
   onGoToStores?: () => void;
@@ -38,17 +45,35 @@ export const CartScreen: React.FC<CartScreenProps> = ({
   const [contactPhone, setContactPhone] = useState(user?.phone || '+380');
   const [deliveryAddress, setDeliveryAddress] = useState('м. Київ, Відділення Нової Пошти');
   const [notes, setNotes] = useState('');
+  const [marketingSub, setMarketingSub] = useState<StoreMarketingSubscriptionState | null>(null);
+  const [optInMarketing, setOptInMarketing] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    if (!storeId || !user) {
+      setMarketingSub(null);
+      setOptInMarketing(false);
+      return;
+    }
+    mobileApi.broadcasts
+      .getStoreMarketingSubscription(storeId)
+      .then((res) => {
+        if (active && res.success && res.data) {
+          setMarketingSub(res.data);
+          if (!res.data.showCheckoutOptIn) setOptInMarketing(false);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [storeId, user]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [createdOrderNumber, setCreatedOrderNumber] = useState<string | null>(null);
 
-  const formatPrice = (kopecks: number) => {
-    return (kopecks / 100).toLocaleString('uk-UA', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    });
-  };
+  const formatPrice = (kopecks: number) => formatMoney(kopecks, 'uk');
 
   const handleCheckout = async () => {
     if (!storeId || items.length === 0) return;
@@ -68,6 +93,7 @@ export const CartScreen: React.FC<CartScreenProps> = ({
         paymentMethod: 'card' as const,
         deliveryAddress: deliveryAddress || 'Самовивіз',
         notes: notes || undefined,
+        ...(marketingSub?.showCheckoutOptIn ? { subscribeToStoreMarketing: optInMarketing } : {}),
         items: items.map((item) => ({
           productId: item.product.id,
           quantity: item.quantity
@@ -103,25 +129,23 @@ export const CartScreen: React.FC<CartScreenProps> = ({
             Дякуємо за покупку! Партнер отримав ваше замовлення та розпочав його обробку.
           </Text>
 
-          <TouchableOpacity
-            onPress={() => {
-              setCreatedOrderNumber(null);
-              handleOrders();
-            }}
-            className="w-full bg-slate-900 py-3 rounded-lg items-center shadow-sm mb-2"
-          >
-            <Text className="text-white text-xs font-bold">Переглянути замовлення</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={() => {
-              setCreatedOrderNumber(null);
-              handleStores();
-            }}
-            className="w-full bg-slate-100 py-2.5 rounded-lg items-center border border-slate-200"
-          >
-            <Text className="text-slate-600 text-xs font-semibold">Продовжити покупки</Text>
-          </TouchableOpacity>
+          <View className="w-full gap-2">
+            <MobileButton
+              label="Переглянути замовлення"
+              onPress={() => {
+                setCreatedOrderNumber(null);
+                handleOrders();
+              }}
+            />
+            <MobileButton
+              label="Продовжити покупки"
+              variant="secondary"
+              onPress={() => {
+                setCreatedOrderNumber(null);
+                handleStores();
+              }}
+            />
+          </View>
         </View>
       </View>
     );
@@ -130,23 +154,13 @@ export const CartScreen: React.FC<CartScreenProps> = ({
   // Empty Cart Screen
   if (items.length === 0) {
     return (
-      <View className="flex-1 bg-slate-50 items-center justify-center p-6">
-        <View className="bg-white p-8 rounded-xl border border-slate-200 shadow-sm items-center w-full max-w-sm">
-          <View className="w-14 h-14 rounded-xl bg-slate-100 items-center justify-center mb-4">
-            <MaterialIcon name="remove-shopping-cart" size={28} color="#94a3b8" />
-          </View>
-          <Text className="text-base font-black text-slate-900 mb-1">Кошик порожній</Text>
-          <Text className="text-xs text-slate-500 text-center mb-6 leading-5">
-            Перейдіть до каталогу та оберіть потрібні товари для замовлення
-          </Text>
-          <TouchableOpacity
-            onPress={handleStores}
-            className="bg-slate-900 px-5 py-2.5 rounded-lg items-center shadow-sm"
-          >
-            <Text className="text-white text-xs font-bold">Перейти до магазинів</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+      <MobileEmptyState
+        iconName="remove-shopping-cart"
+        title="Кошик порожній"
+        description="Перейдіть до каталогу та оберіть потрібні товари для замовлення"
+        actionLabel="Перейти до магазинів"
+        onAction={handleStores}
+      />
     );
   }
 
@@ -154,13 +168,7 @@ export const CartScreen: React.FC<CartScreenProps> = ({
 
   return (
     <ScrollView className="flex-1 bg-slate-50" contentContainerStyle={{ paddingBottom: 120 }}>
-      {/* Header */}
-      <View className="px-5 pt-4 pb-2">
-        <Text className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-          Оформлення покупки
-        </Text>
-        <Text className="text-2xl font-black text-slate-900 mt-0.5">Мій кошик</Text>
-      </View>
+      <MobileSectionHeader eyebrow="Оформлення покупки" title="Мій кошик" />
 
       {/* Cart Items List */}
       <View className="px-5 mt-2 space-y-3">
@@ -214,11 +222,7 @@ export const CartScreen: React.FC<CartScreenProps> = ({
             Контактні дані покупця
           </Text>
 
-          {errorMessage && (
-            <View className="p-3 bg-red-50 rounded-lg border border-red-200">
-              <Text className="text-xs text-red-600 font-medium">{errorMessage}</Text>
-            </View>
-          )}
+          {errorMessage && <MobileAlertBanner tone="danger" message={errorMessage} />}
 
           <View className="space-y-1">
             <Text className="text-[11px] font-semibold text-slate-600">Ім&apos;я одержувача *</Text>
@@ -233,14 +237,7 @@ export const CartScreen: React.FC<CartScreenProps> = ({
 
           <View className="space-y-1">
             <Text className="text-[11px] font-semibold text-slate-600">Телефон *</Text>
-            <TextInput
-              value={contactPhone}
-              onChangeText={setContactPhone}
-              placeholder="+380..."
-              placeholderTextColor="#94a3b8"
-              keyboardType="phone-pad"
-              className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900"
-            />
+            <MobilePhoneInput value={contactPhone} onChange={setContactPhone} locale="uk" />
           </View>
 
           <View className="space-y-1">
@@ -265,6 +262,30 @@ export const CartScreen: React.FC<CartScreenProps> = ({
             />
           </View>
 
+          {user && marketingSub?.showCheckoutOptIn && (
+            <TouchableOpacity
+              onPress={() => setOptInMarketing((v) => !v)}
+              activeOpacity={0.8}
+              className="flex-row items-start gap-2.5 p-3 rounded-lg bg-slate-50 border border-slate-200 mt-1"
+            >
+              <View
+                className={`w-5 h-5 rounded border items-center justify-center mt-0.5 ${
+                  optInMarketing ? 'bg-slate-900 border-slate-900' : 'bg-white border-slate-300'
+                }`}
+              >
+                {optInMarketing && <MaterialIcon name="check" size={14} color="#ffffff" />}
+              </View>
+              <View className="flex-1">
+                <Text className="text-xs font-bold text-slate-900">
+                  Отримувати акції та знижки від закладу
+                </Text>
+                <Text className="text-[10px] text-slate-500 mt-0.5 leading-4">
+                  Необов’язково. Повідомлення приходитимуть у Пошту BizX. Відписатися можна в 1 клік у будь-який момент.
+                </Text>
+              </View>
+            </TouchableOpacity>
+          )}
+
           {/* Total & Submit Button */}
           <View className="pt-3 border-t border-slate-100 mt-2">
             <View className="flex-row items-baseline justify-between mb-3">
@@ -274,17 +295,11 @@ export const CartScreen: React.FC<CartScreenProps> = ({
               </Text>
             </View>
 
-            <TouchableOpacity
+            <MobileButton
+              label="Підтвердити замовлення"
               onPress={handleCheckout}
-              disabled={isSubmitting}
-              className="w-full bg-slate-900 py-3 rounded-lg items-center shadow-sm flex-row justify-center gap-2"
-            >
-              {isSubmitting ? (
-                <ActivityIndicator size="small" color="#ffffff" />
-              ) : (
-                <Text className="text-white text-xs font-bold">Підтвердити замовлення</Text>
-              )}
-            </TouchableOpacity>
+              loading={isSubmitting}
+            />
           </View>
         </View>
       </View>

@@ -1,29 +1,47 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { platformApi } from './lib/api';
 import { useTranslation, initPlatformLocale } from './hooks/useTranslation';
-import type { UserProfile, PlatformAnalytics, StoreCategory } from '@bizx/common-types';
-import { ShieldAlert } from 'lucide-react';
+import type {
+  UserProfile,
+  PlatformAnalytics,
+  StoreCategory,
+  MemberAccessSummary,
+  UpdatePlatformUserStatusDto,
+  UpdatePlatformUserSubscriptionDto
+} from '@bizx/common-types';
+import { ShieldAlert, AlertCircle, X, Lock, Bell, ArrowRight } from 'lucide-react';
 import { PlatformLayout, type PlatformTab } from './components/PlatformLayout';
 import { MetricsView } from './views/MetricsView';
 import { PlatformAnalyticsView } from './views/PlatformAnalyticsView';
+import { PlatformRolesView } from './views/PlatformRolesView';
 import { BusinessesView, type ExtendedBusiness } from './views/BusinessesView';
+import { PendingBusinessesView } from './views/PendingBusinessesView';
 import { UsersView } from './views/UsersView';
-import { StaffView, type PlatformStaffMember } from './views/StaffView';
+import { DisputesView } from './views/DisputesView';
+import { SupportView } from './views/SupportView';
+import { BroadcastsView } from './views/BroadcastsView';
+import { StaffView } from './views/StaffView';
 import { LoginView } from './views/LoginView';
-import { BusinessDetailsModal } from './components/BusinessDetailsModal';
+import {
+  BusinessDetailsModal,
+  type BusinessStatusUpdatePayload
+} from './components/BusinessDetailsModal';
 import { UserDetailsModal, type PlatformUserRecord } from './components/UserDetailsModal';
 
 export const App: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const [activeTab, setActiveTab] = useState<PlatformTab>('metrics');
 
-  // Platform Data State
+  // Platform Data State (100% real DB — zero mock fallbacks)
   const [analytics, setAnalytics] = useState<PlatformAnalytics | null>(null);
   const [businesses, setBusinesses] = useState<ExtendedBusiness[]>([]);
   const [categories, setCategories] = useState<Array<{ id: string; name: string }>>([]);
+  const [myAccess, setMyAccess] = useState<MemberAccessSummary | null>(null);
+  const [permsLoaded, setPermsLoaded] = useState(false);
   const [isDataLoading, setIsDataLoading] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   // Modals & Active Selections
   const [selectedBusiness, setSelectedBusiness] = useState<ExtendedBusiness | null>(null);
@@ -33,269 +51,228 @@ export const App: React.FC = () => {
   const [selectedUser, setSelectedUser] = useState<PlatformUserRecord | null>(null);
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
 
-  // Users State
-  const [usersList, setUsersList] = useState<PlatformUserRecord[]>([
-    {
-      id: 'u-1',
-      name: 'Олександр Коваленко',
-      email: 'admin@bizx.ua',
-      phone: '+380 50 123 45 67',
-      role: 'admin',
-      systemRole: 'platform_admin',
-      status: 'active',
-      createdAt: '12.01.2026'
-    },
-    {
-      id: 'u-2',
-      name: 'Тарас Шевчук',
-      email: 'owner.coffee@bizx.ua',
-      phone: '+380 67 111 22 33',
-      role: 'business_owner',
-      systemRole: 'user',
-      status: 'active',
-      createdAt: '15.01.2026'
-    },
-    {
-      id: 'u-3',
-      name: 'Ірина Мельник',
-      email: 'owner.tech@bizx.ua',
-      phone: '+380 93 444 55 66',
-      role: 'business_owner',
-      systemRole: 'user',
-      status: 'active',
-      createdAt: '22.01.2026'
-    },
-    {
-      id: 'u-4',
-      name: 'Богдан Кравченко',
-      email: 'owner.bakery@bizx.ua',
-      phone: '+380 66 777 88 99',
-      role: 'business_owner',
-      systemRole: 'user',
-      status: 'active',
-      createdAt: '01.02.2026'
-    },
-    {
-      id: 'u-5',
-      name: 'Марія Бондаренко',
-      email: 'client@bizx.ua',
-      phone: '+380 99 123 98 76',
-      role: 'client',
-      systemRole: 'user',
-      status: 'active',
-      createdAt: '10.02.2026'
-    },
-    {
-      id: 'u-6',
-      name: 'Дмитро Кравчук',
-      email: 'suspicious.actor@spam.ua',
-      phone: '+380 50 999 88 77',
-      role: 'client',
-      systemRole: 'user',
-      status: 'suspended',
-      createdAt: '18.02.2026'
-    }
-  ]);
+  // Users State (loaded from real DB /platform/users)
+  const [usersList, setUsersList] = useState<PlatformUserRecord[]>([]);
+  const [pendingDisputesCount, setPendingDisputesCount] = useState<number>(0);
+  const [pendingStoresCount, setPendingStoresCount] = useState<number>(0);
+  const [unreadSupportCount, setUnreadSupportCount] = useState<number>(0);
+  const [newPendingAlert, setNewPendingAlert] = useState<number | null>(null);
+  const prevPendingStoresRef = useRef<number | null>(null);
 
-  // Staff State
-  const [staffList, setStaffList] = useState<PlatformStaffMember[]>([
-    {
-      id: 'st-1',
-      name: 'Олександр Коваленко',
-      email: 'admin@bizx.ua',
-      department: 'Керівництво',
-      role: 'Head of Platform',
-      accessLevel: 'full_admin',
-      status: 'active'
-    },
-    {
-      id: 'st-2',
-      name: 'Юлія Шевченко',
-      email: 'yulia.shevchenko@bizx.ua',
-      department: 'Операційний відділ',
-      role: 'Lead Ops Manager',
-      accessLevel: 'ops_manager',
-      status: 'active'
-    },
-    {
-      id: 'st-3',
-      name: 'Сергій Бондар',
-      email: 'sergiy.bondar@bizx.ua',
-      department: 'Відділ комплаєнсу',
-      role: 'Compliance Officer',
-      accessLevel: 'compliance',
-      status: 'active'
-    },
-    {
-      id: 'st-4',
-      name: 'Анна Ткаченко',
-      email: 'anna.tkachenko@bizx.ua',
-      department: 'Служба підтримки',
-      role: 'Support Lead',
-      accessLevel: 'support_lead',
-      status: 'active'
-    }
-  ]);
+  const myPermissions = myAccess?.permissions ?? [];
+  const hasPerm = (code: string) => Boolean(myAccess && myPermissions.includes(code));
 
-  // Load Real Data from Backend API
-  const loadPlatformData = async () => {
+  // Load Real Data from Backend API strictly according to user permissions
+  const loadPlatformData = useCallback(async () => {
     setIsDataLoading(true);
     try {
-      // 1. Fetch Categories
-      let fetchedCategories: Array<{ id: string; name: string }> = [];
+      // 1. Fetch Real Platform Permissions FIRST
+      let perms: string[] = [];
+      try {
+        const permRes = await platformApi.rbac.getPlatformPermissions();
+        if (permRes.success && permRes.data?.myAccess) {
+          setMyAccess(permRes.data.myAccess);
+          perms = permRes.data.myAccess.permissions;
+        } else {
+          setMyAccess(null);
+        }
+      } catch {
+        setMyAccess(null);
+      } finally {
+        setPermsLoaded(true);
+      }
+
+      // 2. Fetch Categories (public)
       try {
         const catRes = await platformApi.stores.getCategories();
         if (catRes.success && catRes.data) {
-          fetchedCategories = catRes.data.map((c: StoreCategory) => ({ id: c.id, name: c.name }));
-          setCategories(fetchedCategories);
+          setCategories(catRes.data.map((c: StoreCategory) => ({ id: c.id, name: c.name })));
         }
       } catch {
-        // Fallback categories
-        fetchedCategories = [
-          { id: 'cat-1', name: 'Кавʼярні та десерти' },
-          { id: 'cat-2', name: 'Електроніка та гаджети' },
-          { id: 'cat-3', name: 'Пекарні та випічка' }
-        ];
-        setCategories(fetchedCategories);
+        setCategories([]);
       }
 
-      // 2. Fetch Real Stores
-      try {
-        const storesRes = await platformApi.stores.getStores({ page: 1, pageSize: 100 });
-        if (storesRes.success && storesRes.data?.items && storesRes.data.items.length > 0) {
-          const categoryMap = new Map(fetchedCategories.map((c) => [c.id, c.name]));
-
-          const mappedStores: ExtendedBusiness[] = storesRes.data.items.map((st) => ({
-            ...st,
-            categoryName: (st.categoryId && categoryMap.get(st.categoryId)) || 'Торгівля',
-            ownerName:
-              st.slug === 'lviv-coffee'
-                ? 'Тарас Шевчук'
-                : st.slug === 'cybertech-ukraine'
-                ? 'Ірина Мельник'
-                : st.slug === 'khlibna-maisternia'
-                ? 'Богдан Кравченко'
-                : 'Партнер BizX',
-            ownerEmail:
-              st.slug === 'lviv-coffee'
-                ? 'owner.coffee@bizx.ua'
-                : st.slug === 'cybertech-ukraine'
-                ? 'owner.tech@bizx.ua'
-                : st.slug === 'khlibna-maisternia'
-                ? 'owner.bakery@bizx.ua'
-                : undefined
-          }));
-          setBusinesses(mappedStores);
-        } else {
-          // Fallback seed stores
-          setBusinesses([
-            {
-              id: 'store-1',
-              name: 'Львівська Кавова Мануфактура',
-              slug: 'lviv-coffee',
-              status: 'active',
-              ownerId: 'u-2',
-              ownerName: 'Тарас Шевчук',
-              ownerEmail: 'owner.coffee@bizx.ua',
-              categoryName: 'Кавʼярні та десерти',
-              createdAt: new Date().toISOString()
-            },
-            {
-              id: 'store-2',
-              name: 'CyberTech Ukraine',
-              slug: 'cybertech-ukraine',
-              status: 'active',
-              ownerId: 'u-3',
-              ownerName: 'Ірина Мельник',
-              ownerEmail: 'owner.tech@bizx.ua',
-              categoryName: 'Електроніка та гаджети',
-              createdAt: new Date().toISOString()
-            },
-            {
-              id: 'store-3',
-              name: 'Хлібна Майстерня',
-              slug: 'khlibna-maisternia',
-              status: 'active',
-              ownerId: 'u-4',
-              ownerName: 'Богдан Кравченко',
-              ownerEmail: 'owner.bakery@bizx.ua',
-              categoryName: 'Пекарні та випічка',
-              createdAt: new Date().toISOString()
+      // 3. Fetch ALL Platform Stores (including draft/pending/suspended/archived) ONLY if platform.stores.read
+      if (perms.includes('platform.stores.read')) {
+        try {
+          const storesRes = await platformApi.rbac.getPlatformStores();
+          if (storesRes.success && storesRes.data) {
+            const mapped = storesRes.data.map((st) => ({
+              ...st,
+              categoryName: st.categoryName || undefined,
+              ownerName: st.ownerName || undefined,
+              ownerEmail: st.ownerEmail || undefined
+            }));
+            setBusinesses(mapped);
+            const pCount = mapped.filter((b) => b.status === 'pending').length;
+            setPendingStoresCount(pCount);
+            if (prevPendingStoresRef.current === null) {
+              prevPendingStoresRef.current = pCount;
             }
-          ]);
+          }
+        } catch {
+          setBusinesses([]);
         }
-      } catch {
-        // Fallback stores
+      } else {
+        setBusinesses([]);
       }
 
-      // 3. Fetch Platform Analytics
-      try {
-        const aRes = await platformApi.analytics.getPlatformAnalytics();
-        if (aRes.success && aRes.data) {
-          setAnalytics(aRes.data);
-        } else {
-          setAnalytics({
-            totalPlatformRevenue: 24500000,
-            totalOrders: 1420,
-            totalStores: 3,
-            activeStores: 3,
-            totalProducts: 12,
-            topStoresByRevenue: [
-              {
-                storeId: 'store-2',
-                storeName: 'CyberTech Ukraine',
-                revenue: 16500000,
-                ordersCount: 420
-              },
-              {
-                storeId: 'store-1',
-                storeName: 'Львівська Кавова Мануфактура',
-                revenue: 5600000,
-                ordersCount: 780
-              },
-              {
-                storeId: 'store-3',
-                storeName: 'Хлібна Майстерня',
-                revenue: 2400000,
-                ordersCount: 220
-              }
-            ]
-          });
+      // 4. Fetch Platform Analytics ONLY if platform.analytics.read
+      if (perms.includes('platform.analytics.read')) {
+        try {
+          const aRes = await platformApi.analytics.getPlatformAnalytics();
+          if (aRes.success && aRes.data) {
+            setAnalytics(aRes.data);
+          }
+        } catch {
+          setAnalytics(null);
         }
-      } catch {
-        // Fallback analytics
-        setAnalytics({
-          totalPlatformRevenue: 24500000,
-          totalOrders: 1420,
-          totalStores: 3,
-          activeStores: 3,
-          totalProducts: 12,
-          topStoresByRevenue: [
-            {
-              storeId: 'store-2',
-              storeName: 'CyberTech Ukraine',
-              revenue: 16500000,
-              ordersCount: 420
-            },
-            {
-              storeId: 'store-1',
-              storeName: 'Львівська Кавова Мануфактура',
-              revenue: 5600000,
-              ordersCount: 780
-            },
-            {
-              storeId: 'store-3',
-              storeName: 'Хлібна Майстерня',
-              revenue: 2400000,
-              ordersCount: 220
-            }
-          ]
-        });
+      } else {
+        setAnalytics(null);
+      }
+
+      // 5. Fetch Users ONLY if platform.users.read
+      if (perms.includes('platform.users.read')) {
+        try {
+          const uRes = await platformApi.rbac.getPlatformUsers();
+          if (uRes.success && uRes.data) {
+            setUsersList(
+              uRes.data.map((u) => ({
+                id: u.id,
+                name: u.name,
+                email: u.email,
+                phone: u.phone || undefined,
+                isPlatformStaff: Boolean(u.isPlatformStaff),
+                platformRoleName: u.platformRoleName || null,
+                isBusinessOwner: Boolean(u.isBusinessOwner),
+                storesCount: u.storesCount ?? 0,
+                status: u.status,
+                suspendedUntil: u.suspendedUntil || null,
+                suspensionReason: u.suspensionReason || null,
+                subscriptionTier: u.subscriptionTier || 'free',
+                subscriptionStatus: u.subscriptionStatus || 'none',
+                subscriptionExpiresAt: u.subscriptionExpiresAt || null,
+                createdAt: new Date(u.createdAt).toLocaleDateString('uk-UA')
+              }))
+            );
+          }
+        } catch {
+          setUsersList([]);
+        }
+      } else {
+        setUsersList([]);
       }
     } finally {
       setIsDataLoading(false);
     }
-  };
+  }, []);
+
+  // Auto-select first permitted tab when permissions finish loading
+  useEffect(() => {
+    if (!permsLoaded || !myAccess) return;
+    const allowedTabs: PlatformTab[] = [];
+    if (myAccess.permissions.includes('platform.analytics.read')) {
+      allowedTabs.push('metrics', 'analytics');
+    }
+    if (myAccess.permissions.includes('platform.stores.read')) {
+      allowedTabs.push('businesses', 'businesses_pending');
+    }
+    if (myAccess.permissions.includes('platform.users.read')) allowedTabs.push('users');
+    if (myAccess.permissions.includes('platform.disputes.read')) allowedTabs.push('disputes');
+    if (myAccess.permissions.includes('platform.support.read')) allowedTabs.push('support');
+    if (myAccess.permissions.includes('platform.broadcasts.read')) allowedTabs.push('broadcasts');
+    if (myAccess.permissions.includes('platform.staff.read')) allowedTabs.push('staff');
+    if (myAccess.permissions.includes('platform.roles.read')) allowedTabs.push('roles');
+
+    if (allowedTabs.length > 0 && !allowedTabs.includes(activeTab)) {
+      setActiveTab(allowedTabs[0]);
+    }
+  }, [permsLoaded, myAccess, activeTab]);
+
+  // Poll pending escalated disputes count for sidebar badge
+  const refreshDisputesSummary = useCallback(() => {
+    if (!myAccess?.permissions.includes('platform.disputes.read')) {
+      setPendingDisputesCount(0);
+      return;
+    }
+    platformApi.orders
+      .getPlatformDisputesSummary()
+      .then((res) => {
+        if (res.success && res.data) {
+          setPendingDisputesCount(res.data.pendingEscalatedCount);
+        }
+      })
+      .catch(() => {});
+  }, [myAccess]);
+
+  // Poll pending businesses summary every 15s and notify staff when a new store awaits moderation
+  const refreshPendingStoresSummary = useCallback(() => {
+    if (!myAccess?.permissions.includes('platform.stores.read')) {
+      setPendingStoresCount(0);
+      return;
+    }
+    platformApi.stores
+      .getPlatformStoresSummary()
+      .then((res) => {
+        if (res.success && res.data) {
+          const nextCount = res.data.pendingCount;
+          if (prevPendingStoresRef.current !== null && nextCount > prevPendingStoresRef.current) {
+            const diff = nextCount - prevPendingStoresRef.current;
+            setNewPendingAlert(diff);
+            // Refresh full businesses list in background so the queue has the new store immediately
+            platformApi.rbac
+              .getPlatformStores()
+              .then((stRes) => {
+                if (stRes.success && stRes.data) {
+                  setBusinesses(
+                    stRes.data.map((st) => ({
+                      ...st,
+                      categoryName: st.categoryName || undefined,
+                      ownerName: st.ownerName || undefined,
+                      ownerEmail: st.ownerEmail || undefined
+                    }))
+                  );
+                }
+              })
+              .catch(() => {});
+          }
+          prevPendingStoresRef.current = nextCount;
+          setPendingStoresCount(nextCount);
+        }
+      })
+      .catch(() => {});
+  }, [myAccess]);
+
+  const refreshSupportSummary = useCallback(() => {
+    if (!myAccess?.permissions.includes('platform.support.read')) {
+      setUnreadSupportCount(0);
+      return;
+    }
+    platformApi.broadcasts
+      .getPlatformSupportSummary()
+      .then((res) => {
+        if (res.success && res.data) {
+          setUnreadSupportCount(res.data.unreadThreadsCount);
+        }
+      })
+      .catch(() => {});
+  }, [myAccess]);
+
+  useEffect(() => {
+    refreshDisputesSummary();
+    refreshPendingStoresSummary();
+    refreshSupportSummary();
+    const canDisputes = Boolean(myAccess?.permissions.includes('platform.disputes.read'));
+    const canStores = Boolean(myAccess?.permissions.includes('platform.stores.read'));
+    const canSupport = Boolean(myAccess?.permissions.includes('platform.support.read'));
+    if (!canDisputes && !canStores && !canSupport) return;
+    const timer = window.setInterval(() => {
+      if (canDisputes) refreshDisputesSummary();
+      if (canStores) refreshPendingStoresSummary();
+      if (canSupport) refreshSupportSummary();
+    }, 15000);
+    return () => window.clearInterval(timer);
+  }, [myAccess, refreshDisputesSummary, refreshPendingStoresSummary, refreshSupportSummary]);
 
   // Check auth on mount
   useEffect(() => {
@@ -306,6 +283,9 @@ export const App: React.FC = () => {
         if (res.success && res.data) {
           setCurrentUser(res.data);
           initPlatformLocale(res.data.preferredLanguage);
+          if (res.data.isPlatformStaff) {
+            await loadPlatformData();
+          }
         } else {
           setCurrentUser(null);
         }
@@ -316,77 +296,238 @@ export const App: React.FC = () => {
       }
     };
 
-    initAuth();
-    loadPlatformData();
-  }, []);
+    void initAuth();
+  }, [loadPlatformData]);
 
-  // Handler: Update Business Status
+  // Handler: Update Business Status (with optional timed suspension & mandatory reason)
   const handleUpdateBusinessStatus = async (
     id: string,
-    newStatus: 'active' | 'pending' | 'suspended' | 'archived'
+    payload: BusinessStatusUpdatePayload
   ) => {
     setIsUpdatingBusinessStatus(true);
+    setActionError(null);
     try {
-      if (newStatus === 'archived') {
+      let updatedStore: {
+        status?: string;
+        suspendedUntil?: string | null;
+        suspensionReason?: string | null;
+      } | null = null;
+
+      if (payload.status === 'archived') {
         await platformApi.stores.archiveStore(id);
+        updatedStore = { status: 'archived', suspendedUntil: null, suspensionReason: null };
       } else {
-        await platformApi.stores.updateStore(id, { status: newStatus });
+        const res = await platformApi.stores.updateStore(id, {
+          status: payload.status,
+          suspensionDays: payload.suspensionDays,
+          suspensionReason: payload.suspensionReason ?? undefined
+        });
+        updatedStore = res.data || { status: payload.status };
       }
 
-      // Update local state
-      setBusinesses((prev) =>
-        prev.map((b) => (b.id === id ? { ...b, status: newStatus } : b))
-      );
+      const nextStatus = (updatedStore?.status || payload.status) as ExtendedBusiness['status'];
+      const nextUntil =
+        payload.status === 'suspended' ? updatedStore?.suspendedUntil ?? null : null;
+      const nextReason =
+        payload.status === 'suspended'
+          ? updatedStore?.suspensionReason ?? payload.suspensionReason ?? null
+          : null;
+
+      setBusinesses((prev) => {
+        const next = prev.map((b) =>
+          b.id === id
+            ? {
+                ...b,
+                status: nextStatus,
+                suspendedUntil: nextUntil,
+                suspensionReason: nextReason
+              }
+            : b
+        );
+        const pCount = next.filter((b) => b.status === 'pending').length;
+        prevPendingStoresRef.current = pCount;
+        setPendingStoresCount(pCount);
+        return next;
+      });
 
       if (selectedBusiness && selectedBusiness.id === id) {
-        setSelectedBusiness((prev) => (prev ? { ...prev, status: newStatus } : null));
+        setSelectedBusiness((prev) =>
+          prev
+            ? {
+                ...prev,
+                status: nextStatus,
+                suspendedUntil: nextUntil,
+                suspensionReason: nextReason
+              }
+            : null
+        );
       }
-    } catch {
-      // Still update UI optimistically
-      setBusinesses((prev) =>
-        prev.map((b) => (b.id === id ? { ...b, status: newStatus } : b))
+    } catch (err: any) {
+      setActionError(
+        err?.data?.message ||
+          err?.message ||
+          (locale === 'en'
+            ? 'Insufficient permissions to update store status'
+            : 'Недостатньо прав для зміни статусу закладу')
       );
-      if (selectedBusiness && selectedBusiness.id === id) {
-        setSelectedBusiness((prev) => (prev ? { ...prev, status: newStatus } : null));
-      }
+      throw err;
     } finally {
       setIsUpdatingBusinessStatus(false);
     }
   };
 
-  // Handler: Update User Status
-  const handleUpdateUserStatus = (
-    userId: string,
-    newStatus: 'active' | 'suspended' | 'archived'
-  ) => {
-    setUsersList((prev) =>
-      prev.map((u) => (u.id === userId ? { ...u, status: newStatus } : u))
-    );
-    if (selectedUser && selectedUser.id === userId) {
-      setSelectedUser((prev) => (prev ? { ...prev, status: newStatus } : null));
+  // Handler: Approve Pending Store (platform.stores.approve)
+  const handleApproveStore = async (id: string) => {
+    setIsUpdatingBusinessStatus(true);
+    setActionError(null);
+    try {
+      const res = await platformApi.stores.approveStore(id);
+      if (res.success) {
+        setBusinesses((prev) => {
+          const next = prev.map((b) => (b.id === id ? { ...b, status: 'active' as const } : b));
+          const pCount = next.filter((b) => b.status === 'pending').length;
+          prevPendingStoresRef.current = pCount;
+          setPendingStoresCount(pCount);
+          return next;
+        });
+        if (selectedBusiness && selectedBusiness.id === id) {
+          setSelectedBusiness((prev) => (prev ? { ...prev, status: 'active' } : null));
+        }
+      }
+    } catch (err: any) {
+      setActionError(
+        err?.data?.message ||
+          err?.message ||
+          'Недостатньо прав для підтвердження нового закладу'
+      );
+    } finally {
+      setIsUpdatingBusinessStatus(false);
     }
   };
 
-  // Handler: Toggle Platform Role
-  const handleTogglePlatformRole = (
-    userId: string,
-    newSystemRole: 'user' | 'platform_admin'
-  ) => {
-    setUsersList((prev) =>
-      prev.map((u) => (u.id === userId ? { ...u, systemRole: newSystemRole } : u))
-    );
-    if (selectedUser && selectedUser.id === userId) {
-      setSelectedUser((prev) => (prev ? { ...prev, systemRole: newSystemRole } : null));
+  // Handler: Reject Pending Store with Reason -> sends official BizX Inbox letter to owner
+  const handleRejectStore = async (id: string, reason: string) => {
+    setIsUpdatingBusinessStatus(true);
+    setActionError(null);
+    try {
+      const res = await platformApi.stores.rejectStore(id, { reason });
+      if (res.success) {
+        setBusinesses((prev) => {
+          const next = prev.map((b) => (b.id === id ? { ...b, status: 'draft' as const } : b));
+          const pCount = next.filter((b) => b.status === 'pending').length;
+          prevPendingStoresRef.current = pCount;
+          setPendingStoresCount(pCount);
+          return next;
+        });
+        if (selectedBusiness && selectedBusiness.id === id) {
+          setSelectedBusiness((prev) => (prev ? { ...prev, status: 'draft' } : null));
+        }
+      }
+    } catch (err: any) {
+      setActionError(
+        err?.data?.message ||
+          err?.message ||
+          'Недостатньо прав для відхилення заявки закладу'
+      );
+      throw err;
+    } finally {
+      setIsUpdatingBusinessStatus(false);
     }
   };
 
-  // Handler: Add Staff
-  const handleAddStaff = (newStaff: Omit<PlatformStaffMember, 'id'>) => {
-    const created: PlatformStaffMember = {
-      ...newStaff,
-      id: `st-${Date.now()}`
-    };
-    setStaffList((prev) => [...prev, created]);
+  // Handler: Open Private Storefront Preview in new tab (works for pending & draft stores!)
+  const handlePreviewStore = async (store: { id: string; slug: string }) => {
+    setActionError(null);
+    try {
+      const res = await platformApi.stores.createPreviewToken(store.id);
+      if (res.success && res.data?.previewToken) {
+        const previewUrl = `http://localhost:3100/store/${encodeURIComponent(store.slug)}?preview=${encodeURIComponent(res.data.previewToken)}`;
+        window.open(previewUrl, '_blank', 'noopener,noreferrer');
+      }
+    } catch (err: any) {
+      setActionError(
+        err?.data?.message || err?.message || 'Не вдалося відкрити попередній перегляд вітрини'
+      );
+    }
+  };
+
+  // Handler: Update User Status (with timed/indefinite suspension & reason)
+  const handleUpdateUserStatus = async (
+    userId: string,
+    dto: UpdatePlatformUserStatusDto
+  ) => {
+    setActionError(null);
+    try {
+      const res = await platformApi.rbac.updatePlatformUserStatus(userId, dto);
+      const nextStatus = (res.data?.status || dto.status) as PlatformUserRecord['status'];
+      const nextUntil = res.data?.suspendedUntil ?? null;
+      const nextReason = res.data?.suspensionReason ?? null;
+
+      setUsersList((prev) =>
+        prev.map((u) =>
+          u.id === userId
+            ? {
+                ...u,
+                status: nextStatus,
+                suspendedUntil: nextUntil,
+                suspensionReason: nextReason
+              }
+            : u
+        )
+      );
+      if (selectedUser && selectedUser.id === userId) {
+        setSelectedUser((prev) =>
+          prev
+            ? {
+                ...prev,
+                status: nextStatus,
+                suspendedUntil: nextUntil,
+                suspensionReason: nextReason
+              }
+            : null
+        );
+      }
+    } catch (err: any) {
+      setActionError(
+        err?.data?.message ||
+          err?.message ||
+          (locale === 'en'
+            ? 'Insufficient permissions to update user status'
+            : 'Недостатньо прав для зміни статусу користувача')
+      );
+      throw err;
+    }
+  };
+
+  // Handler: Update User Subscription (tier, status, expiration date)
+  const handleUpdateUserSubscription = async (
+    userId: string,
+    dto: UpdatePlatformUserSubscriptionDto
+  ) => {
+    setActionError(null);
+    try {
+      const res = await platformApi.rbac.updatePlatformUserSubscription(userId, dto);
+      if (res.success && res.data) {
+        const patch = {
+          subscriptionTier: res.data.subscriptionTier,
+          subscriptionStatus: res.data.subscriptionStatus,
+          subscriptionExpiresAt: res.data.subscriptionExpiresAt
+        };
+        setUsersList((prev) => prev.map((u) => (u.id === userId ? { ...u, ...patch } : u)));
+        if (selectedUser && selectedUser.id === userId) {
+          setSelectedUser((prev) => (prev ? { ...prev, ...patch } : null));
+        }
+      }
+    } catch (err: any) {
+      setActionError(
+        err?.data?.message ||
+          err?.message ||
+          (locale === 'en'
+            ? 'Insufficient permissions to update user subscription'
+            : 'Недостатньо прав для керування підпискою користувача')
+      );
+      throw err;
+    }
   };
 
   // Handler: Logout
@@ -401,6 +542,8 @@ export const App: React.FC = () => {
     localStorage.removeItem('bizx_access_token');
     localStorage.removeItem('bizx_admin_access_token');
     setCurrentUser(null);
+    setMyAccess(null);
+    setPermsLoaded(false);
   };
 
   if (isLoadingAuth) {
@@ -413,10 +556,17 @@ export const App: React.FC = () => {
   }
 
   if (!currentUser) {
-    return <LoginView onSuccess={(user) => setCurrentUser(user)} />;
+    return (
+      <LoginView
+        onSuccess={(user) => {
+          setCurrentUser(user);
+          void loadPlatformData();
+        }}
+      />
+    );
   }
 
-  const isStaff = currentUser.systemRole === 'platform_admin' || currentUser.role === 'admin';
+  const isStaff = Boolean(currentUser.isPlatformStaff);
 
   if (!isStaff) {
     return (
@@ -450,7 +600,6 @@ export const App: React.FC = () => {
     );
   }
 
-  // Count businesses by status
   const businessesCount = {
     total: businesses.length,
     active: businesses.filter((b) => b.status === 'active').length,
@@ -462,82 +611,217 @@ export const App: React.FC = () => {
   return (
     <PlatformLayout
       currentTab={activeTab}
-      onTabChange={setActiveTab}
+      onTabChange={(nextTab) => {
+        setActiveTab(nextTab);
+        if (nextTab === 'businesses_pending') setNewPendingAlert(null);
+      }}
       currentUser={currentUser}
+      myPermissions={myPermissions}
+      myRoleName={myAccess?.roleName}
+      permsLoaded={permsLoaded}
+      pendingStoresCount={pendingStoresCount}
+      pendingDisputesCount={pendingDisputesCount}
+      unreadSupportCount={unreadSupportCount}
       onLogout={handleLogout}
     >
-      {/* View: Metrics */}
-      {activeTab === 'metrics' && (
-        <MetricsView
-          analytics={analytics}
-          totalUsersCount={usersList.length}
-          businessesCount={businessesCount}
-          isLoading={isDataLoading}
-          onOpenDetailedAnalytics={() => setActiveTab('analytics')}
-        />
+      {newPendingAlert !== null && newPendingAlert > 0 && (
+        <div className="mb-4 p-3.5 bg-amber-50 border border-amber-300 rounded-xl text-xs text-amber-950 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-sm">
+          <div className="flex items-center gap-2.5 font-semibold">
+            <Bell className="w-4 h-4 text-amber-600 shrink-0" />
+            <span>
+              {newPendingAlert === 1
+                ? 'Надійшла нова заявка на підтвердження бізнесу!'
+                : `Надійшло ${newPendingAlert} нових заявок на підтвердження бізнесів!`}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setNewPendingAlert(null);
+                setActiveTab('businesses_pending');
+              }}
+              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs transition-colors"
+            >
+              <span>Перейти до перевірки</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setNewPendingAlert(null)}
+              className="p-1 text-amber-600 hover:text-amber-900"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
       )}
 
-      {/* View: Detailed Platform Analytics */}
-      {activeTab === 'analytics' && (
-        <PlatformAnalyticsView
-          initialAnalytics={analytics}
-          businesses={businesses}
-        />
+      {actionError && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-800 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+            <span>{actionError}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setActionError(null)}
+            className="text-red-500 hover:text-red-700"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
       )}
 
-      {/* View: Businesses */}
-      {activeTab === 'businesses' && (
-        <BusinessesView
-          businesses={businesses}
-          categories={categories}
-          onSelectBusiness={(b) => {
-            setSelectedBusiness(b);
-            setIsBusinessModalOpen(true);
-          }}
-          onRefresh={loadPlatformData}
-          isLoading={isDataLoading}
-        />
+      {permsLoaded && myPermissions.length === 0 ? (
+        <div className="bg-white border border-slate-200 rounded-xl p-10 text-center space-y-2">
+          <Lock className="w-8 h-8 text-slate-300 mx-auto" />
+          <h3 className="text-sm font-bold text-slate-900">
+            {locale === 'en' ? 'No platform permissions assigned' : 'Немає призначених прав платформи'}
+          </h3>
+          <p className="text-xs text-slate-500">
+            {locale === 'en'
+              ? 'Contact the BizX Platform Owner to assign a role or custom permissions.'
+              : 'Зверніться до власника платформи BizX для надання ролі або прав доступу.'}
+          </p>
+        </div>
+      ) : (
+        <>
+          {activeTab === 'metrics' && hasPerm('platform.analytics.read') && (
+            <MetricsView
+              analytics={analytics}
+              totalUsersCount={usersList.length}
+              businessesCount={businessesCount}
+              isLoading={isDataLoading}
+              onOpenDetailedAnalytics={() => setActiveTab('analytics')}
+            />
+          )}
+
+          {activeTab === 'analytics' && hasPerm('platform.analytics.read') && (
+            <PlatformAnalyticsView
+              initialAnalytics={analytics}
+              businesses={businesses}
+              canExport={hasPerm('platform.analytics.export')}
+            />
+          )}
+
+          {activeTab === 'businesses' && hasPerm('platform.stores.read') && (
+            <BusinessesView
+              businesses={businesses}
+              categories={categories}
+              onSelectBusiness={(b) => {
+                setSelectedBusiness(b);
+                setIsBusinessModalOpen(true);
+              }}
+              onPreviewStore={handlePreviewStore}
+              onOpenPendingQueue={() => setActiveTab('businesses_pending')}
+              onRefresh={loadPlatformData}
+              isLoading={isDataLoading}
+            />
+          )}
+
+          {activeTab === 'businesses_pending' && hasPerm('platform.stores.read') && (
+            <PendingBusinessesView
+              businesses={businesses}
+              canApprove={hasPerm('platform.stores.approve')}
+              isLoading={isDataLoading}
+              onRefresh={loadPlatformData}
+              onSelectBusiness={(b) => {
+                setSelectedBusiness(b);
+                setIsBusinessModalOpen(true);
+              }}
+            />
+          )}
+
+          {activeTab === 'users' && hasPerm('platform.users.read') && (
+            <UsersView
+              users={usersList}
+              onSelectUser={(u) => {
+                setSelectedUser(u);
+                setIsUserModalOpen(true);
+              }}
+              isLoading={isDataLoading}
+            />
+          )}
+
+          {activeTab === 'disputes' && hasPerm('platform.disputes.read') && (
+            <DisputesView
+              canResolve={hasPerm('platform.disputes.resolve')}
+              canRevokeStrikes={hasPerm('platform.strikes.revoke')}
+              onDisputesChanged={() => {
+                refreshDisputesSummary();
+                void loadPlatformData();
+              }}
+            />
+          )}
+
+          {activeTab === 'support' && hasPerm('platform.support.read') && (
+            <SupportView
+              canReply={hasPerm('platform.support.reply')}
+              onSupportChanged={refreshSupportSummary}
+            />
+          )}
+
+          {activeTab === 'broadcasts' && hasPerm('platform.broadcasts.read') && (
+            <BroadcastsView
+              canSend={hasPerm('platform.broadcasts.send')}
+              businesses={businesses}
+              usersList={usersList}
+            />
+          )}
+
+          {activeTab === 'staff' && hasPerm('platform.staff.read') && (
+            <StaffView currentUserId={currentUser.id} />
+          )}
+
+          {activeTab === 'roles' && hasPerm('platform.roles.read') && <PlatformRolesView />}
+        </>
       )}
 
-      {/* View: Users */}
-      {activeTab === 'users' && (
-        <UsersView
-          users={usersList}
-          onSelectUser={(u) => {
-            setSelectedUser(u);
-            setIsUserModalOpen(true);
-          }}
-          isLoading={isDataLoading}
-        />
-      )}
-
-      {/* View: Staff */}
-      {activeTab === 'staff' && (
-        <StaffView staffList={staffList} onAddStaff={handleAddStaff} />
-      )}
-
-      {/* Business Details Slide-over / Modal */}
+      {/* Business Details Modal */}
       <BusinessDetailsModal
-        business={selectedBusiness}
+        business={
+          selectedBusiness
+            ? businesses.find((b) => b.id === selectedBusiness.id) || selectedBusiness
+            : null
+        }
         isOpen={isBusinessModalOpen}
         onClose={() => {
           setIsBusinessModalOpen(false);
           setSelectedBusiness(null);
         }}
         onUpdateStatus={handleUpdateBusinessStatus}
+        onApproveStore={handleApproveStore}
+        onRejectStore={handleRejectStore}
+        onPreviewStore={handlePreviewStore}
         isUpdating={isUpdatingBusinessStatus}
+        canModerate={hasPerm('platform.stores.moderate')}
+        canApprove={hasPerm('platform.stores.approve')}
+        canUnblock={hasPerm('platform.stores.unblock')}
+        canArchive={hasPerm('platform.stores.archive')}
+        canIssueStrikes={hasPerm('platform.strikes.issue')}
+        canRevokeStrikes={hasPerm('platform.strikes.revoke')}
+        onRefresh={loadPlatformData}
       />
 
       {/* User Details Modal */}
       <UserDetailsModal
-        user={selectedUser}
+        user={
+          selectedUser
+            ? usersList.find((u) => u.id === selectedUser.id) || selectedUser
+            : null
+        }
         isOpen={isUserModalOpen}
         onClose={() => {
           setIsUserModalOpen(false);
           setSelectedUser(null);
         }}
         onUpdateStatus={handleUpdateUserStatus}
-        onTogglePlatformRole={handleTogglePlatformRole}
+        onUpdateSubscription={handleUpdateUserSubscription}
+        canEditStatus={hasPerm('platform.users.edit')}
+        canUnblock={hasPerm('platform.users.unblock')}
+        canArchive={hasPerm('platform.users.archive')}
+        canManageSubscriptions={hasPerm('platform.users.subscriptions')}
       />
     </PlatformLayout>
   );

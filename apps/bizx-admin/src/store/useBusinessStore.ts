@@ -1,10 +1,10 @@
 import { create } from 'zustand';
 import { api } from '../lib/api';
+import type { EnrichedOrderResponse } from '@bizx/api-client';
 import type {
   Store,
   Product,
   ProductCategory,
-  OrderResponse,
   StoreAnalytics,
   CreateProductDto,
   UpdateProductDto,
@@ -20,13 +20,14 @@ interface BusinessState {
   analytics: StoreAnalytics | null;
   products: Product[];
   categories: ProductCategory[];
-  orders: OrderResponse[];
+  orders: EnrichedOrderResponse[];
   isLoading: boolean;
   error: string | null;
 
   fetchStores: () => Promise<void>;
   setActiveStore: (storeId: string) => void;
   fetchStoreData: (storeId: string) => Promise<void>;
+  refreshOrders: () => Promise<void>;
   createProduct: (dto: CreateProductDto, imageFile?: File) => Promise<boolean>;
   updateProduct: (id: string, dto: UpdateProductDto, imageFile?: File) => Promise<boolean>;
   deleteProduct: (id: string) => Promise<boolean>;
@@ -105,6 +106,19 @@ export const useBusinessStore = create<BusinessState>((set, get) => ({
       });
     } catch (err: any) {
       set({ error: err.message || 'Помилка завантаження даних магазину', isLoading: false });
+    }
+  },
+
+  refreshOrders: async () => {
+    const storeId = get().activeStoreId;
+    if (!storeId) return;
+    try {
+      const ordersRes = await api.orders.getStoreOrders(storeId);
+      if (ordersRes.success && ordersRes.data) {
+        set({ orders: ordersRes.data });
+      }
+    } catch {
+      // ignore
     }
   },
 
@@ -237,7 +251,9 @@ export const useBusinessStore = create<BusinessState>((set, get) => ({
       if (res.success && res.data) {
         const updated = res.data;
         set((state) => ({
-          orders: state.orders.map((o) => (o.id === orderId ? updated : o))
+          orders: state.orders.map((o) =>
+            o.id === orderId ? { ...o, ...updated } : o
+          )
         }));
         return true;
       }

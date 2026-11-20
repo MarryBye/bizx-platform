@@ -6,62 +6,37 @@ import {
   TouchableOpacity
 } from 'react-native';
 import { MaterialIcon } from '../components/MaterialIcon';
+import { MobileBadge, MobileCountBadge, getOrderStatusMeta } from '../components/MobileBadge';
 import { useMobileStoresStore } from '../store/useMobileStoresStore';
 import { useMobileAuthStore } from '../store/useMobileAuthStore';
+import type { CustomerOrderSummary } from '@bizx/api-client';
 
 interface OrdersScreenProps {
   onGoToProfile?: () => void;
   onExploreStores?: () => void;
+  onSelectOrder: (order: CustomerOrderSummary) => void;
 }
 
-export const OrdersScreen: React.FC<OrdersScreenProps> = ({ onGoToProfile, onExploreStores }) => {
-  const { myOrders, fetchMyOrders } = useMobileStoresStore();
+export const OrdersScreen: React.FC<OrdersScreenProps> = ({
+  onGoToProfile,
+  onExploreStores,
+  onSelectOrder
+}) => {
+  const { myOrders, fetchMyOrders, fetchUnreadSummary } = useMobileStoresStore();
   const { user } = useMobileAuthStore();
 
   useEffect(() => {
     if (user) {
       void fetchMyOrders();
+      void fetchUnreadSummary();
     }
-  }, [user, fetchMyOrders]);
+  }, [user, fetchMyOrders, fetchUnreadSummary]);
 
   const formatPrice = (kopecks: number) => {
     return (kopecks / 100).toLocaleString('uk-UA', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2
     });
-  };
-
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case 'confirmed':
-        return 'Підтверджено';
-      case 'processing':
-        return 'Комплектується';
-      case 'shipped':
-        return 'В дорозі';
-      case 'delivered':
-        return 'Виконано';
-      case 'cancelled':
-        return 'Скасовано';
-      case 'pending':
-      default:
-        return 'Очікує підтвердження';
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'delivered':
-        return 'bg-emerald-50 text-emerald-700 border border-emerald-200';
-      case 'shipped':
-      case 'confirmed':
-        return 'bg-slate-100 text-slate-800 border border-slate-200';
-      case 'cancelled':
-        return 'bg-red-50 text-red-700 border border-red-200';
-      case 'pending':
-      default:
-        return 'bg-amber-50 text-amber-700 border border-amber-200';
-    }
   };
 
   if (!user) {
@@ -73,7 +48,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({ onGoToProfile, onExp
           </View>
           <Text className="text-base font-black text-slate-900 mb-1">Історія покупок</Text>
           <Text className="text-xs text-slate-500 text-center mb-6 leading-5">
-            Увійдіть у свій обліковий запис, щоб переглядати історію замовлень та відстежувати їхній статус
+            Увійдіть у свій обліковий запис, щоб переглядати історію замовлень, спілкуватись із підтримкою та залишати відгуки
           </Text>
           <TouchableOpacity
             onPress={onGoToProfile}
@@ -89,49 +64,121 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({ onGoToProfile, onExp
   return (
     <ScrollView className="flex-1 bg-slate-50" contentContainerStyle={{ paddingBottom: 120 }}>
       {/* Header */}
-      <View className="px-5 pt-4 pb-2">
-        <Text className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-          Історія покупок
-        </Text>
-        <Text className="text-2xl font-black text-slate-900 mt-0.5">Мої замовлення</Text>
+      <View className="px-5 pt-4 pb-2 flex-row items-end justify-between">
+        <View>
+          <Text className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+            Історія покупок
+          </Text>
+          <Text className="text-2xl font-black text-slate-900 mt-0.5">Мої замовлення</Text>
+        </View>
+        <TouchableOpacity
+          onPress={() => {
+            void fetchMyOrders();
+            void fetchUnreadSummary();
+          }}
+          className="w-9 h-9 rounded-lg bg-white border border-slate-200 items-center justify-center shadow-sm"
+        >
+          <MaterialIcon name="refresh" size={18} color="#334155" />
+        </TouchableOpacity>
       </View>
 
       <View className="px-5 mt-3 space-y-3">
         {myOrders.length > 0 ? (
-          myOrders.map((order) => (
-            <View
-              key={order.id}
-              className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm mb-3"
-            >
-              <View className="flex-row items-center justify-between border-b border-slate-100 pb-2.5">
-                <View>
-                  <Text className="font-black text-slate-900 text-xs font-mono">{order.orderNumber}</Text>
-                  <Text className="text-[10px] text-slate-400 mt-0.5">
-                    {new Date(order.createdAt).toLocaleDateString('uk-UA')}
+          myOrders.map((order) => {
+            const unread = order.unreadCount || 0;
+            const hasActiveDispute = Boolean(order.activeDispute);
+            const hasPendingRefund = order.refundOfferStatus === 'pending_customer';
+
+            return (
+              <TouchableOpacity
+                key={order.id}
+                activeOpacity={0.8}
+                onPress={() => onSelectOrder(order)}
+                className={`bg-white border rounded-xl p-4 shadow-sm mb-3 ${
+                  hasActiveDispute
+                    ? 'border-red-300'
+                    : hasPendingRefund
+                    ? 'border-emerald-300'
+                    : 'border-slate-200'
+                }`}
+              >
+                <View className="flex-row items-center justify-between border-b border-slate-100 pb-2.5">
+                  <View className="flex-row items-center gap-2">
+                    <View>
+                      <Text className="font-black text-slate-900 text-xs font-mono">
+                        {order.orderNumber}
+                      </Text>
+                      <Text className="text-[10px] text-slate-400 mt-0.5">
+                        {new Date(order.createdAt).toLocaleDateString('uk-UA')}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View className="flex-row items-center gap-1.5">
+                    <MobileCountBadge count={unread} tone="blue" iconName="chat-bubble" />
+                    {(() => {
+                      const st = getOrderStatusMeta(order.status);
+                      return <MobileBadge tone={st.tone} label={st.label} uppercase />;
+                    })()}
+                  </View>
+                </View>
+
+                <View className="pt-3 flex-row items-center justify-between">
+                  <View className="flex-1 pr-2">
+                    <Text className="text-xs font-semibold text-slate-800" numberOfLines={1}>
+                      {order.storeName || 'Магазин BizX'}
+                    </Text>
+                    <Text className="text-[11px] text-slate-400">
+                      {order.itemsCount} {order.itemsCount === 1 ? 'позиція' : 'позиції'}
+                    </Text>
+                  </View>
+
+                  <Text className="text-sm font-black text-slate-900">
+                    {formatPrice(order.totalAmount)} ₴
                   </Text>
                 </View>
 
-                <View className={`px-2 py-0.5 rounded ${getStatusColor(order.status)}`}>
-                  <Text className="text-[10px] font-bold uppercase">{getStatusText(order.status)}</Text>
-                </View>
-              </View>
+                {/* Status highlights & chat CTA */}
+                <View className="mt-2.5 pt-2.5 border-t border-slate-100 flex-row items-center justify-between flex-wrap gap-1.5">
+                  <View className="flex-row items-center gap-1.5 flex-wrap">
+                    {hasActiveDispute && (
+                      <MobileBadge
+                        tone="rose"
+                        iconName="report-problem"
+                        label={
+                          order.activeDispute?.status === 'escalated_platform'
+                            ? 'На розгляді BizX'
+                            : 'Відкрито спір'
+                        }
+                      />
+                    )}
+                    {hasPendingRefund && (
+                      <MobileBadge
+                        tone="emerald"
+                        iconName="currency-exchange"
+                        label="Підтвердіть повернення"
+                      />
+                    )}
+                    {order.review && (
+                      <MobileBadge
+                        tone="amber"
+                        iconName="star"
+                        label={`${order.review.rating}/5`}
+                      />
+                    )}
+                    {order.status === 'delivered' && !order.review && (
+                      <MobileBadge tone="slate" iconName="star-border" label="Оцінити" />
+                    )}
+                  </View>
 
-              <View className="pt-3 flex-row items-center justify-between">
-                <View>
-                  <Text className="text-xs font-semibold text-slate-800">
-                    {order.storeName || 'Магазин BizX'}
-                  </Text>
-                  <Text className="text-[11px] text-slate-400">
-                    {order.itemsCount} {order.itemsCount === 1 ? 'позиція' : 'позиції'}
-                  </Text>
+                  <View className="flex-row items-center gap-1">
+                    <Text className="text-[11px] font-bold text-slate-700">Деталі та чат</Text>
+                    <MaterialIcon name="chevron-right" size={16} color="#475569" />
+                  </View>
                 </View>
-
-                <Text className="text-sm font-black text-slate-900">
-                  {formatPrice(order.totalAmount)} ₴
-                </Text>
-              </View>
-            </View>
-          ))
+              </TouchableOpacity>
+            );
+          })
         ) : (
           <View className="bg-white border border-dashed border-slate-300 rounded-xl p-8 items-center justify-center">
             <View className="w-12 h-12 rounded-xl bg-slate-100 items-center justify-center mb-2">

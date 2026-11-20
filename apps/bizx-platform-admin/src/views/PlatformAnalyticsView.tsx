@@ -20,23 +20,30 @@ import { useTranslation } from '../hooks/useTranslation';
 import type { AnalyticsPeriod, OrderStatus, PlatformAnalytics } from '@bizx/common-types';
 import type { ExtendedBusiness } from './BusinessesView';
 import {
-  Filter,
-  Download,
-  FileSpreadsheet,
-  RotateCcw,
+  AnalyticsPageHeader,
+  AnalyticsFiltersCard,
+  AnalyticsKpiGrid,
+  AnalyticsChartCard,
+  AnalyticsDataTableShell
+} from '@bizx/ui';
+import { formatMoney as formatMoneyShared } from '@bizx/utils';
+import {
   TrendingUp,
   BarChart3,
   ScatterChart as ScatterIcon,
-  Table2,
   Loader2
 } from 'lucide-react';
 
 interface PlatformAnalyticsViewProps {
   initialAnalytics: PlatformAnalytics | null;
   businesses: ExtendedBusiness[];
+  canExport?: boolean;
 }
 
 type TableTab = 'daily' | 'monthly' | 'stores';
+
+const TOP_LIMIT_OPTIONS = [5, 10, 20, 50, 500] as const;
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const;
 
 const ORDER_STATUSES: OrderStatus[] = [
   'pending',
@@ -49,7 +56,8 @@ const ORDER_STATUSES: OrderStatus[] = [
 
 export const PlatformAnalyticsView: React.FC<PlatformAnalyticsViewProps> = ({
   initialAnalytics,
-  businesses
+  businesses,
+  canExport = false
 }) => {
   const { t, locale } = useTranslation();
 
@@ -65,6 +73,9 @@ export const PlatformAnalyticsView: React.FC<PlatformAnalyticsViewProps> = ({
   const [data, setData] = useState<PlatformAnalytics | null>(initialAnalytics);
   const [isLoading, setIsLoading] = useState(false);
   const [tableTab, setTableTab] = useState<TableTab>('stores');
+  const [topLimit, setTopLimit] = useState<number>(10);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(10);
 
   const fetchAnalytics = useCallback(async () => {
     setIsLoading(true);
@@ -75,7 +86,8 @@ export const PlatformAnalyticsView: React.FC<PlatformAnalyticsViewProps> = ({
         endDate: endDate || undefined,
         status: status || undefined,
         storeId: storeId || undefined,
-        minAmount: minAmountUah ? Math.round(Number(minAmountUah) * 100) : undefined
+        minAmount: minAmountUah ? Math.round(Number(minAmountUah) * 100) : undefined,
+        topLimit
       });
       if (res.success && res.data) {
         setData(res.data);
@@ -85,11 +97,15 @@ export const PlatformAnalyticsView: React.FC<PlatformAnalyticsViewProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [period, startDate, endDate, status, storeId, minAmountUah]);
+  }, [period, startDate, endDate, status, storeId, minAmountUah, topLimit]);
 
   useEffect(() => {
     fetchAnalytics();
   }, [fetchAnalytics]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [tableTab, pageSize, period, startDate, endDate, status, storeId, minAmountUah, minOrdersFilter, topLimit]);
 
   const handleResetFilters = () => {
     setPeriod('all');
@@ -101,11 +117,7 @@ export const PlatformAnalyticsView: React.FC<PlatformAnalyticsViewProps> = ({
     setMinOrdersFilter('');
   };
 
-  const formatMoney = (kopecks: number) =>
-    (kopecks / 100).toLocaleString(locale === 'en' ? 'en-US' : 'uk-UA', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    });
+  const formatMoney = (kopecks: number) => formatMoneyShared(kopecks, locale);
 
   const minOrdersNum = minOrdersFilter ? Number(minOrdersFilter) : 0;
 
@@ -150,6 +162,21 @@ export const PlatformAnalyticsView: React.FC<PlatformAnalyticsViewProps> = ({
       count
     }));
   }, [data, t]);
+
+  const activeRowsCount =
+    tableTab === 'stores'
+      ? storesChartData.length
+      : tableTab === 'daily'
+        ? dailyChartData.length
+        : monthlyChartData.length;
+  const totalPages = Math.max(1, Math.ceil(activeRowsCount / pageSize));
+  const safePage = Math.min(currentPage, totalPages);
+  const startIdx = (safePage - 1) * pageSize;
+  const paginatedStores = storesChartData.slice(startIdx, startIdx + pageSize);
+  const paginatedDaily = dailyChartData.slice(startIdx, startIdx + pageSize);
+  const paginatedMonthly = monthlyChartData.slice(startIdx, startIdx + pageSize);
+  const rangeFrom = activeRowsCount === 0 ? 0 : startIdx + 1;
+  const rangeTo = Math.min(startIdx + pageSize, activeRowsCount);
 
   const handleExportExcel = () => {
     if (!data) return;
@@ -236,57 +263,23 @@ export const PlatformAnalyticsView: React.FC<PlatformAnalyticsViewProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Header + Export Actions */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-        <div>
-          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-            BizX Core Analytics
-          </span>
-          <h1 className="text-2xl font-black tracking-tight text-slate-900 mt-0.5">
-            {t('analytics.title')}
-          </h1>
-          <p className="text-xs text-slate-500 mt-1">{t('analytics.platformSubtitle')}</p>
-        </div>
+      <AnalyticsPageHeader
+        eyebrow="BizX Core Analytics"
+        title={t('analytics.title')}
+        subtitle={t('analytics.platformSubtitle')}
+        canExport={canExport}
+        disableExport={!data}
+        exportCsvLabel={t('analytics.exportCsv')}
+        exportExcelLabel={t('analytics.exportExcel')}
+        onExportCsv={handleExportCsv}
+        onExportExcel={handleExportExcel}
+      />
 
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={handleExportCsv}
-            disabled={!data}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-800 rounded-lg text-xs font-bold transition-colors disabled:opacity-50"
-          >
-            <Download className="w-4 h-4 shrink-0" />
-            <span>{t('analytics.exportCsv')}</span>
-          </button>
-          <button
-            type="button"
-            onClick={handleExportExcel}
-            disabled={!data}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold transition-colors shadow-sm disabled:opacity-50"
-          >
-            <FileSpreadsheet className="w-4 h-4 shrink-0" />
-            <span>{t('analytics.exportExcel')}</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Filters Panel */}
-      <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-sm font-black text-slate-900">
-            <Filter className="w-4 h-4 text-slate-500" />
-            <span>{t('analytics.filters')}</span>
-          </div>
-          <button
-            type="button"
-            onClick={handleResetFilters}
-            className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-900 transition-colors"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            <span>{t('analytics.resetFilters')}</span>
-          </button>
-        </div>
-
+      <AnalyticsFiltersCard
+        title={t('analytics.filters')}
+        resetLabel={t('analytics.resetFilters')}
+        onReset={handleResetFilters}
+      >
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-3">
           <div className="space-y-1">
             <label className="text-[10px] font-bold text-slate-500 uppercase">
@@ -397,7 +390,7 @@ export const PlatformAnalyticsView: React.FC<PlatformAnalyticsViewProps> = ({
             />
           </div>
         </div>
-      </div>
+      </AnalyticsFiltersCard>
 
       {isLoading ? (
         <div className="py-16 flex items-center justify-center gap-2 text-slate-500 text-sm">
@@ -406,129 +399,131 @@ export const PlatformAnalyticsView: React.FC<PlatformAnalyticsViewProps> = ({
         </div>
       ) : (
         <>
-          {/* Filtered KPI Summary */}
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-            <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm">
-              <div className="text-[10px] font-bold text-slate-400 uppercase">{t('platform.gmv')}</div>
-              <div className="text-xl font-black text-slate-900 mt-1">
-                {formatMoney(totalRev)} <span className="text-xs text-slate-500">₴</span>
-              </div>
-            </div>
-            <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm">
-              <div className="text-[10px] font-bold text-slate-400 uppercase">{t('platform.orders')}</div>
-              <div className="text-xl font-black text-slate-900 mt-1">{totalOrders}</div>
-            </div>
-            <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm">
-              <div className="text-[10px] font-bold text-slate-400 uppercase">{t('platform.avgCheck')}</div>
-              <div className="text-xl font-black text-slate-900 mt-1">
-                {formatMoney(aov)} <span className="text-xs text-slate-500">₴</span>
-              </div>
-            </div>
-            <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm">
-              <div className="text-[10px] font-bold text-slate-400 uppercase">{t('platform.stores')}</div>
-              <div className="text-xl font-black text-slate-900 mt-1">
-                {data?.activeStores ?? 0} / {data?.totalStores ?? 0}
-              </div>
-            </div>
-          </div>
+          <AnalyticsKpiGrid
+            columnsClassName="grid-cols-1 sm:grid-cols-4"
+            items={[
+              {
+                label: t('platform.gmv'),
+                value: (
+                  <>
+                    {formatMoney(totalRev)} <span className="text-xs text-slate-500">₴</span>
+                  </>
+                )
+              },
+              {
+                label: t('platform.orders'),
+                value: totalOrders
+              },
+              {
+                label: t('platform.avgCheck'),
+                value: (
+                  <>
+                    {formatMoney(aov)} <span className="text-xs text-slate-500">₴</span>
+                  </>
+                )
+              },
+              {
+                label: t('platform.stores'),
+                value: `${data?.activeStores ?? 0} / ${data?.totalStores ?? 0}`
+              }
+            ]}
+          />
 
-          {/* Line Chart: Daily GMV & Orders */}
-          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-3">
-            <div>
-              <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
-                <TrendingUp className="w-4 h-4 text-slate-600" />
-                <span>{t('analytics.revenueOverTime')}</span>
-              </h3>
-              <p className="text-[11px] text-slate-500">{t('analytics.revenueOverTimeDesc')}</p>
+          <AnalyticsChartCard
+            title={t('analytics.revenueOverTime')}
+            description={t('analytics.revenueOverTimeDesc')}
+            icon={<TrendingUp className="w-4 h-4 text-slate-600" />}
+            hasData={dailyChartData.length > 0}
+            emptyLabel={t('analytics.noChartData')}
+          >
+            <div className="h-72 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={dailyChartData} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#64748b' }} />
+                  <YAxis yAxisId="left" tick={{ fontSize: 11, fill: '#64748b' }} />
+                  <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11, fill: '#64748b' }} />
+                  <Tooltip />
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                  <Line
+                    yAxisId="left"
+                    type="monotone"
+                    dataKey="revenueUah"
+                    name={t('analytics.revenueAxis')}
+                    stroke="#0f172a"
+                    strokeWidth={2.5}
+                    dot={{ r: 3 }}
+                  />
+                  <Line
+                    yAxisId="right"
+                    type="monotone"
+                    dataKey="ordersCount"
+                    name={t('analytics.ordersAxis')}
+                    stroke="#10b981"
+                    strokeWidth={2}
+                    dot={{ r: 3 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
             </div>
-            {dailyChartData.length > 0 ? (
-              <div className="h-72 w-full">
+          </AnalyticsChartCard>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <AnalyticsChartCard
+              title={t('analytics.topStoresChart')}
+              description={t('platform.topStoresSubtitle')}
+              icon={<BarChart3 className="w-4 h-4 text-slate-600" />}
+              hasData={storesChartData.length > 0}
+              emptyLabel={t('analytics.noChartData')}
+              headerRight={
+                <select
+                  value={topLimit}
+                  onChange={(e) => setTopLimit(Number(e.target.value))}
+                  className="text-xs font-bold px-2 py-1 bg-white border border-slate-300 rounded-lg focus:outline-none focus:border-slate-900 text-slate-800 shrink-0"
+                >
+                  {TOP_LIMIT_OPTIONS.map((opt) => (
+                    <option key={opt} value={opt}>
+                      {opt === 500
+                        ? t('analytics.topAll')
+                        : t('platform.topCount', { count: opt })}
+                    </option>
+                  ))}
+                </select>
+              }
+            >
+              <div className="h-64 w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={dailyChartData} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
+                  <BarChart data={storesChartData} margin={{ top: 10, right: 10, left: 0, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                    <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#64748b' }} />
-                    <YAxis yAxisId="left" tick={{ fontSize: 11, fill: '#64748b' }} />
-                    <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11, fill: '#64748b' }} />
+                    <XAxis dataKey="storeName" tick={{ fontSize: 10, fill: '#64748b' }} />
+                    <YAxis tick={{ fontSize: 11, fill: '#64748b' }} />
                     <Tooltip />
-                    <Legend wrapperStyle={{ fontSize: 12 }} />
-                    <Line
-                      yAxisId="left"
-                      type="monotone"
+                    <Bar
                       dataKey="revenueUah"
                       name={t('analytics.revenueAxis')}
-                      stroke="#0f172a"
-                      strokeWidth={2.5}
-                      dot={{ r: 3 }}
+                      fill="#0f172a"
+                      radius={[4, 4, 0, 0]}
                     />
-                    <Line
-                      yAxisId="right"
-                      type="monotone"
-                      dataKey="ordersCount"
-                      name={t('analytics.ordersAxis')}
-                      stroke="#10b981"
-                      strokeWidth={2}
-                      dot={{ r: 3 }}
-                    />
-                  </LineChart>
+                  </BarChart>
                 </ResponsiveContainer>
               </div>
-            ) : (
-              <p className="text-xs text-slate-400 py-10 text-center">
-                {t('analytics.noChartData')}
-              </p>
-            )}
-          </div>
+            </AnalyticsChartCard>
 
-          {/* Bar Charts Row: Top Stores + Monthly / Status */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-3">
-              <div>
-                <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
-                  <BarChart3 className="w-4 h-4 text-slate-600" />
-                  <span>{t('analytics.topStoresChart')}</span>
-                </h3>
-                <p className="text-[11px] text-slate-500">{t('platform.topStoresSubtitle')}</p>
-              </div>
-              {storesChartData.length > 0 ? (
-                <div className="h-64 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={storesChartData} margin={{ top: 10, right: 10, left: 0, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                      <XAxis dataKey="storeName" tick={{ fontSize: 10, fill: '#64748b' }} />
-                      <YAxis tick={{ fontSize: 11, fill: '#64748b' }} />
-                      <Tooltip />
-                      <Bar
-                        dataKey="revenueUah"
-                        name={t('analytics.revenueAxis')}
-                        fill="#0f172a"
-                        radius={[4, 4, 0, 0]}
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              ) : (
-                <p className="text-xs text-slate-400 py-10 text-center">
-                  {t('analytics.noChartData')}
-                </p>
-              )}
-            </div>
-
-            <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-3">
-              <div>
-                <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
-                  <BarChart3 className="w-4 h-4 text-slate-600" />
-                  <span>
-                    {monthlyChartData.length > 0
-                      ? t('analytics.monthlyComparison')
-                      : t('analytics.statusDistribution')}
-                  </span>
-                </h3>
-                <p className="text-[11px] text-slate-500">
-                  {monthlyChartData.length > 0
-                    ? t('analytics.monthlyComparisonDesc')
-                    : t('analytics.statusDistributionDesc')}
-                </p>
-              </div>
+            <AnalyticsChartCard
+              title={
+                monthlyChartData.length > 0
+                  ? t('analytics.monthlyComparison')
+                  : t('analytics.statusDistribution')
+              }
+              description={
+                monthlyChartData.length > 0
+                  ? t('analytics.monthlyComparisonDesc')
+                  : t('analytics.statusDistributionDesc')
+              }
+              icon={<BarChart3 className="w-4 h-4 text-slate-600" />}
+              hasData={monthlyChartData.length > 0 || statusChartData.length > 0}
+              emptyLabel={t('analytics.noChartData')}
+            >
               {monthlyChartData.length > 0 ? (
                 <div className="h-64 w-full">
                   <ResponsiveContainer width="100%" height="100%">
@@ -546,7 +541,7 @@ export const PlatformAnalyticsView: React.FC<PlatformAnalyticsViewProps> = ({
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
-              ) : statusChartData.length > 0 ? (
+              ) : (
                 <div className="h-64 w-full">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={statusChartData} margin={{ top: 10, right: 10, left: 0, bottom: 5 }}>
@@ -563,197 +558,183 @@ export const PlatformAnalyticsView: React.FC<PlatformAnalyticsViewProps> = ({
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
-              ) : (
-                <p className="text-xs text-slate-400 py-10 text-center">
-                  {t('analytics.noChartData')}
-                </p>
               )}
-            </div>
+            </AnalyticsChartCard>
           </div>
 
-          {/* Scatter Chart: Store Orders vs Revenue */}
-          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-3">
-            <div>
-              <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
-                <ScatterIcon className="w-4 h-4 text-slate-600" />
-                <span>{t('analytics.scatterTitle')}</span>
-              </h3>
-              <p className="text-[11px] text-slate-500">{t('analytics.scatterStoresDesc')}</p>
+          <AnalyticsChartCard
+            title={t('analytics.scatterTitle')}
+            description={t('analytics.scatterStoresDesc')}
+            icon={<ScatterIcon className="w-4 h-4 text-slate-600" />}
+            hasData={storesChartData.length > 0}
+            emptyLabel={t('analytics.noChartData')}
+          >
+            <div className="h-64 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <ScatterChart margin={{ top: 10, right: 20, bottom: 10, left: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis
+                    type="number"
+                    dataKey="ordersCount"
+                    name={t('analytics.ordersAxis')}
+                    tick={{ fontSize: 11, fill: '#64748b' }}
+                  />
+                  <YAxis
+                    type="number"
+                    dataKey="revenueUah"
+                    name={t('analytics.revenueAxis')}
+                    tick={{ fontSize: 11, fill: '#64748b' }}
+                  />
+                  <ZAxis range={[80, 240]} />
+                  <Tooltip cursor={{ strokeDasharray: '3 3' }} />
+                  <Scatter
+                    name={t('analytics.tabStores')}
+                    data={storesChartData}
+                    fill="#7c3aed"
+                  />
+                </ScatterChart>
+              </ResponsiveContainer>
             </div>
-            {storesChartData.length > 0 ? (
-              <div className="h-64 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <ScatterChart margin={{ top: 10, right: 20, bottom: 10, left: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                    <XAxis
-                      type="number"
-                      dataKey="ordersCount"
-                      name={t('analytics.ordersAxis')}
-                      tick={{ fontSize: 11, fill: '#64748b' }}
-                    />
-                    <YAxis
-                      type="number"
-                      dataKey="revenueUah"
-                      name={t('analytics.revenueAxis')}
-                      tick={{ fontSize: 11, fill: '#64748b' }}
-                    />
-                    <ZAxis range={[80, 240]} />
-                    <Tooltip cursor={{ strokeDasharray: '3 3' }} />
-                    <Scatter
-                      name={t('analytics.tabStores')}
-                      data={storesChartData}
-                      fill="#7c3aed"
-                    />
-                  </ScatterChart>
-                </ResponsiveContainer>
-              </div>
-            ) : (
-              <p className="text-xs text-slate-400 py-10 text-center">
-                {t('analytics.noChartData')}
-              </p>
+          </AnalyticsChartCard>
+
+          <AnalyticsDataTableShell
+            title={t('analytics.tableTitle')}
+            tabs={[
+              { key: 'stores', label: t('analytics.tabStores') },
+              { key: 'daily', label: t('analytics.tabDaily') },
+              { key: 'monthly', label: t('analytics.tabMonthly') }
+            ]}
+            activeTab={tableTab}
+            onTabChange={setTableTab}
+            pageSize={pageSize}
+            pageSizeOptions={PAGE_SIZE_OPTIONS}
+            onPageSizeChange={setPageSize}
+            rowsPerPageLabel={t('analytics.rowsPerPage')}
+            totalRows={activeRowsCount}
+            showingRangeText={t('analytics.showingRange', {
+              from: rangeFrom,
+              to: rangeTo,
+              total: activeRowsCount
+            })}
+            pageOfText={t('analytics.pageOf', { page: safePage, pages: totalPages })}
+            prevLabel={t('analytics.prevPage')}
+            nextLabel={t('analytics.nextPage')}
+            canPrev={safePage > 1}
+            canNext={safePage < totalPages}
+            onPrev={() => setCurrentPage((p) => Math.max(1, p - 1))}
+            onNext={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+          >
+            {tableTab === 'stores' && (
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-slate-200 text-slate-500 font-bold uppercase">
+                    <th className="py-2.5 px-3">{t('platform.storeCol')}</th>
+                    <th className="py-2.5 px-3 text-right">{t('analytics.ordersAxis')}</th>
+                    <th className="py-2.5 px-3 text-right">{t('analytics.revenueAxis')}</th>
+                    <th className="py-2.5 px-3 text-right">{t('analytics.avgCheck')}</th>
+                    <th className="py-2.5 px-3 text-right">{t('analytics.shareOfRevenue')}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {paginatedStores.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="py-6 text-center text-slate-400">
+                        {t('common.noData')}
+                      </td>
+                    </tr>
+                  ) : (
+                    paginatedStores.map((s) => (
+                      <tr key={s.storeId} className="hover:bg-slate-50">
+                        <td className="py-2.5 px-3 font-bold text-slate-900">{s.storeName}</td>
+                        <td className="py-2.5 px-3 text-right font-mono text-slate-600">
+                          {s.ordersCount}
+                        </td>
+                        <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900">
+                          {s.revenueUah.toFixed(2)} ₴
+                        </td>
+                        <td className="py-2.5 px-3 text-right font-mono text-slate-600">
+                          {s.aovUah.toFixed(2)} ₴
+                        </td>
+                        <td className="py-2.5 px-3 text-right font-mono text-slate-600">
+                          {s.sharePct}%
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             )}
-          </div>
 
-          {/* Filtered Data Table */}
-          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-              <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
-                <Table2 className="w-4 h-4 text-slate-600" />
-                <span>{t('analytics.tableTitle')}</span>
-              </h3>
-              <div className="inline-flex p-1 bg-slate-100 rounded-lg text-xs font-bold">
-                {(['stores', 'daily', 'monthly'] as const).map((tabKey) => (
-                  <button
-                    key={tabKey}
-                    type="button"
-                    onClick={() => setTableTab(tabKey)}
-                    className={`px-3 py-1 rounded-md transition-colors ${
-                      tableTab === tabKey
-                        ? 'bg-white text-slate-900 shadow-xs'
-                        : 'text-slate-500 hover:text-slate-800'
-                    }`}
-                  >
-                    {tabKey === 'stores' && t('analytics.tabStores')}
-                    {tabKey === 'daily' && t('analytics.tabDaily')}
-                    {tabKey === 'monthly' && t('analytics.tabMonthly')}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="overflow-x-auto">
-              {tableTab === 'stores' && (
-                <table className="w-full text-left text-xs">
-                  <thead>
-                    <tr className="border-b border-slate-200 text-slate-500 font-bold uppercase">
-                      <th className="py-2.5 px-3">{t('platform.storeCol')}</th>
-                      <th className="py-2.5 px-3 text-right">{t('analytics.ordersAxis')}</th>
-                      <th className="py-2.5 px-3 text-right">{t('analytics.revenueAxis')}</th>
-                      <th className="py-2.5 px-3 text-right">{t('analytics.avgCheck')}</th>
-                      <th className="py-2.5 px-3 text-right">{t('analytics.shareOfRevenue')}</th>
+            {tableTab === 'daily' && (
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-slate-200 text-slate-500 font-bold uppercase">
+                    <th className="py-2.5 px-3">{t('common.date')}</th>
+                    <th className="py-2.5 px-3 text-right">{t('analytics.ordersAxis')}</th>
+                    <th className="py-2.5 px-3 text-right">{t('analytics.revenueAxis')}</th>
+                    <th className="py-2.5 px-3 text-right">{t('analytics.avgCheck')}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {paginatedDaily.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="py-6 text-center text-slate-400">
+                        {t('common.noData')}
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {storesChartData.length === 0 ? (
-                      <tr>
-                        <td colSpan={5} className="py-6 text-center text-slate-400">
-                          {t('common.noData')}
+                  ) : (
+                    paginatedDaily.map((d) => (
+                      <tr key={d.date} className="hover:bg-slate-50">
+                        <td className="py-2.5 px-3 font-medium text-slate-900">{d.date}</td>
+                        <td className="py-2.5 px-3 text-right font-mono text-slate-600">
+                          {d.ordersCount}
+                        </td>
+                        <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900">
+                          {d.revenueUah.toFixed(2)} ₴
+                        </td>
+                        <td className="py-2.5 px-3 text-right font-mono text-slate-600">
+                          {d.aovUah.toFixed(2)} ₴
                         </td>
                       </tr>
-                    ) : (
-                      storesChartData.map((s) => (
-                        <tr key={s.storeId} className="hover:bg-slate-50">
-                          <td className="py-2.5 px-3 font-bold text-slate-900">{s.storeName}</td>
-                          <td className="py-2.5 px-3 text-right font-mono text-slate-600">
-                            {s.ordersCount}
-                          </td>
-                          <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900">
-                            {s.revenueUah.toFixed(2)} ₴
-                          </td>
-                          <td className="py-2.5 px-3 text-right font-mono text-slate-600">
-                            {s.aovUah.toFixed(2)} ₴
-                          </td>
-                          <td className="py-2.5 px-3 text-right font-mono text-slate-600">
-                            {s.sharePct}%
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              )}
+                    ))
+                  )}
+                </tbody>
+              </table>
+            )}
 
-              {tableTab === 'daily' && (
-                <table className="w-full text-left text-xs">
-                  <thead>
-                    <tr className="border-b border-slate-200 text-slate-500 font-bold uppercase">
-                      <th className="py-2.5 px-3">{t('common.date')}</th>
-                      <th className="py-2.5 px-3 text-right">{t('analytics.ordersAxis')}</th>
-                      <th className="py-2.5 px-3 text-right">{t('analytics.revenueAxis')}</th>
-                      <th className="py-2.5 px-3 text-right">{t('analytics.avgCheck')}</th>
+            {tableTab === 'monthly' && (
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-slate-200 text-slate-500 font-bold uppercase">
+                    <th className="py-2.5 px-3">{t('analytics.tabMonthly')}</th>
+                    <th className="py-2.5 px-3 text-right">{t('analytics.ordersAxis')}</th>
+                    <th className="py-2.5 px-3 text-right">{t('analytics.revenueAxis')}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {paginatedMonthly.length === 0 ? (
+                    <tr>
+                      <td colSpan={3} className="py-6 text-center text-slate-400">
+                        {t('common.noData')}
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {dailyChartData.length === 0 ? (
-                      <tr>
-                        <td colSpan={4} className="py-6 text-center text-slate-400">
-                          {t('common.noData')}
+                  ) : (
+                    paginatedMonthly.map((m) => (
+                      <tr key={m.month} className="hover:bg-slate-50">
+                        <td className="py-2.5 px-3 font-medium text-slate-900">{m.month}</td>
+                        <td className="py-2.5 px-3 text-right font-mono text-slate-600">
+                          {m.ordersCount}
+                        </td>
+                        <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900">
+                          {m.revenueUah.toFixed(2)} ₴
                         </td>
                       </tr>
-                    ) : (
-                      dailyChartData.map((d) => (
-                        <tr key={d.date} className="hover:bg-slate-50">
-                          <td className="py-2.5 px-3 font-medium text-slate-900">{d.date}</td>
-                          <td className="py-2.5 px-3 text-right font-mono text-slate-600">
-                            {d.ordersCount}
-                          </td>
-                          <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900">
-                            {d.revenueUah.toFixed(2)} ₴
-                          </td>
-                          <td className="py-2.5 px-3 text-right font-mono text-slate-600">
-                            {d.aovUah.toFixed(2)} ₴
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              )}
-
-              {tableTab === 'monthly' && (
-                <table className="w-full text-left text-xs">
-                  <thead>
-                    <tr className="border-b border-slate-200 text-slate-500 font-bold uppercase">
-                      <th className="py-2.5 px-3">{t('analytics.tabMonthly')}</th>
-                      <th className="py-2.5 px-3 text-right">{t('analytics.ordersAxis')}</th>
-                      <th className="py-2.5 px-3 text-right">{t('analytics.revenueAxis')}</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {monthlyChartData.length === 0 ? (
-                      <tr>
-                        <td colSpan={3} className="py-6 text-center text-slate-400">
-                          {t('common.noData')}
-                        </td>
-                      </tr>
-                    ) : (
-                      monthlyChartData.map((m) => (
-                        <tr key={m.month} className="hover:bg-slate-50">
-                          <td className="py-2.5 px-3 font-medium text-slate-900">{m.month}</td>
-                          <td className="py-2.5 px-3 text-right font-mono text-slate-600">
-                            {m.ordersCount}
-                          </td>
-                          <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900">
-                            {m.revenueUah.toFixed(2)} ₴
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          </div>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            )}
+          </AnalyticsDataTableShell>
         </>
       )}
     </div>

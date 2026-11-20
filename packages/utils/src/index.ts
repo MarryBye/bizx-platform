@@ -117,6 +117,7 @@ export const uk = {
     cart: 'Кошик',
     profile: 'Профіль',
     settings: 'Налаштування',
+    accountSettings: 'Налаштування акаунту',
     stores: 'Заклади'
   },
   roles: {
@@ -141,7 +142,8 @@ export const uk = {
     payment: {
       pending: 'Очікує оплати',
       paid: 'Оплачено',
-      failed: 'Помилка оплати'
+      failed: 'Помилка оплати',
+      refunded: 'Повернено'
     },
     store: {
       draft: 'Чернетка',
@@ -174,8 +176,8 @@ export const uk = {
     clientRole: 'Покупець',
     businessRole: 'Власник бізнесу',
     logoutConfirm: 'Ви дійсно бажаєте вийти з облікового запису?',
-    invalidCredentials: 'Невірний логін або пароль [AUTH_1001]',
-    accessForbidden: 'Доступ до розділу обмежено [AUTH_1002]',
+    invalidCredentials: 'Невірний логін або пароль',
+    accessForbidden: 'Доступ до розділу обмежено',
     loginSuccess: 'Успішний вхід',
     registerSuccess: 'Акаунт успішно зареєстровано',
     loginError: 'Невірні облікові дані або помилка авторизації',
@@ -211,7 +213,7 @@ export const uk = {
     ctaPricing: 'Переглянути тарифи',
     ctaPartner: 'Панель бізнесу',
     statsStores: 'Активних закладів',
-    statsUptime: 'Стабільність API',
+    statsUptime: 'Стабільність роботи',
     statsCommission: 'Комісія платформи',
     statsSetup: 'Швидкий запуск',
     featuresTag: 'МОЖЛИВОСТІ ПЛАТФОРМИ',
@@ -226,8 +228,8 @@ export const uk = {
     feature3Desc: 'Графіки продажів, середній чек, топ-товари та експорт звітів у Excel і CSV.',
     feature4Title: 'Ролі та права команди',
     feature4Desc: 'Додавайте менеджерів і персонал з гнучким розподілом прав доступу до закладу.',
-    feature5Title: 'Медіа-сховище Cloudflare R2',
-    feature5Desc: 'Миттєве завантаження логотипів, банерів та фото товарів із глобальним CDN.',
+    feature5Title: 'Швидке завантаження медіа',
+    feature5Desc: 'Миттєве завантаження логотипів, банерів та фото товарів у високій якості.',
     feature6Title: 'Безпечна авторизація BizX ID',
     feature6Desc: 'Єдиний обліковий запис для всіх сервісів платформи з входом за Email або телефоном.',
     benefitsTag: 'ДЛЯ БІЗНЕСУ',
@@ -294,7 +296,7 @@ export const uk = {
     storeCreated: 'Заклад успішно створено як чернетку',
     storeSubmitted: 'Заклад відправлено на модерацію',
     storeNameLabel: 'Назва закладу',
-    storeSlugLabel: 'URL-ідентифікатор (slug)',
+    storeSlugLabel: 'Адреса сторінки (URL)',
     storeAddressLabel: 'Адреса закладу',
     storePhoneLabel: 'Контактний телефон',
     storeDescLabel: 'Короткий опис',
@@ -317,7 +319,7 @@ export const uk = {
     upgradePlan: 'Перейти на тариф',
     activate30Days: 'Підключити на 30 днів',
     loginToSubscribe: 'Увійдіть, щоб підключити',
-    noCardNeeded: 'Банківська картка не потрібна. Демонстраційне підключення на 30 днів.',
+    noCardNeeded: 'Банківська картка не потрібна. Миттєве підключення тарифу на 30 днів.',
     subscribeSuccess: 'Тариф успішно активовано на 30 днів!',
     subscribeError: 'Не вдалося активувати тарифний план',
     faqTitle: 'Часті запитання про тарифи',
@@ -357,7 +359,12 @@ export const uk = {
     detailedAnalytics: 'Детальна аналітика',
     products: 'Товари та меню',
     orders: 'Замовлення',
+    marketing: 'Маркетинг і розсилки',
+    customers: 'Клієнти',
     staff: 'Команда',
+    roles: 'Ролі та доступи',
+    rolesTitle: 'Ролі та доступи закладу',
+    rolesSubtitle: 'Налаштовуйте ієрархію ролей та гнучкі права доступу для працівників',
     settings: 'Налаштування закладу',
     payouts: 'Виплати',
     payoutsTitle: 'Фінанси та виплати',
@@ -369,7 +376,7 @@ export const uk = {
     successfulPayments: 'Успішні оплати',
     totalOrders: 'Всього замовлень',
     processedBySystem: 'Оброблено системою',
-    averageOrderValue: 'Середній чек (AOV)',
+    averageOrderValue: 'Середній чек',
     perOrder: 'На одне замовлення',
     activeProducts: 'Активні товари',
     inStoreCatalog: 'В каталозі магазину',
@@ -383,7 +390,7 @@ export const uk = {
     noStatusData: 'Немає даних по статусах',
     salesDynamics: 'Динаміка продажів',
     noPeriodData: 'Дані за поточний період відсутні',
-    topProductsTitle: 'Топ найпопулярніших товарів за виручкою',
+    topProductsTitle: 'Топ-10 найпопулярніших товарів за виручкою',
     noTopProducts: 'Топ-товари поки відсутні',
     productCol: 'Товар',
     soldQtyCol: 'Продано шт.',
@@ -438,7 +445,14 @@ export const uk = {
     recordsCount: 'Записів: {count}',
     noChartData: 'Недостатньо даних для побудови графіка за обраними фільтрами',
     shareOfRevenue: 'Частка виторгу',
-    avgCheck: 'Середній чек'
+    avgCheck: 'Середній чек',
+    topLimitLabel: 'Показати:',
+    topAll: 'Усі',
+    rowsPerPage: 'Записів на сторінці:',
+    showingRange: 'Показано {from}–{to} із {total}',
+    pageOf: 'Стор. {page} з {pages}',
+    prevPage: 'Назад',
+    nextPage: 'Далі'
   },
   products: {
     title: 'Товари та каталог',
@@ -507,16 +521,25 @@ export const uk = {
     quickLinks: 'Швидкі переходи',
     tabMetrics: 'Огляд та метрики',
     tabAnalytics: 'Детальна аналітика',
-    tabBusinesses: 'Торгові точки',
+    tabBusinesses: 'Бізнеси',
+    tabBusinessesAll: 'Усі бізнеси',
+    tabBusinessesPending: 'Очікують підтвердження',
     tabUsers: 'Користувачі',
+    tabDisputes: 'Скарги',
+    tabCommunications: 'Комунікації',
+    tabSupport: 'Звернення підтримки',
+    tabBroadcasts: 'Розсилки BizX',
     tabStaff: 'Команда BizX',
+    tabRoles: 'Ролі та доступи',
+    rolesTitle: 'Ролі платформи BizX Core',
+    rolesSubtitle: 'Ієрархія ролей та гранулярні права доступу для команди платформи BizX',
     operatorFallback: 'Оператор платформи',
     logoutTitle: 'Вийти з консолі',
     overviewBadge: 'Огляд платформи BizX',
     realtimeBadge: 'Режим реального часу',
     metricsTitle: 'Огляд та системні показники',
     metricsSubtitle: 'Зведений оборот торгівлі, стан підключених бізнесів та навантаження на систему',
-    gmv: 'Оборот GMV',
+    gmv: 'Загальний оборот',
     orders: 'Замовлення',
     processedByPlatform: 'Оброблено платформою',
     avgCheck: 'Середній чек',
@@ -535,8 +558,8 @@ export const uk = {
     ordersCol: 'Замовлень',
     revenueCol: 'Виручка',
     shareCol: 'Частка обороту',
-    infraTitle: 'Стан системного оточення та інфраструктури',
-    infraSubtitle: 'Моніторинг сервісів бекенду, бази даних, сховища та черг',
+    infraTitle: 'Стан сервісів платформи',
+    infraSubtitle: 'Поточний стан основних сервісів BizX',
     allSystemsOperational: 'Всі системи в нормі',
     storeStatusDist: 'Розподіл бізнесів за статусами',
     storeStatusSubtitle: 'Поточний стан підключених торгових закладів',
@@ -577,6 +600,146 @@ export const uk = {
     orderNotes: 'Коментар до замовлення',
     totalToPay: 'До сплати',
     phoneSaved: 'Номер телефону збережено'
+  },
+  permissions: {
+    products: {
+      read: 'Перегляд товарів та категорій',
+      write: 'Створення нових товарів та категорій',
+      edit: 'Редагування даних, цін та фото товарів',
+      status: 'Зміна статусу товару (Активний / Чернетка)',
+      archive: 'Архівація (видалення) товарів та категорій'
+    },
+    orders: {
+      read: 'Перегляд замовлень клієнтів',
+      edit: 'Зміна статусів замовлень, оплати та чат із клієнтами',
+      refund: 'Швидке повернення коштів клієнту'
+    },
+    analytics: {
+      read: 'Перегляд дашборду та статистики продажів',
+      export: 'Експорт аналітики в Excel / CSV'
+    },
+    store: {
+      admin: 'Адміністратор (повний доступ, крім прав власника)',
+      read: 'Перегляд даних та налаштувань закладу',
+      edit: 'Редагування даних, логотипу та банера',
+      status: {
+        manage: 'Керування статусом закладу (пауза / модерація)'
+      }
+    },
+    staff: {
+      read: 'Перегляд списку працівників',
+      write: 'Додавання нових працівників',
+      edit: 'Зміна ролей та доступів працівників',
+      archive: 'Архівація (видалення) працівників із команди'
+    },
+    roles: {
+      read: 'Перегляд ролей та їх прав',
+      write: 'Створення нових ролей',
+      edit: 'Редагування ролей та зміна пріоритету',
+      archive: 'Архівація (видалення) ролей'
+    },
+    marketing: {
+      broadcasts: {
+        read: 'Перегляд підписників, лімітів та історії розсилок закладу',
+        send: 'Надсилання акційних розсилок та керування авто-знижками'
+      }
+    },
+    platform: {
+      admin: 'Адміністратор платформи (повний доступ з урахуванням ієрархії)',
+      stores: {
+        read: 'Перегляд усіх торгових точок платформи',
+        moderate: 'Модерація та призупинення закладів',
+        approve: 'Підтвердження та відхилення нових заявок бізнесів',
+        unblock: 'Дострокове розблокування призупинених закладів',
+        archive: 'Архівація (видалення) торгових точок'
+      },
+      categories: {
+        manage: 'Керування категоріями закладів'
+      },
+      users: {
+        read: 'Перегляд реєстру користувачів BizX ID',
+        edit: 'Блокування облікових записів користувачів',
+        unblock: 'Розблокування заблокованих користувачів',
+        subscriptions: 'Перегляд та керування підписками користувачів',
+        archive: 'Архівація облікових записів користувачів'
+      },
+      analytics: {
+        read: 'Перегляд метрик та аналітики платформи',
+        export: 'Експорт платформних звітів у Excel / CSV'
+      },
+      staff: {
+        read: 'Перегляд команди платформи BizX',
+        write: 'Додавання співробітників BizX',
+        edit: 'Редагування ролей співробітників BizX',
+        archive: 'Архівація (видалення) співробітників BizX'
+      },
+      roles: {
+        read: 'Перегляд ролей платформи',
+        write: 'Створення ролей платформи',
+        edit: 'Редагування та пріоритет ролей платформи',
+        archive: 'Архівація (видалення) ролей платформи'
+      },
+      disputes: {
+        read: 'Перегляд скарг та листування по спорах',
+        resolve: 'Розгляд скарг, повернення коштів та видача страйків'
+      },
+      strikes: {
+        issue: 'Ручна видача страйків закладам через керування',
+        revoke: 'Зняття страйків та дострокове розблокування закладів'
+      },
+      broadcasts: {
+        read: 'Перегляд журналу офіційних та технічних розсилок BizX',
+        send: 'Надсилання офіційних та технічних розсилок користувачам BizX'
+      },
+      support: {
+        read: 'Перегляд звернень користувачів у службу підтримки BizX',
+        reply: 'Відповіді користувачам у тікетах техпідтримки BizX'
+      }
+    }
+  },
+  permissionCategories: {
+    admin: 'Адміністрування',
+    products: 'Товари та каталог',
+    orders: 'Замовлення',
+    analytics: 'Статистика та аналітика',
+    store: 'Налаштування закладу',
+    staff: 'Команда та працівники',
+    roles: 'Ролі та ієрархія',
+    marketing: 'Маркетинг і розсилки',
+    platform_admin: 'Адміністрування платформи',
+    platform_stores: 'Торгові точки платформи',
+    platform_users: 'Користувачі BizX ID',
+    platform_analytics: 'Аналітика платформи',
+    platform_staff: 'Команда BizX',
+    platform_roles: 'Ролі платформи',
+    platform_disputes: 'Скарги та страйки',
+    platform_communications: 'Комунікації, розсилки та підтримка'
+  },
+  disputes: {
+    categories: {
+      not_received: 'Товар не прийшов',
+      damaged: 'Товар пошкоджено або брак',
+      wrong_item: 'Привезли не той товар',
+      missing_items: 'Неповна комплектація',
+      poor_quality: 'Низька якість товару / послуги',
+      other: 'Інше (описати власноруч)'
+    },
+    statuses: {
+      open_store: 'Відкрито спір',
+      escalated_platform: 'На розгляді BizX',
+      withdrawn: 'Відкликано клієнтом',
+      resolved_refund: 'Повернення узгоджено',
+      resolved_business: 'Закрито на користь бізнесу',
+      resolved_customer: 'Закрито на користь клієнта'
+    }
+  },
+  permissionActions: {
+    read: 'Читання',
+    write: 'Створення',
+    edit: 'Редагування',
+    manage: 'Керування',
+    export: 'Експорт',
+    archive: 'Архівація'
   }
 };
 
@@ -650,6 +813,7 @@ export const en: typeof uk = {
     cart: 'Cart',
     profile: 'Profile',
     settings: 'Settings',
+    accountSettings: 'Account Settings',
     stores: 'Stores'
   },
   roles: {
@@ -674,7 +838,8 @@ export const en: typeof uk = {
     payment: {
       pending: 'Awaiting payment',
       paid: 'Paid',
-      failed: 'Payment failed'
+      failed: 'Payment failed',
+      refunded: 'Refunded'
     },
     store: {
       draft: 'Draft',
@@ -707,8 +872,8 @@ export const en: typeof uk = {
     clientRole: 'Customer',
     businessRole: 'Business Owner',
     logoutConfirm: 'Are you sure you want to sign out?',
-    invalidCredentials: 'Invalid login or password [AUTH_1001]',
-    accessForbidden: 'Access restricted [AUTH_1002]',
+    invalidCredentials: 'Invalid login or password',
+    accessForbidden: 'Access restricted',
     loginSuccess: 'Successfully signed in',
     registerSuccess: 'Account successfully registered',
     loginError: 'Invalid credentials or authentication error',
@@ -744,7 +909,7 @@ export const en: typeof uk = {
     ctaPricing: 'View pricing',
     ctaPartner: 'Business Panel',
     statsStores: 'Active stores',
-    statsUptime: 'API reliability',
+    statsUptime: 'Platform uptime',
     statsCommission: 'Platform commission',
     statsSetup: 'Quick setup',
     featuresTag: 'PLATFORM FEATURES',
@@ -759,8 +924,8 @@ export const en: typeof uk = {
     feature3Desc: 'Sales charts, average order value, top products, and Excel/CSV report exports.',
     feature4Title: 'Team Roles & Permissions',
     feature4Desc: 'Invite managers and staff with flexible access controls for every store.',
-    feature5Title: 'Cloudflare R2 Media Storage',
-    feature5Desc: 'Instant upload for logos, banners, and product photos backed by global CDN.',
+    feature5Title: 'Fast Media Hosting',
+    feature5Desc: 'Instant upload and crisp delivery for logos, banners, and product photos.',
     feature6Title: 'Secure BizX ID Auth',
     feature6Desc: 'Single sign-on across all platform services using Email or Phone number.',
     benefitsTag: 'FOR BUSINESS',
@@ -827,7 +992,7 @@ export const en: typeof uk = {
     storeCreated: 'Store created as a draft',
     storeSubmitted: 'Store submitted for moderation',
     storeNameLabel: 'Store name',
-    storeSlugLabel: 'URL slug',
+    storeSlugLabel: 'Page web address (URL)',
     storeAddressLabel: 'Store address',
     storePhoneLabel: 'Contact phone',
     storeDescLabel: 'Short description',
@@ -850,7 +1015,7 @@ export const en: typeof uk = {
     upgradePlan: 'Upgrade plan',
     activate30Days: 'Activate for 30 days',
     loginToSubscribe: 'Sign in to subscribe',
-    noCardNeeded: 'No credit card required. 30-day demonstration activation.',
+    noCardNeeded: 'No credit card required. Instant 30-day plan activation.',
     subscribeSuccess: 'Plan successfully activated for 30 days!',
     subscribeError: 'Failed to activate subscription plan',
     faqTitle: 'Frequently Asked Questions',
@@ -890,7 +1055,12 @@ export const en: typeof uk = {
     detailedAnalytics: 'Detailed Analytics',
     products: 'Products & Menu',
     orders: 'Orders',
+    marketing: 'Marketing & Broadcasts',
+    customers: 'Customers',
     staff: 'Team',
+    roles: 'Roles & Permissions',
+    rolesTitle: 'Store Roles & Permissions',
+    rolesSubtitle: 'Configure role priority hierarchy and flexible employee access',
     settings: 'Store Settings',
     payouts: 'Payouts',
     payoutsTitle: 'Finance & Payouts',
@@ -902,7 +1072,7 @@ export const en: typeof uk = {
     successfulPayments: 'Successful payments',
     totalOrders: 'Total Orders',
     processedBySystem: 'Processed by system',
-    averageOrderValue: 'Average Order Value (AOV)',
+    averageOrderValue: 'Average Order Value',
     perOrder: 'Per order',
     activeProducts: 'Active Products',
     inStoreCatalog: 'In store catalog',
@@ -916,7 +1086,7 @@ export const en: typeof uk = {
     noStatusData: 'No status data yet',
     salesDynamics: 'Recent Sales Dynamics',
     noPeriodData: 'No data for the selected period',
-    topProductsTitle: 'Top Products by Revenue',
+    topProductsTitle: 'Top 10 Most Popular Products by Revenue',
     noTopProducts: 'No top products yet',
     productCol: 'Product',
     soldQtyCol: 'Sold qty',
@@ -971,7 +1141,14 @@ export const en: typeof uk = {
     recordsCount: 'Records: {count}',
     noChartData: 'Not enough data to render this chart for the selected filters',
     shareOfRevenue: 'Revenue share',
-    avgCheck: 'Avg check'
+    avgCheck: 'Avg check',
+    topLimitLabel: 'Show:',
+    topAll: 'All',
+    rowsPerPage: 'Rows per page:',
+    showingRange: 'Showing {from}–{to} of {total}',
+    pageOf: 'Page {page} of {pages}',
+    prevPage: 'Prev',
+    nextPage: 'Next'
   },
   products: {
     title: 'Products & Catalog',
@@ -1040,16 +1217,25 @@ export const en: typeof uk = {
     quickLinks: 'Quick Links',
     tabMetrics: 'Overview & Metrics',
     tabAnalytics: 'Detailed Analytics',
-    tabBusinesses: 'Stores',
+    tabBusinesses: 'Businesses',
+    tabBusinessesAll: 'All Businesses',
+    tabBusinessesPending: 'Pending Approval',
     tabUsers: 'Users',
+    tabDisputes: 'Disputes',
+    tabCommunications: 'Communications',
+    tabSupport: 'Support Tickets',
+    tabBroadcasts: 'BizX Broadcasts',
     tabStaff: 'BizX Team',
+    tabRoles: 'Roles & Permissions',
+    rolesTitle: 'BizX Core Platform Roles',
+    rolesSubtitle: 'Role priority hierarchy and granular permissions for BizX Platform staff',
     operatorFallback: 'Platform Operator',
     logoutTitle: 'Sign out of console',
     overviewBadge: 'BizX Platform Overview',
     realtimeBadge: 'Real-time',
     metricsTitle: 'Overview & System Metrics',
-    metricsSubtitle: 'Platform-wide GMV, connected business health, and infrastructure status',
-    gmv: 'GMV Volume',
+    metricsSubtitle: 'Platform-wide sales volume, connected business status, and service health',
+    gmv: 'Total Volume',
     orders: 'Orders',
     processedByPlatform: 'Processed by platform',
     avgCheck: 'Avg Order Value',
@@ -1068,8 +1254,8 @@ export const en: typeof uk = {
     ordersCol: 'Orders',
     revenueCol: 'Revenue',
     shareCol: 'Revenue share',
-    infraTitle: 'System Environment & Infrastructure Health',
-    infraSubtitle: 'Monitoring backend API, database, object storage, and queues',
+    infraTitle: 'Platform Service Status',
+    infraSubtitle: 'Live status of core BizX services',
     allSystemsOperational: 'All systems operational',
     storeStatusDist: 'Stores by Status',
     storeStatusSubtitle: 'Current lifecycle distribution of connected stores',
@@ -1110,6 +1296,146 @@ export const en: typeof uk = {
     orderNotes: 'Order notes',
     totalToPay: 'Total to pay',
     phoneSaved: 'Phone number saved'
+  },
+  permissions: {
+    products: {
+      read: 'View products & categories',
+      write: 'Create new products & categories',
+      edit: 'Edit product details, prices & photos',
+      status: 'Toggle product status (Active / Draft)',
+      archive: 'Archive (remove) products & categories'
+    },
+    orders: {
+      read: 'View customer orders',
+      edit: 'Update order statuses & chat with customers',
+      refund: 'Offer instant refunds to customers'
+    },
+    analytics: {
+      read: 'View dashboard & sales analytics',
+      export: 'Export analytics to Excel / CSV'
+    },
+    store: {
+      admin: 'Administrator (full access except owner-only rights)',
+      read: 'View store settings & details',
+      edit: 'Edit store info, logo & banner',
+      status: {
+        manage: 'Manage store status (pause / submit review)'
+      }
+    },
+    staff: {
+      read: 'View store team members',
+      write: 'Add new team members',
+      edit: 'Edit member roles & permissions',
+      archive: 'Archive (remove) team members'
+    },
+    roles: {
+      read: 'View roles & permissions',
+      write: 'Create new roles',
+      edit: 'Edit roles & change priority order',
+      archive: 'Archive (remove) roles'
+    },
+    marketing: {
+      broadcasts: {
+        read: 'View store subscribers, daily quotas & campaign history',
+        send: 'Send promotional broadcasts & manage auto-discount alerts'
+      }
+    },
+    platform: {
+      admin: 'Platform Administrator (full console access respecting hierarchy)',
+      stores: {
+        read: 'View all platform stores',
+        moderate: 'Moderate & suspend stores',
+        approve: 'Approve & reject new business applications',
+        unblock: 'Unblock suspended stores early',
+        archive: 'Archive (remove) platform stores'
+      },
+      categories: {
+        manage: 'Manage store categories'
+      },
+      users: {
+        read: 'View BizX ID users registry',
+        edit: 'Suspend user accounts',
+        unblock: 'Unblock suspended user accounts early',
+        subscriptions: 'View & manage user subscriptions',
+        archive: 'Archive user accounts'
+      },
+      analytics: {
+        read: 'View platform metrics & analytics',
+        export: 'Export platform reports to Excel / CSV'
+      },
+      staff: {
+        read: 'View BizX platform team',
+        write: 'Add BizX platform staff',
+        edit: 'Edit BizX staff roles',
+        archive: 'Archive (remove) BizX staff'
+      },
+      roles: {
+        read: 'View platform roles',
+        write: 'Create platform roles',
+        edit: 'Edit & reorder platform roles',
+        archive: 'Archive (remove) platform roles'
+      },
+      disputes: {
+        read: 'View escalated disputes & order chats',
+        resolve: 'Resolve disputes, issue refunds & store strikes'
+      },
+      strikes: {
+        issue: 'Issue manual strikes to stores',
+        revoke: 'Revoke store strikes & lift suspension early'
+      },
+      broadcasts: {
+        read: 'View official & technical BizX broadcast logs',
+        send: 'Send official & technical broadcasts to BizX users'
+      },
+      support: {
+        read: 'View incoming BizX support tickets',
+        reply: 'Reply to users in BizX support tickets'
+      }
+    }
+  },
+  permissionCategories: {
+    admin: 'Administration',
+    products: 'Products & Catalog',
+    orders: 'Orders',
+    analytics: 'Analytics & Reports',
+    store: 'Store Settings',
+    staff: 'Team & Staff',
+    roles: 'Roles & Hierarchy',
+    marketing: 'Marketing & Broadcasts',
+    platform_admin: 'Platform Administration',
+    platform_stores: 'Platform Stores',
+    platform_users: 'BizX ID Users',
+    platform_analytics: 'Platform Analytics',
+    platform_staff: 'BizX Staff',
+    platform_roles: 'Platform Roles',
+    platform_disputes: 'Disputes & Strikes',
+    platform_communications: 'Communications, Broadcasts & Support'
+  },
+  disputes: {
+    categories: {
+      not_received: 'Order not received',
+      damaged: 'Damaged or defective item',
+      wrong_item: 'Wrong item delivered',
+      missing_items: 'Missing items',
+      poor_quality: 'Poor quality',
+      other: 'Other (specify below)'
+    },
+    statuses: {
+      open_store: 'Dispute open',
+      escalated_platform: 'Escalated to BizX',
+      withdrawn: 'Withdrawn by customer',
+      resolved_refund: 'Refund accepted',
+      resolved_business: 'Resolved for business',
+      resolved_customer: 'Resolved for customer'
+    }
+  },
+  permissionActions: {
+    read: 'Read',
+    write: 'Create',
+    edit: 'Edit',
+    manage: 'Manage',
+    export: 'Export',
+    archive: 'Archive'
   }
 };
 
@@ -1245,27 +1571,51 @@ export function translateApiError(rawMessage?: string | null, fallbackKey = 'com
   if (!rawMessage) return i18n.t(fallbackKey);
   const lower = rawMessage.toLowerCase();
 
-  if (lower.includes('номером телефона уже') || lower.includes('phone already')) {
+  if (
+    lower.includes('номером телефона уже') ||
+    lower.includes('номером телефону вже') ||
+    lower.includes('phone already')
+  ) {
     return i18n.t('errors.phoneExists');
   }
-  if (lower.includes('email уже') || lower.includes('email already')) {
+  if (
+    lower.includes('email уже') ||
+    lower.includes('email вже') ||
+    lower.includes('email already')
+  ) {
     return i18n.t('errors.emailExists');
   }
   if (
     lower.includes('неверный email') ||
     lower.includes('неверный логин') ||
     lower.includes('неверный номер телефона') ||
+    lower.includes('невірний email') ||
+    lower.includes('невірний логін') ||
+    lower.includes('невірний номер телефону') ||
     lower.includes('invalid credentials')
   ) {
     return i18n.t('errors.invalidCredentials');
   }
-  if (lower.includes('некорректный номер') || lower.includes('invalid phone')) {
+  if (
+    lower.includes('некорректный номер') ||
+    lower.includes('некоректний номер') ||
+    lower.includes('invalid phone')
+  ) {
     return i18n.t('errors.invalidPhone');
   }
-  if (lower.includes('некорректный email') || lower.includes('invalid email')) {
+  if (
+    lower.includes('некорректный email') ||
+    lower.includes('некоректний email') ||
+    lower.includes('invalid email')
+  ) {
     return i18n.t('errors.invalidEmail');
   }
-  if (lower.includes('пользователь не найден') || lower.includes('user not found')) {
+  if (
+    lower.includes('пользователь не найден') ||
+    lower.includes('користувача не знайдено') ||
+    lower.includes('користувач не знайдений') ||
+    lower.includes('user not found')
+  ) {
     return i18n.t('errors.userNotFound');
   }
   if (lower.includes('unauthorized') || lower.includes('токен')) {
@@ -1286,3 +1636,136 @@ export const translationStore = {
   getSnapshot: () => i18n.getLocale(),
   getServerSnapshot: () => 'uk' as const
 };
+
+/**
+ * ============================================================================
+ * Shared Formatting & Phone Country Helpers (Single Source of Truth)
+ * ============================================================================
+ */
+
+export function formatMoney(
+  kopecks: number,
+  locale: SupportedLocale = 'uk',
+  options?: { withDecimals?: boolean; currencySymbol?: string }
+): string {
+  const withDecimals = options?.withDecimals ?? true;
+  const formatted = ((kopecks || 0) / 100).toLocaleString(locale === 'en' ? 'en-US' : 'uk-UA', {
+    minimumFractionDigits: withDecimals ? 2 : 0,
+    maximumFractionDigits: withDecimals ? 2 : 0
+  });
+  return options?.currencySymbol ? `${formatted} ${options.currencySymbol}` : formatted;
+}
+
+export function getInitials(value?: string | null, fallback = 'U'): string {
+  if (!value || !value.trim()) return fallback;
+  const parts = value.trim().split(/\s+/);
+  if (parts.length >= 2) {
+    return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+  }
+  return value.trim().slice(0, 2).toUpperCase();
+}
+
+export function formatShortDate(
+  date: string | Date | null | undefined,
+  locale: SupportedLocale = 'uk'
+): string {
+  if (!date) return '—';
+  const d = date instanceof Date ? date : new Date(date);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleDateString(locale === 'en' ? 'en-US' : 'uk-UA');
+}
+
+export function formatDateTime(
+  date: string | Date | null | undefined,
+  locale: SupportedLocale = 'uk'
+): string {
+  if (!date) return '—';
+  const d = date instanceof Date ? date : new Date(date);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleString(locale === 'en' ? 'en-US' : 'uk-UA');
+}
+
+export interface SharedPhoneCountry {
+  iso: string;
+  name: string;
+  nameUk: string;
+  dialCode: string;
+  flag: string;
+  placeholder: string;
+  maxDigits: number;
+  groups: number[];
+}
+
+export const SHARED_PHONE_COUNTRIES: SharedPhoneCountry[] = [
+  { iso: 'UA', name: 'Ukraine', nameUk: 'Україна', dialCode: '380', flag: '🇺🇦', placeholder: '(67) 123-45-67', maxDigits: 9, groups: [2, 3, 2, 2] },
+  { iso: 'PL', name: 'Poland', nameUk: 'Польща', dialCode: '48', flag: '🇵🇱', placeholder: '512 345 678', maxDigits: 9, groups: [3, 3, 3] },
+  { iso: 'DE', name: 'Germany', nameUk: 'Німеччина', dialCode: '49', flag: '🇩🇪', placeholder: '151 2345 6789', maxDigits: 11, groups: [3, 4, 4] },
+  { iso: 'GB', name: 'United Kingdom', nameUk: 'Велика Британія', dialCode: '44', flag: '🇬🇧', placeholder: '7700 900123', maxDigits: 10, groups: [4, 6] },
+  { iso: 'US', name: 'United States', nameUk: 'США', dialCode: '1', flag: '🇺🇸', placeholder: '(555) 123-4567', maxDigits: 10, groups: [3, 3, 4] },
+  { iso: 'CA', name: 'Canada', nameUk: 'Канада', dialCode: '1', flag: '🇨🇦', placeholder: '(416) 555-0123', maxDigits: 10, groups: [3, 3, 4] },
+  { iso: 'CZ', name: 'Czechia', nameUk: 'Чехія', dialCode: '420', flag: '🇨🇿', placeholder: '601 123 456', maxDigits: 9, groups: [3, 3, 3] },
+  { iso: 'FR', name: 'France', nameUk: 'Франція', dialCode: '33', flag: '🇫🇷', placeholder: '6 12 34 56 78', maxDigits: 9, groups: [1, 2, 2, 2, 2] },
+  { iso: 'IT', name: 'Italy', nameUk: 'Італія', dialCode: '39', flag: '🇮🇹', placeholder: '312 345 6789', maxDigits: 10, groups: [3, 3, 4] },
+  { iso: 'ES', name: 'Spain', nameUk: 'Іспанія', dialCode: '34', flag: '🇪🇸', placeholder: '612 345 678', maxDigits: 9, groups: [3, 3, 3] },
+  { iso: 'MD', name: 'Moldova', nameUk: 'Молдова', dialCode: '373', flag: '🇲🇩', placeholder: '68 123 456', maxDigits: 8, groups: [2, 3, 3] },
+  { iso: 'RO', name: 'Romania', nameUk: 'Румунія', dialCode: '40', flag: '🇷🇴', placeholder: '712 345 678', maxDigits: 9, groups: [3, 3, 3] },
+  { iso: 'LT', name: 'Lithuania', nameUk: 'Литва', dialCode: '370', flag: '🇱🇹', placeholder: '612 34567', maxDigits: 8, groups: [3, 5] },
+  { iso: 'GE', name: 'Georgia', nameUk: 'Грузія', dialCode: '995', flag: '🇬🇪', placeholder: '555 12 34 56', maxDigits: 9, groups: [3, 2, 2, 2] },
+  { iso: 'TR', name: 'Turkey', nameUk: 'Туреччина', dialCode: '90', flag: '🇹🇷', placeholder: '532 123 45 67', maxDigits: 10, groups: [3, 3, 2, 2] }
+];
+
+export function parseSharedPhoneNumber(
+  rawValue?: string | null,
+  defaultIso = 'UA'
+): { country: SharedPhoneCountry; nationalDigits: string } {
+  const fallback =
+    SHARED_PHONE_COUNTRIES.find((c) => c.iso === defaultIso) || SHARED_PHONE_COUNTRIES[0];
+  if (!rawValue) return { country: fallback, nationalDigits: '' };
+  const digits = rawValue.replace(/\D/g, '');
+  if (!digits) return { country: fallback, nationalDigits: '' };
+
+  const sorted = [...SHARED_PHONE_COUNTRIES].sort((a, b) => b.dialCode.length - a.dialCode.length);
+  for (const c of sorted) {
+    if (digits.startsWith(c.dialCode)) {
+      return {
+        country: c,
+        nationalDigits: digits.slice(c.dialCode.length, c.dialCode.length + c.maxDigits)
+      };
+    }
+  }
+  return { country: fallback, nationalDigits: digits.slice(0, fallback.maxDigits) };
+}
+
+export function formatNationalPhoneNumber(digits: string, country: SharedPhoneCountry): string {
+  const clean = digits.replace(/\D/g, '').slice(0, country.maxDigits);
+  if (!clean) return '';
+
+  if (country.iso === 'UA' || country.iso === 'US' || country.iso === 'CA') {
+    const g0 = country.groups[0];
+    const g1 = country.groups[1];
+    const g2 = country.groups[2];
+    const g3 = country.groups[3];
+    const p0 = clean.slice(0, g0);
+    const p1 = clean.slice(g0, g0 + g1);
+    const p2 = clean.slice(g0 + g1, g0 + g1 + g2);
+    const p3 = g3 ? clean.slice(g0 + g1 + g2, g0 + g1 + g2 + g3) : '';
+
+    let out = `(${p0}`;
+    if (clean.length > g0) out += `) ${p1}`;
+    if (p2) out += `-${p2}`;
+    if (p3) out += `-${p3}`;
+    return out;
+  }
+
+  const parts: string[] = [];
+  let cursor = 0;
+  for (const len of country.groups) {
+    if (cursor >= clean.length) break;
+    parts.push(clean.slice(cursor, cursor + len));
+    cursor += len;
+  }
+  if (cursor < clean.length) {
+    parts.push(clean.slice(cursor));
+  }
+  return parts.join(' ');
+}

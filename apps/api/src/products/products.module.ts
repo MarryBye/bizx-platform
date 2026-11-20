@@ -4,9 +4,10 @@ import { ProductsService } from './products.service.js';
 import { DatabaseModule } from '../database/database.module.js';
 import { AuthModule } from '../auth/auth.module.js';
 import { StoresModule } from '../stores/stores.module.js';
+import { BroadcastsModule } from '../broadcasts/broadcasts.module.js';
 
 @Module({
-  imports: [DatabaseModule, AuthModule, StoresModule],
+  imports: [DatabaseModule, AuthModule, StoresModule, BroadcastsModule],
   controllers: [ProductsController],
   providers: [ProductsService],
   exports: [ProductsService]

@@ -173,7 +173,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
                 <p className="text-[11px] text-slate-500">{t('platform.topStoresSubtitle')}</p>
               </div>
               <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-md">
-                {t('platform.topCount', { count: topStores.length || 3 })}
+                {t('platform.topCount', { count: topStores.length })}
               </span>
             </div>
 
@@ -250,12 +250,16 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
                     <Server className="w-4 h-4" />
                   </div>
                   <div>
-                    <div className="text-xs font-bold text-slate-900">NestJS Core API</div>
-                    <div className="text-[10px] text-slate-400 font-mono">API Gateway</div>
+                    <div className="text-xs font-bold text-slate-900">
+                      {locale === 'en' ? 'Core Platform' : 'Основний сервіс'}
+                    </div>
+                    <div className="text-[10px] text-slate-400">
+                      {locale === 'en' ? 'Orders & Catalog' : 'Замовлення та каталог'}
+                    </div>
                   </div>
                 </div>
                 <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded uppercase">
-                  99.98% Uptime
+                  {t('common.active')}
                 </span>
               </div>
 
@@ -265,12 +269,16 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
                     <Activity className="w-4 h-4" />
                   </div>
                   <div>
-                    <div className="text-xs font-bold text-slate-900">PostgreSQL + Drizzle</div>
-                    <div className="text-[10px] text-slate-400 font-mono">PostgreSQL Primary</div>
+                    <div className="text-xs font-bold text-slate-900">
+                      {locale === 'en' ? 'Data Storage' : 'Сховище даних'}
+                    </div>
+                    <div className="text-[10px] text-slate-400">
+                      {locale === 'en' ? 'Primary Cluster' : 'Основна база'}
+                    </div>
                   </div>
                 </div>
                 <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded uppercase">
-                  Connected
+                  {t('common.active')}
                 </span>
               </div>
 
@@ -280,12 +288,16 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
                     <ShieldCheck className="w-4 h-4" />
                   </div>
                   <div>
-                    <div className="text-xs font-bold text-slate-900">Cloudflare R2 Storage</div>
-                    <div className="text-[10px] text-slate-400 font-mono">bucket: bizx-assets</div>
+                    <div className="text-xs font-bold text-slate-900">
+                      {locale === 'en' ? 'Media Hosting' : 'Медіа-сховище'}
+                    </div>
+                    <div className="text-[10px] text-slate-400">
+                      {locale === 'en' ? 'Logos, banners & photos' : 'Логотипи, банери та фото'}
+                    </div>
                   </div>
                 </div>
                 <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded uppercase">
-                  Operational
+                  {t('common.active')}
                 </span>
               </div>
 
@@ -295,12 +307,14 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
                     <Building2 className="w-4 h-4" />
                   </div>
                   <div>
-                    <div className="text-xs font-bold text-slate-900">Merchant Portal</div>
-                    <div className="text-[10px] text-slate-400 font-mono">{t('nav.businessAdmin')}</div>
+                    <div className="text-xs font-bold text-slate-900">{t('nav.businessAdmin')}</div>
+                    <div className="text-[10px] text-slate-400">
+                      {locale === 'en' ? 'Partner Portal' : 'Кабінет партнерів'}
+                    </div>
                   </div>
                 </div>
                 <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded uppercase">
-                  Active
+                  {t('common.active')}
                 </span>
               </div>
             </div>
