@@ -745,7 +745,9 @@ export class OrdersService {
             : senderName || null,
       senderType: msg.senderType as OrderMessageSenderType,
       body: msg.body,
-      attachments: (msg.attachments || []) as OrderMessageAttachmentDto[],
+      attachments: this.storageService.signAttachments(
+        (msg.attachments || []) as OrderMessageAttachmentDto[]
+      ),
       readByCustomerAt: msg.readByCustomerAt ? msg.readByCustomerAt.toISOString() : null,
       readByStoreAt: msg.readByStoreAt ? msg.readByStoreAt.toISOString() : null,
       createdAt: msg.createdAt.toISOString()
@@ -759,6 +761,9 @@ export class OrdersService {
   ): Promise<OrderMessageItem> {
     const { actorType } = await this.assertOrderChatAccess(orderId, userId, 'write');
     const now = new Date();
+    const cleanAttachments = this.storageService.stripAttachmentsSignatures(
+      (dto.attachments || []) as OrderMessageAttachmentDto[]
+    );
 
     const [inserted] = await this.databaseService.db
       .insert(orderMessages)
@@ -767,7 +772,7 @@ export class OrdersService {
         senderId: userId,
         senderType: actorType,
         body: dto.body?.trim() || null,
-        attachments: (dto.attachments || []) as OrderMessageAttachmentDto[],
+        attachments: cleanAttachments,
         readByCustomerAt: actorType === 'customer' ? now : null,
         readByStoreAt: actorType === 'store' ? now : null
       })
@@ -785,7 +790,9 @@ export class OrdersService {
       senderName: sender?.name || null,
       senderType: inserted.senderType as OrderMessageSenderType,
       body: inserted.body,
-      attachments: (inserted.attachments || []) as OrderMessageAttachmentDto[],
+      attachments: this.storageService.signAttachments(
+        (inserted.attachments || []) as OrderMessageAttachmentDto[]
+      ),
       readByCustomerAt: inserted.readByCustomerAt ? inserted.readByCustomerAt.toISOString() : null,
       readByStoreAt: inserted.readByStoreAt ? inserted.readByStoreAt.toISOString() : null,
       createdAt: inserted.createdAt.toISOString()
@@ -839,7 +846,7 @@ export class OrdersService {
     const publicUrl = await this.storageService.uploadBuffer(fileKey, file.buffer, file.mimetype);
 
     return {
-      url: publicUrl,
+      url: this.storageService.signPrivateUrl(publicUrl),
       fileName: file.originalname,
       mimeType: file.mimetype,
       size: file.size

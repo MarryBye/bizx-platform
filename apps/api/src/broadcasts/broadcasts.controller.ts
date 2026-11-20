@@ -63,7 +63,7 @@ export class BroadcastsController {
     const publicUrl = await this.storageService.uploadBuffer(fileKey, file.buffer, file.mimetype);
     return {
       fileKey,
-      publicUrl,
+      publicUrl: this.storageService.signPrivateUrl(publicUrl),
       originalName: file.originalname,
       size: file.size,
       mimeType: file.mimetype

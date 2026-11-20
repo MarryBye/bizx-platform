@@ -138,7 +138,7 @@ export class InboxController {
     return {
       success: true,
       data: {
-        url: publicUrl,
+        url: this.storageService.signPrivateUrl(publicUrl),
         fileName: validated.originalname,
         mimeType: validated.mimetype,
         size: validated.size

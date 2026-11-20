@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service.js';
 import { RbacService } from '../rbac/rbac.service.js';
+import { StorageService } from '../storage/storage.service.js';
 import {
   stores,
   users,
@@ -71,7 +72,8 @@ function formatPriceUah(kopecks: number): string {
 export class BroadcastsService {
   constructor(
     private readonly databaseService: DatabaseService,
-    private readonly rbacService: RbacService
+    private readonly rbacService: RbacService,
+    private readonly storageService: StorageService
   ) {}
 
   // ============================================================================
@@ -1123,7 +1125,9 @@ export class BroadcastsService {
       senderRole: m.senderRole as InboxMessageRole,
       senderName: m.senderName,
       body: m.body,
-      attachments: (m.attachments as OrderMessageAttachment[]) || [],
+      attachments: this.storageService.signAttachments(
+        (m.attachments as OrderMessageAttachment[]) || []
+      ),
       readByRecipientAt: m.readByRecipientAt ? m.readByRecipientAt.toISOString() : null,
       readByStaffAt: m.readByStaffAt ? m.readByStaffAt.toISOString() : null,
       createdAt: m.createdAt.toISOString()
@@ -1183,7 +1187,9 @@ export class BroadcastsService {
 
     const senderName = staff?.name ? `${staff.name} · Підтримка BizX` : 'Служба підтримки BizX';
     const body = dto.body?.trim() || null;
-    const attachments = (dto.attachments || []) as OrderMessageAttachment[];
+    const attachments = this.storageService.stripAttachmentsSignatures(
+      (dto.attachments || []) as OrderMessageAttachment[]
+    );
     const now = new Date();
     const preview = body
       ? body.slice(0, 200)
@@ -1238,7 +1244,9 @@ export class BroadcastsService {
       senderRole: created.senderRole as InboxMessageRole,
       senderName: created.senderName,
       body: created.body,
-      attachments: (created.attachments as OrderMessageAttachment[]) || [],
+      attachments: this.storageService.signAttachments(
+        (created.attachments as OrderMessageAttachment[]) || []
+      ),
       readByRecipientAt: null,
       readByStaffAt: created.readByStaffAt ? created.readByStaffAt.toISOString() : null,
       createdAt: created.createdAt.toISOString()

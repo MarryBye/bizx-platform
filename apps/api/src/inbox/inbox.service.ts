@@ -5,6 +5,7 @@ import {
   BadRequestException
 } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service.js';
+import { StorageService } from '../storage/storage.service.js';
 import {
   inboxThreads,
   inboxMessages,
@@ -32,7 +33,10 @@ import type {
 
 @Injectable()
 export class InboxService {
-  constructor(private readonly databaseService: DatabaseService) {}
+  constructor(
+    private readonly databaseService: DatabaseService,
+    private readonly storageService: StorageService
+  ) {}
 
   /**
    * Надсилає офіційне системне повідомлення від BizX у Пошту користувача (відповіді вимкнено).
@@ -211,7 +215,9 @@ export class InboxService {
       senderRole: m.senderRole as InboxMessageRole,
       senderName: m.senderName,
       body: m.body,
-      attachments: (m.attachments as OrderMessageAttachment[]) || [],
+      attachments: this.storageService.signAttachments(
+        (m.attachments as OrderMessageAttachment[]) || []
+      ),
       readByRecipientAt: m.readByRecipientAt ? m.readByRecipientAt.toISOString() : null,
       readByStaffAt: m.readByStaffAt ? m.readByStaffAt.toISOString() : null,
       createdAt: m.createdAt.toISOString()
@@ -252,7 +258,7 @@ export class InboxService {
     }
 
     const bodyText = dto.body?.trim() || null;
-    const attachments = dto.attachments || [];
+    const attachments = this.storageService.stripAttachmentsSignatures(dto.attachments || []);
     if (!bodyText && attachments.length === 0) {
       throw new BadRequestException('Повідомлення не може бути порожнім');
     }
@@ -300,7 +306,9 @@ export class InboxService {
       senderRole: msg.senderRole as InboxMessageRole,
       senderName: msg.senderName,
       body: msg.body,
-      attachments: (msg.attachments as OrderMessageAttachment[]) || [],
+      attachments: this.storageService.signAttachments(
+        (msg.attachments as OrderMessageAttachment[]) || []
+      ),
       readByRecipientAt: msg.readByRecipientAt ? msg.readByRecipientAt.toISOString() : null,
       readByStaffAt: msg.readByStaffAt ? msg.readByStaffAt.toISOString() : null,
       createdAt: msg.createdAt.toISOString()
