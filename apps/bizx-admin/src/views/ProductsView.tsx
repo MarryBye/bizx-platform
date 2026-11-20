@@ -3,9 +3,10 @@ import { useBusinessStore } from '../store/useBusinessStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { useTranslation } from '../hooks/useTranslation';
 import { Button, Input, Textarea, Card, CardContent, Badge, Modal, ConfirmModal, ProductPlaceholder, Select } from '@bizx/ui';
-import { Plus, Search, Archive, Image as ImageIcon, Upload, AlertCircle, Pencil } from 'lucide-react';
+import { Plus, Search, Archive, Image as ImageIcon, Upload, AlertCircle, Pencil, FolderTree, Check, X } from 'lucide-react';
+import { api } from '../lib/api';
 import { resolveMediaUrl } from '../lib/media';
-import type { Product } from '@bizx/common-types';
+import type { Product, ProductCategory } from '@bizx/common-types';
 
 export interface ProductsViewProps {
   isReadOnly?: boolean;
@@ -22,7 +23,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
   canChangeStatus: canChangeStatusProp,
   canArchive: canArchiveProp
 }) => {
-  const { products, categories, activeStore, createProduct, updateProduct, deleteProduct, isLoading } =
+  const { products, categories, activeStore, createProduct, updateProduct, deleteProduct, fetchStoreData, isLoading } =
     useBusinessStore();
   const { hasActiveSubscription } = useAuthStore();
   const { t, locale } = useTranslation();
@@ -36,6 +37,69 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [archivingProduct, setArchivingProduct] = useState<Product | null>(null);
+
+  const [isCategoriesModalOpen, setIsCategoriesModalOpen] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [editingCategoryName, setEditingCategoryName] = useState('');
+  const [categoryError, setCategoryError] = useState<string | null>(null);
+  const [isSavingCategory, setIsSavingCategory] = useState(false);
+  const [archivingCategory, setArchivingCategory] = useState<ProductCategory | null>(null);
+
+  const handleCreateCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeStore || !newCategoryName.trim()) return;
+    setIsSavingCategory(true);
+    setCategoryError(null);
+    try {
+      const res = await api.products.createCategory(activeStore.id, {
+        name: newCategoryName.trim(),
+        sortOrder: categories.length
+      });
+      if (res.success) {
+        setNewCategoryName('');
+        await fetchStoreData(activeStore.id);
+      }
+    } catch (err: any) {
+      setCategoryError(err?.data?.message || err?.message || 'Не вдалося створити категорію');
+    } finally {
+      setIsSavingCategory(false);
+    }
+  };
+
+  const handleRenameCategory = async (catId: string) => {
+    if (!activeStore || !editingCategoryName.trim()) return;
+    setIsSavingCategory(true);
+    setCategoryError(null);
+    try {
+      const res = await api.products.updateCategory(catId, { name: editingCategoryName.trim() });
+      if (res.success) {
+        setEditingCategoryId(null);
+        setEditingCategoryName('');
+        await fetchStoreData(activeStore.id);
+      }
+    } catch (err: any) {
+      setCategoryError(err?.data?.message || err?.message || 'Не вдалося оновити категорію');
+    } finally {
+      setIsSavingCategory(false);
+    }
+  };
+
+  const handleArchiveCategory = async (cat: ProductCategory) => {
+    if (!activeStore) return;
+    setIsSavingCategory(true);
+    setCategoryError(null);
+    try {
+      await api.products.deleteCategory(cat.id);
+      if (selectedCategory === cat.id) setSelectedCategory('all');
+      setArchivingCategory(null);
+      await fetchStoreData(activeStore.id);
+    } catch (err: any) {
+      setCategoryError(err?.data?.message || err?.message || 'Не вдалося архівувати категорію');
+    } finally {
+      setIsSavingCategory(false);
+    }
+  };
 
   // Form State
   const [name, setName] = useState('');
@@ -189,14 +253,30 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
           </p>
         </div>
 
-        {canCreate && (
-          <Button
-            onClick={openCreateModal}
-            className="flex items-center gap-1.5 shrink-0"
-          >
-            <Plus className="w-4 h-4" /> {t('products.addProduct')}
-          </Button>
-        )}
+        <div className="flex items-center gap-2 shrink-0 flex-wrap">
+          {(canCreate || canEdit || canArchive) && (
+            <Button
+              variant="outline"
+              onClick={() => {
+                setCategoryError(null);
+                setEditingCategoryId(null);
+                setIsCategoriesModalOpen(true);
+              }}
+              className="flex items-center gap-1.5"
+            >
+              <FolderTree className="w-4 h-4" />
+              {locale === 'en' ? `Categories (${categories.length})` : `Категорії (${categories.length})`}
+            </Button>
+          )}
+          {canCreate && (
+            <Button
+              onClick={openCreateModal}
+              className="flex items-center gap-1.5"
+            >
+              <Plus className="w-4 h-4" /> {t('products.addProduct')}
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Filter and Search Bar */}
@@ -479,16 +559,16 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
 
               <div className="flex-1">
                 <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-700 hover:bg-slate-50 shadow-sm">
-                  <Upload className="w-3.5 h-3.5" /> Обрати файл (PNG, JPG, SVG)
+                  <Upload className="w-3.5 h-3.5" /> Обрати файл (PNG, JPG, WebP)
                   <input
                     type="file"
-                    accept="image/*"
+                    accept="image/png,image/jpeg,image/webp,image/gif"
                     onChange={handleImageChange}
                     className="hidden"
                   />
                 </label>
                 <p className="text-[11px] text-slate-400 mt-1">
-                  Підтримуються формати PNG, JPG, SVG та WebP до 10 МБ
+                  Підтримуються формати PNG, JPG, GIF та WebP до 10 МБ
                 </p>
               </div>
             </div>
@@ -533,6 +613,137 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
         <p className="text-slate-700 leading-relaxed">
           Товар <strong>«{archivingProduct?.name}»</strong> буде приховано з каталогу та вітрини,
           але збережено в системному архіві замовлень.
+        </p>
+      </ConfirmModal>
+
+      <Modal
+        isOpen={isCategoriesModalOpen}
+        onClose={() => setIsCategoriesModalOpen(false)}
+        size="md"
+        icon={<FolderTree className="w-4 h-4" />}
+        title={locale === 'en' ? 'Product Categories' : 'Категорії товарів'}
+        subtitle={activeStore?.name}
+      >
+        <div className="space-y-4">
+          {categoryError && (
+            <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-xs text-rose-700 flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{categoryError}</span>
+            </div>
+          )}
+
+          {canCreate && (
+            <form onSubmit={handleCreateCategory} className="flex gap-2">
+              <Input
+                value={newCategoryName}
+                onChange={(e) => setNewCategoryName(e.target.value)}
+                placeholder={locale === 'en' ? 'New category name...' : 'Назва нової категорії...'}
+                className="flex-1"
+              />
+              <Button type="submit" disabled={isSavingCategory || !newCategoryName.trim()}>
+                <Plus className="w-4 h-4 mr-1" />
+                {locale === 'en' ? 'Add' : 'Додати'}
+              </Button>
+            </form>
+          )}
+
+          <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden bg-white">
+            {categories.length === 0 ? (
+              <div className="p-6 text-center text-xs text-slate-500">
+                {locale === 'en' ? 'No categories created yet.' : 'Категорій ще немає.'}
+              </div>
+            ) : (
+              categories.map((cat) => {
+                const isEditing = editingCategoryId === cat.id;
+                const prodCount = products.filter((p) => p.categoryId === cat.id).length;
+                return (
+                  <div key={cat.id} className="p-3 flex items-center justify-between gap-2">
+                    {isEditing ? (
+                      <div className="flex items-center gap-2 flex-1">
+                        <Input
+                          value={editingCategoryName}
+                          onChange={(e) => setEditingCategoryName(e.target.value)}
+                          className="h-8 text-xs flex-1"
+                        />
+                        <Button
+                          type="button"
+                          size="sm"
+                          disabled={isSavingCategory || !editingCategoryName.trim()}
+                          onClick={() => void handleRenameCategory(cat.id)}
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setEditingCategoryId(null)}
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="min-w-0">
+                          <div className="text-xs font-bold text-slate-900 truncate">{cat.name}</div>
+                          <div className="text-[11px] text-slate-400">
+                            {locale === 'en' ? `${prodCount} product(s)` : `Товарів: ${prodCount}`}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          {canEdit && (
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => {
+                                setEditingCategoryId(cat.id);
+                                setEditingCategoryName(cat.name);
+                              }}
+                            >
+                              <Pencil className="w-3.5 h-3.5 text-slate-500" />
+                            </Button>
+                          )}
+                          {canArchive && (
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => setArchivingCategory(cat)}
+                            >
+                              <Archive className="w-3.5 h-3.5 text-rose-500" />
+                            </Button>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      </Modal>
+
+      <ConfirmModal
+        isOpen={Boolean(archivingCategory)}
+        onClose={() => setArchivingCategory(null)}
+        onConfirm={async () => {
+          if (archivingCategory) await handleArchiveCategory(archivingCategory);
+        }}
+        tone="warning"
+        icon={<Archive className="w-4 h-4" />}
+        title={locale === 'en' ? 'Archive category?' : 'Архівувати категорію?'}
+        subtitle={archivingCategory?.name}
+        confirmLabel={locale === 'en' ? 'Archive' : 'Архівувати'}
+        cancelLabel={locale === 'en' ? 'Cancel' : 'Скасувати'}
+        confirmVariant="destructive"
+        isLoading={isSavingCategory}
+      >
+        <p className="text-xs text-slate-700 leading-relaxed">
+          {locale === 'en'
+            ? `Category «${archivingCategory?.name}» will be archived. Products inside it will remain in your catalog.`
+            : `Категорію «${archivingCategory?.name}» буде архівовано. Товари залишаться в каталозі без прив’язки до цієї категорії.`}
         </p>
       </ConfirmModal>
     </div>

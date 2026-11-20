@@ -3,8 +3,8 @@ import { useBusinessStore } from '../store/useBusinessStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { useTranslation } from '../hooks/useTranslation';
 import { api } from '../lib/api';
-import type { DomainVerificationResult } from '@bizx/common-types';
-import { Card, CardHeader, CardTitle, CardContent, Button, Input, Textarea, PhoneInput } from '@bizx/ui';
+import type { DomainVerificationResult, StoreStrikeItem } from '@bizx/common-types';
+import { Card, CardHeader, CardTitle, CardContent, Button, Input, Textarea, PhoneInput, ConfirmModal, StatusBadge } from '@bizx/ui';
 import {
   Upload,
   Check,
@@ -15,7 +15,9 @@ import {
   ExternalLink,
   Copy,
   RefreshCw,
-  CheckCircle2
+  CheckCircle2,
+  ShieldAlert,
+  Send
 } from 'lucide-react';
 import { StoreMediaImage } from '../components/StoreMediaImage';
 
@@ -48,6 +50,60 @@ export const StoreSettingsView: React.FC<{ isReadOnly?: boolean; canEdit?: boole
   const [isUploadingBanner, setIsUploadingBanner] = useState(false);
 
   const [statusMessage, setStatusMessage] = useState<{ text: string; isError?: boolean } | null>(null);
+  const [strikes, setStrikes] = useState<StoreStrikeItem[]>([]);
+  const [isLoadingStrikes, setIsLoadingStrikes] = useState(false);
+  const [confirmModerationOpen, setConfirmModerationOpen] = useState(false);
+  const [isSubmittingModeration, setIsSubmittingModeration] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    if (!activeStore?.id) {
+      setStrikes([]);
+      return;
+    }
+    setIsLoadingStrikes(true);
+    api.orders
+      .getStoreStrikes(activeStore.id)
+      .then((res) => {
+        if (active && res.success && res.data) setStrikes(res.data);
+      })
+      .catch(() => {
+        if (active) setStrikes([]);
+      })
+      .finally(() => {
+        if (active) setIsLoadingStrikes(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [activeStore?.id]);
+
+  const handleSubmitForModeration = async () => {
+    if (!activeStore) return;
+    setIsSubmittingModeration(true);
+    setStatusMessage(null);
+    try {
+      const ok = await updateStore({ status: 'pending' });
+      if (ok) {
+        await fetchStores();
+        setStatusMessage({
+          text:
+            locale === 'en'
+              ? 'Store submitted for BizX moderation!'
+              : 'Заклад успішно відправлено на перевірку модераторам BizX!'
+        });
+      }
+      setConfirmModerationOpen(false);
+    } catch (err: any) {
+      setStatusMessage({
+        text: err?.data?.message || err?.message || 'Не вдалося відправити на модерацію',
+        isError: true
+      });
+      setConfirmModerationOpen(false);
+    } finally {
+      setIsSubmittingModeration(false);
+    }
+  };
 
   // Скидання локальних станів та прев'ю при зміні активного магазину
   useEffect(() => {
@@ -618,6 +674,130 @@ export const StoreSettingsView: React.FC<{ isReadOnly?: boolean; canEdit?: boole
           )}
         </CardContent>
       </Card>
+
+      {activeStore.status === 'draft' && canEdit && (
+        <Card className="border-amber-200 bg-amber-50/50 shadow-sm">
+          <CardContent className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="text-sm font-extrabold text-amber-950 flex items-center gap-2">
+                <Send className="w-4 h-4 text-amber-600" />
+                {locale === 'en' ? 'Ready to publish your store?' : 'Готові опублікувати заклад?'}
+              </div>
+              <p className="text-xs text-amber-900/80">
+                {locale === 'en'
+                  ? 'Submit your store for BizX moderation. Once approved, it becomes live for all customers.'
+                  : 'Надішліть заклад на перевірку адміністраторам BizX. Після схвалення вітрина стане доступною покупцям.'}
+              </p>
+            </div>
+            <Button
+              type="button"
+              onClick={() => setConfirmModerationOpen(true)}
+              className="gap-1.5 shrink-0 self-start sm:self-center"
+            >
+              <Send className="w-3.5 h-3.5" />
+              {locale === 'en' ? 'Submit for Review' : 'Надіслати на модерацію'}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      <Card className="border-slate-200 shadow-sm">
+        <CardHeader className="pb-3 border-b border-slate-100 flex flex-row items-center justify-between gap-2">
+          <CardTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
+            <ShieldAlert className="w-4 h-4 text-rose-600" />
+            {locale === 'en' ? 'Moderation Strikes & Compliance' : 'Страйки та статус дотримання правил'}
+          </CardTitle>
+          {(() => {
+            const activeCount = strikes.filter(
+              (s) => !s.revokedAt && (!s.expiresAt || new Date(s.expiresAt) > new Date())
+            ).length;
+            return (
+              <StatusBadge
+                tone={activeCount >= 3 ? 'rose' : activeCount > 0 ? 'amber' : 'emerald'}
+                size="xs"
+                dot
+              >
+                {locale === 'en' ? `${activeCount} / 3 active` : `${activeCount} / 3 активних`}
+              </StatusBadge>
+            );
+          })()}
+        </CardHeader>
+        <CardContent className="pt-4">
+          {isLoadingStrikes ? (
+            <div className="text-xs text-slate-400">
+              {locale === 'en' ? 'Loading strike history...' : 'Завантаження історії страйків...'}
+            </div>
+          ) : strikes.length === 0 ? (
+            <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg p-3 flex items-center gap-2 font-medium">
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+              <span>
+                {locale === 'en'
+                  ? 'Your store has zero moderation strikes. Keep up the great service!'
+                  : 'У вашого закладу немає жодного страйку. Дякуємо за дотримання стандартів BizX!'}
+              </span>
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden">
+              {strikes.map((st) => {
+                const isExpired = Boolean(st.expiresAt && new Date(st.expiresAt) <= new Date());
+                const isActiveStrike = !st.revokedAt && !isExpired;
+                return (
+                  <div key={st.id} className="p-3.5 space-y-1 bg-white">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <StatusBadge tone={isActiveStrike ? 'rose' : 'slate'} size="xs">
+                        {st.revokedAt
+                          ? locale === 'en'
+                            ? 'Revoked'
+                            : 'Знято'
+                          : isExpired
+                            ? locale === 'en'
+                              ? 'Expired'
+                              : 'Минув'
+                            : locale === 'en'
+                              ? 'Active strike'
+                              : 'Активний страйк'}
+                      </StatusBadge>
+                      <span className="text-[11px] text-slate-400">
+                        {new Date(st.createdAt).toLocaleDateString(locale === 'en' ? 'en-US' : 'uk-UA')}
+                        {st.expiresAt && isActiveStrike && (
+                          <>
+                            {' · '}
+                            {locale === 'en' ? 'expires ' : 'діє до '}
+                            {new Date(st.expiresAt).toLocaleDateString(locale === 'en' ? 'en-US' : 'uk-UA')}
+                          </>
+                        )}
+                      </span>
+                    </div>
+                    <p className="text-xs font-semibold text-slate-800">{st.reason}</p>
+                    {st.revokeReason && (
+                      <p className="text-[11px] text-emerald-700">
+                        {locale === 'en' ? 'Revoke note:' : 'Причина зняття:'} {st.revokeReason}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <ConfirmModal
+        isOpen={confirmModerationOpen}
+        onClose={() => !isSubmittingModeration && setConfirmModerationOpen(false)}
+        onConfirm={() => void handleSubmitForModeration()}
+        isLoading={isSubmittingModeration}
+        confirmVariant="primary"
+        title={locale === 'en' ? 'Submit store for moderation?' : 'Надіслати заклад на модерацію?'}
+        confirmLabel={locale === 'en' ? 'Submit' : 'Надіслати'}
+        cancelLabel={locale === 'en' ? 'Cancel' : 'Скасувати'}
+      >
+        <p className="text-xs text-slate-600 leading-relaxed">
+          {locale === 'en'
+            ? `Store «${activeStore.name}» will be reviewed by BizX moderators. Make sure logo, description, contacts, and catalog are ready.`
+            : `Заклад «${activeStore.name}» буде передано на перевірку модераторам BizX. Переконайтеся, що заповнено логотип, опис, контакти та товари.`}
+        </p>
+      </ConfirmModal>
     </div>
   );
 };

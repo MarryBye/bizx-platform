@@ -14,6 +14,7 @@ import {
   Card,
   Select,
   Button,
+  Input,
   OrderChatBox,
   Modal,
   StatusBadge,
@@ -30,7 +31,8 @@ import {
   RotateCcw,
   Star,
   Clock,
-  ShieldAlert
+  ShieldAlert,
+  Search
 } from 'lucide-react';
 
 export const OrdersView: React.FC<{ canEdit?: boolean; canRefund?: boolean }> = ({
@@ -43,6 +45,8 @@ export const OrdersView: React.FC<{ canEdit?: boolean; canRefund?: boolean }> = 
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [orderMessages, setOrderMessages] = useState<OrderMessageItem[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
 
   // Status edit state inside details modal
   const [nextStatus, setNextStatus] = useState<OrderStatus>('pending');
@@ -254,6 +258,23 @@ export const OrdersView: React.FC<{ canEdit?: boolean; canRefund?: boolean }> = 
     );
   }
 
+  const filteredOrders = orders.filter((o) => {
+    if (statusFilter === 'disputed') {
+      if (!o.activeDispute) return false;
+    } else if (statusFilter === 'unread') {
+      if (!o.unreadCount || o.unreadCount <= 0) return false;
+    } else if (statusFilter !== 'all' && o.status !== statusFilter) {
+      return false;
+    }
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      o.orderNumber.toLowerCase().includes(q) ||
+      o.contactName.toLowerCase().includes(q) ||
+      o.contactPhone.toLowerCase().includes(q)
+    );
+  });
+
   return (
     <div className="space-y-5">
       {/* Header */}
@@ -265,14 +286,50 @@ export const OrdersView: React.FC<{ canEdit?: boolean; canRefund?: boolean }> = 
           </p>
         </div>
         <div className="text-xs font-semibold text-slate-500">
-          {locale === 'en' ? `Total orders: ${orders.length}` : `Всього замовлень: ${orders.length}`}
+          {locale === 'en'
+            ? `Showing ${filteredOrders.length} of ${orders.length}`
+            : `Показано ${filteredOrders.length} із ${orders.length}`}
+        </div>
+      </div>
+
+      {/* Search & Status Filters */}
+      <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-sm flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
+        <div className="relative flex-1 max-w-md">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <Input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder={
+              locale === 'en'
+                ? 'Search by order #, customer or phone...'
+                : 'Пошук за № замовлення, клієнтом або телефоном...'
+            }
+            className="pl-9"
+          />
+        </div>
+        <div className="w-full sm:w-52">
+          <Select
+            value={statusFilter}
+            onChange={setStatusFilter}
+            options={[
+              { value: 'all', label: locale === 'en' ? 'All statuses' : 'Усі статуси' },
+              { value: 'unread', label: locale === 'en' ? 'With unread messages' : 'З непрочитаними' },
+              { value: 'disputed', label: locale === 'en' ? 'Active disputes' : 'Активні спори' },
+              { value: 'pending', label: t('statuses.order.pending') },
+              { value: 'paid', label: t('statuses.order.paid') },
+              { value: 'confirmed', label: t('statuses.order.confirmed') },
+              { value: 'shipped', label: t('statuses.order.shipped') },
+              { value: 'delivered', label: t('statuses.order.delivered') },
+              { value: 'cancelled', label: t('statuses.order.cancelled') }
+            ]}
+          />
         </div>
       </div>
 
       {/* Compact Orders List */}
-      {orders.length > 0 ? (
+      {filteredOrders.length > 0 ? (
         <div className="bg-white border border-slate-200 rounded-xl shadow-sm divide-y divide-slate-100 overflow-hidden">
-          {orders.map((order) => {
+          {filteredOrders.map((order) => {
             const hasDispute = Boolean(order.activeDispute);
             const isEscalated = order.activeDispute?.status === 'escalated_platform';
             const unread = order.unreadCount || 0;
