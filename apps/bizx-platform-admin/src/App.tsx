@@ -747,6 +747,7 @@ export const App: React.FC = () => {
           {activeTab === 'disputes' && hasPerm('platform.disputes.read') && (
             <DisputesView
               canResolve={hasPerm('platform.disputes.resolve')}
+              canIssueStrikes={hasPerm('platform.strikes.issue')}
               canRevokeStrikes={hasPerm('platform.strikes.revoke')}
               onDisputesChanged={() => {
                 refreshDisputesSummary();

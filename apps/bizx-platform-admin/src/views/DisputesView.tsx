@@ -34,12 +34,14 @@ import {
 
 interface DisputesViewProps {
   canResolve: boolean;
+  canIssueStrikes?: boolean;
   canRevokeStrikes: boolean;
   onDisputesChanged?: () => void;
 }
 
 export const DisputesView: React.FC<DisputesViewProps> = ({
   canResolve,
+  canIssueStrikes = false,
   canRevokeStrikes,
   onDisputesChanged
 }) => {
@@ -55,8 +57,9 @@ export const DisputesView: React.FC<DisputesViewProps> = ({
 
   // Resolution state
   const [resolutionNote, setResolutionNote] = useState('');
-  const [issueStrike, setIssueStrike] = useState(true);
+  const [issueStrike, setIssueStrike] = useState(canIssueStrikes);
   const [strikeReason, setStrikeReason] = useState('');
+  const effectiveIssueStrike = canIssueStrikes && issueStrike;
   const [isResolving, setIsResolving] = useState(false);
   const [notice, setNotice] = useState<{ text: string; isError?: boolean } | null>(null);
 
@@ -146,10 +149,11 @@ export const DisputesView: React.FC<DisputesViewProps> = ({
       const res = await platformApi.orders.resolvePlatformDispute(detail.dispute.id, {
         decision,
         resolutionNote: resolutionNote.trim(),
-        issueStrike: decision === 'customer' ? issueStrike : false,
-        strikeReason: decision === 'customer' && issueStrike ? strikeReason.trim() || undefined : undefined,
+        issueStrike: decision === 'customer' ? effectiveIssueStrike : false,
+        strikeReason:
+          decision === 'customer' && effectiveIssueStrike ? strikeReason.trim() || undefined : undefined,
         suspensionDays:
-          decision === 'customer' && issueStrike ? suspensionDays : undefined
+          decision === 'customer' && effectiveIssueStrike ? suspensionDays : undefined
       });
       if (res.success && res.data) {
         setShowThirdStrikeModal(false);
@@ -194,7 +198,7 @@ export const DisputesView: React.FC<DisputesViewProps> = ({
     }
 
     // ЯКЩО на користь клієнта + видається страйк і у закладу вже >= 2 активних страйків → модалка 3-го страйку!
-    if (decision === 'customer' && issueStrike && detail.dispute.storeActiveStrikes >= 2) {
+    if (decision === 'customer' && effectiveIssueStrike && detail.dispute.storeActiveStrikes >= 2) {
       setSelectedSuspensionDays(7);
       setShowThirdStrikeModal(true);
       return;
@@ -601,45 +605,56 @@ export const DisputesView: React.FC<DisputesViewProps> = ({
                         />
                       </div>
 
-                      {/* Strike option when deciding for customer */}
-                      <div className="p-3 rounded-xl bg-white border border-slate-200 space-y-2">
-                        <label className="flex items-center gap-2 text-xs font-bold text-slate-800 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={issueStrike}
-                            onChange={(e) => setIssueStrike(e.target.checked)}
-                            className="rounded border-slate-300"
-                          />
-                          <span>
-                            {locale === 'en'
-                              ? `Issue a strike to the store if resolved for customer (currently ${detail.dispute.storeActiveStrikes}/3)`
-                              : `Видати страйк закладу при рішенні на користь клієнта (зараз ${detail.dispute.storeActiveStrikes}/3)`}
-                          </span>
-                        </label>
-                        {issueStrike && (
-                          <input
-                            type="text"
-                            value={strikeReason}
-                            onChange={(e) => setStrikeReason(e.target.value)}
-                            placeholder={
-                              locale === 'en'
-                                ? 'Strike reason (optional, defaults to decision explanation)'
-                                : 'Причина страйку (необов’язково — за замовчуванням текст рішення)'
-                            }
-                            className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:bg-white focus:border-slate-900"
-                          />
-                        )}
-                        {issueStrike && detail.dispute.storeActiveStrikes >= 2 && (
-                          <div className="text-[11px] font-bold text-rose-700 flex items-center gap-1.5">
-                            <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                      {/* Strike option when deciding for customer (requires platform.strikes.issue) */}
+                      {canIssueStrikes ? (
+                        <div className="p-3 rounded-xl bg-white border border-slate-200 space-y-2">
+                          <label className="flex items-center gap-2 text-xs font-bold text-slate-800 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={effectiveIssueStrike}
+                              onChange={(e) => setIssueStrike(e.target.checked)}
+                              className="rounded border-slate-300"
+                            />
                             <span>
                               {locale === 'en'
-                                ? 'Next strike reaches 3/3 — you will choose suspension duration before submitting.'
-                                : 'Цей страйк стане 3-м — перед відправкою відкриється вікно вибору терміну блокування.'}
+                                ? `Issue a strike to the store if resolved for customer (currently ${detail.dispute.storeActiveStrikes}/3)`
+                                : `Видати страйк закладу при рішенні на користь клієнта (зараз ${detail.dispute.storeActiveStrikes}/3)`}
                             </span>
-                          </div>
-                        )}
-                      </div>
+                          </label>
+                          {effectiveIssueStrike && (
+                            <input
+                              type="text"
+                              value={strikeReason}
+                              onChange={(e) => setStrikeReason(e.target.value)}
+                              placeholder={
+                                locale === 'en'
+                                  ? 'Strike reason (optional, defaults to decision explanation)'
+                                  : 'Причина страйку (необов’язково — за замовчуванням текст рішення)'
+                              }
+                              className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:bg-white focus:border-slate-900"
+                            />
+                          )}
+                          {effectiveIssueStrike && detail.dispute.storeActiveStrikes >= 2 && (
+                            <div className="text-[11px] font-bold text-rose-700 flex items-center gap-1.5">
+                              <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                              <span>
+                                {locale === 'en'
+                                  ? 'Next strike reaches 3/3 — you will choose suspension duration before submitting.'
+                                  : 'Цей страйк стане 3-м — перед відправкою відкриється вікно вибору терміну блокування.'}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="p-2.5 rounded-xl bg-white border border-slate-200 text-[11px] text-slate-500 flex items-center gap-2">
+                          <Lock className="w-3.5 h-3.5 shrink-0 text-slate-400" />
+                          <span>
+                            {locale === 'en'
+                              ? 'Issuing strikes requires the strike-management permission. You can still resolve the dispute without a strike.'
+                              : 'Видача страйків вимагає окремого права. Ви можете закрити спір без накладення страйку.'}
+                          </span>
+                        </div>
+                      )}
 
                       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2 border-t border-slate-200/80">
                         <Button
@@ -843,8 +858,8 @@ export const DisputesView: React.FC<DisputesViewProps> = ({
                   ? `You are closing dispute for order ${detail.dispute.orderNumber} in favor of «${detail.dispute.storeName}». No refund or strike will be issued.`
                   : `Ви закриваєте скаргу по замовленню ${detail.dispute.orderNumber} на користь закладу «${detail.dispute.storeName}». Кошти залишаться за бізнесом, страйк не видається.`
                 : locale === 'en'
-                  ? `You are resolving dispute for order ${detail.dispute.orderNumber} in favor of customer (${formatMoney(detail.dispute.orderTotalAmount)} UAH refund).${issueStrike ? ' 1 strike will be issued to the store.' : ''}`
-                  : `Ви закриваєте скаргу по замовленню ${detail.dispute.orderNumber} на користь клієнта з поверненням ${formatMoney(detail.dispute.orderTotalAmount)} ₴.${issueStrike ? ` Закладу «${detail.dispute.storeName}» буде видано страйк (${detail.dispute.storeActiveStrikes + 1}/3).` : ''}`}
+                  ? `You are resolving dispute for order ${detail.dispute.orderNumber} in favor of customer (${formatMoney(detail.dispute.orderTotalAmount)} UAH refund).${effectiveIssueStrike ? ' 1 strike will be issued to the store.' : ''}`
+                  : `Ви закриваєте скаргу по замовленню ${detail.dispute.orderNumber} на користь клієнта з поверненням ${formatMoney(detail.dispute.orderTotalAmount)} ₴.${effectiveIssueStrike ? ` Закладу «${detail.dispute.storeName}» буде видано страйк (${detail.dispute.storeActiveStrikes + 1}/3).` : ''}`}
             </p>
 
             <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
