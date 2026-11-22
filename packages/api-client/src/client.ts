@@ -7,6 +7,8 @@ export interface ApiClientConfig {
   defaultHeaders?: Record<string, string>;
   getAccessToken?: () => string | null | Promise<string | null>;
   setAccessToken?: (token: string | null) => void | Promise<void>;
+  getRefreshToken?: () => string | null | Promise<string | null>;
+  setRefreshToken?: (token: string | null) => void | Promise<void>;
   onUnauthorized?: () => void | Promise<void>;
 }
 
@@ -22,6 +24,8 @@ export class ApiClient {
   private defaultHeaders: Record<string, string>;
   private getAccessTokenFn?: () => string | null | Promise<string | null>;
   private setAccessTokenFn?: (token: string | null) => void | Promise<void>;
+  private getRefreshTokenFn?: () => string | null | Promise<string | null>;
+  private setRefreshTokenFn?: (token: string | null) => void | Promise<void>;
   private onUnauthorizedFn?: () => void | Promise<void>;
 
   // Mutex promise to avoid multiple concurrent refresh token calls
@@ -33,6 +37,8 @@ export class ApiClient {
     this.defaultHeaders = config.defaultHeaders || {};
     this.getAccessTokenFn = config.getAccessToken;
     this.setAccessTokenFn = config.setAccessToken;
+    this.getRefreshTokenFn = config.getRefreshToken;
+    this.setRefreshTokenFn = config.setRefreshToken;
     this.onUnauthorizedFn = config.onUnauthorized;
   }
 
@@ -43,6 +49,17 @@ export class ApiClient {
   public setAccessToken(token: string | null) {
     if (this.setAccessTokenFn) {
       void this.setAccessTokenFn(token);
+    }
+  }
+
+  public async getRefreshToken(): Promise<string | null> {
+    if (!this.getRefreshTokenFn) return null;
+    return await this.getRefreshTokenFn();
+  }
+
+  public setRefreshToken(token: string | null) {
+    if (this.setRefreshTokenFn) {
+      void this.setRefreshTokenFn(token);
     }
   }
 
@@ -107,14 +124,24 @@ export class ApiClient {
         headers.set('Content-Type', 'application/json');
         headers.set('X-Requested-With', 'XMLHttpRequest');
 
+        const storedRefreshToken = this.getRefreshTokenFn
+          ? await this.getRefreshTokenFn()
+          : null;
+        const payloadBody = storedRefreshToken
+          ? JSON.stringify({ refreshToken: storedRefreshToken })
+          : '{}';
+
         const response = await fetch(refreshUrl, {
           method: 'POST',
           headers,
-          body: '{}',
+          body: payloadBody,
           credentials: this.credentials
         });
 
         if (!response.ok) {
+          if (this.setRefreshTokenFn) {
+            await this.setRefreshTokenFn(null);
+          }
           if (this.onUnauthorizedFn) {
             await this.onUnauthorizedFn();
           }
@@ -123,9 +150,13 @@ export class ApiClient {
 
         const data = (await response.json()) as ApiResponse<AuthResponse>;
         const newAccessToken = data.data.accessToken;
+        const newRefreshToken = data.data.refreshToken;
 
         if (this.setAccessTokenFn && newAccessToken) {
           await this.setAccessTokenFn(newAccessToken);
+        }
+        if (this.setRefreshTokenFn && newRefreshToken) {
+          await this.setRefreshTokenFn(newRefreshToken);
         }
 
         return newAccessToken;

@@ -23,6 +23,9 @@ export class AuthModule {
     if (res.data?.accessToken) {
       this.client.setAccessToken(res.data.accessToken);
     }
+    if (res.data?.refreshToken) {
+      this.client.setRefreshToken(res.data.refreshToken);
+    }
     return res;
   }
 
@@ -35,6 +38,9 @@ export class AuthModule {
     });
     if (res.data?.accessToken) {
       this.client.setAccessToken(res.data.accessToken);
+    }
+    if (res.data?.refreshToken) {
+      this.client.setRefreshToken(res.data.refreshToken);
     }
     return res;
   }
@@ -49,6 +55,9 @@ export class AuthModule {
     if (res.data?.accessToken) {
       this.client.setAccessToken(res.data.accessToken);
     }
+    if (res.data?.refreshToken) {
+      this.client.setRefreshToken(res.data.refreshToken);
+    }
     return res;
   }
 
@@ -57,11 +66,14 @@ export class AuthModule {
    */
   async logout(): Promise<ApiResponse<{ message: string }>> {
     try {
-      return await this.client.post<ApiResponse<{ message: string }>>('/auth/logout', {}, {
+      const storedRefreshToken = await this.client.getRefreshToken();
+      const body = storedRefreshToken ? { refreshToken: storedRefreshToken } : {};
+      return await this.client.post<ApiResponse<{ message: string }>>('/auth/logout', body, {
         skipAuthRefresh: true
       });
     } finally {
       this.client.setAccessToken(null);
+      this.client.setRefreshToken(null);
     }
   }
 
