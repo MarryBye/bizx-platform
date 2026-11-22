@@ -1,3 +1,4 @@
+import { encodePathSegment } from './path-utils';
 import type { ApiClient } from './client';
 import type {
   ApiResponse,
@@ -146,11 +147,12 @@ export class BroadcastsModule {
   }
 
   async uploadPlatformSupportAttachment(
-    fileOrFormData: unknown
+    fileOrFormData: unknown,
+    threadId?: string
   ): Promise<ApiResponse<UploadFileResponse>> {
-    return this.client.post<ApiResponse<UploadFileResponse>>(
-      '/platform/support/upload',
-      toFormData(fileOrFormData)
-    );
+    const url = threadId
+      ? `/platform/support/threads/${encodePathSegment(threadId)}/upload`
+      : '/platform/support/upload';
+    return this.client.post<ApiResponse<UploadFileResponse>>(url, toFormData(fileOrFormData));
   }
 }

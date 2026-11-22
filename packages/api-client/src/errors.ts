@@ -17,12 +17,15 @@ export class ApiClientError extends Error {
   readonly isAuthError: boolean;
 
   constructor(status: number, statusText: string, data: unknown) {
-    const errorPayload = data as ApiErrorPayload | undefined;
-    const message =
-      errorPayload?.message ||
-      errorPayload?.error ||
-      `Request failed with status ${status}: ${statusText}`;
-    super(message);
+    const errorPayload = typeof data === 'object' && data !== null ? (data as ApiErrorPayload) : undefined;
+    const rawMsg = errorPayload?.message || errorPayload?.error;
+    const safeMsg =
+      status >= 500
+        ? 'Внутрішня помилка сервера. Спробуйте пізніше.'
+        : typeof rawMsg === 'string' && rawMsg.length <= 280 && !/<[a-z!/]/i.test(rawMsg)
+          ? rawMsg
+          : `Request failed with status ${status}: ${statusText}`;
+    super(safeMsg);
     this.name = 'ApiClientError';
     this.status = status;
     this.statusText = statusText;

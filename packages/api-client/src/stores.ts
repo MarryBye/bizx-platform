@@ -1,3 +1,4 @@
+import { encodePathSegment } from './path-utils';
 import type { ApiClient } from './client';
 import type {
   ApiResponse,
@@ -41,7 +42,7 @@ export class StoresModule {
    * Отримання детальної інформації про магазин за ID або slug (GET /stores/:idOrSlug)
    */
   async getStore(idOrSlug: string): Promise<ApiResponse<Store>> {
-    return this.client.get<ApiResponse<Store>>(`/stores/${idOrSlug}`);
+    return this.client.get<ApiResponse<Store>>(`/stores/${encodePathSegment(idOrSlug)}`);
   }
 
   /**
@@ -62,7 +63,7 @@ export class StoresModule {
    * Оновлення даних магазину (PATCH /stores/:id)
    */
   async updateStore(id: string, dto: UpdateStoreDto): Promise<ApiResponse<Store>> {
-    return this.client.patch<ApiResponse<Store>>(`/stores/${id}`, dto);
+    return this.client.patch<ApiResponse<Store>>(`/stores/${encodePathSegment(id)}`, dto);
   }
 
   /**
@@ -193,15 +194,19 @@ export class StoresModule {
   }
 
   /**
-   * Попередній перегляд вітрини закладу (включно зі статусами draft/pending)
+   * Попередній перегляд вітрини закладу (включно зі статусами draft/pending).
+   * Передає токен через заголовок X-Store-Preview-Token (не в URL query!).
    */
   async getStorePreview(
     idOrSlug: string,
     previewToken?: string | null
   ): Promise<ApiResponse<StorePreviewResponse>> {
-    return this.client.get<ApiResponse<StorePreviewResponse>>(`/stores/${idOrSlug}/preview`, {
-      params: previewToken ? { token: previewToken } : undefined
-    });
+    return this.client.get<ApiResponse<StorePreviewResponse>>(
+      `/stores/${encodePathSegment(idOrSlug)}/preview`,
+      {
+        headers: previewToken ? { 'X-Store-Preview-Token': previewToken } : undefined
+      }
+    );
   }
 
   /**

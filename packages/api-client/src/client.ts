@@ -64,11 +64,19 @@ export class ApiClient {
     return url.toString();
   }
 
-  private async prepareHeaders(customHeaders?: HeadersInit, hasJsonBody = false): Promise<Headers> {
+  private async prepareHeaders(
+    customHeaders?: HeadersInit,
+    hasJsonBody = false,
+    includeCsrfHeader = false
+  ): Promise<Headers> {
     const headers = new Headers(this.defaultHeaders);
 
     if (hasJsonBody) {
       headers.set('Content-Type', 'application/json');
+    }
+
+    if (includeCsrfHeader && !headers.has('X-Requested-With')) {
+      headers.set('X-Requested-With', 'XMLHttpRequest');
     }
 
     if (this.getAccessTokenFn) {
@@ -95,11 +103,14 @@ export class ApiClient {
     this.refreshPromise = (async () => {
       try {
         const refreshUrl = this.buildUrl('/auth/refresh');
-        const headers = await this.prepareHeaders(undefined, true);
+        const headers = new Headers(this.defaultHeaders);
+        headers.set('Content-Type', 'application/json');
+        headers.set('X-Requested-With', 'XMLHttpRequest');
 
         const response = await fetch(refreshUrl, {
           method: 'POST',
           headers,
+          body: '{}',
           credentials: this.credentials
         });
 
@@ -136,8 +147,10 @@ export class ApiClient {
       options.body !== undefined &&
       typeof options.body === 'object' &&
       !(options.body instanceof FormData);
+    const method = (options.method || 'GET').toUpperCase();
+    const isMutating = method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS';
     const url = this.buildUrl(path, options.params);
-    const headers = await this.prepareHeaders(options.headers, isJsonBody);
+    const headers = await this.prepareHeaders(options.headers, isJsonBody, isMutating);
 
     const fetchOptions: RequestInit = {
       ...options,

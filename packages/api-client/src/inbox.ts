@@ -1,3 +1,4 @@
+import { encodePathSegment } from './path-utils';
 import type { ApiClient } from './client';
 import type {
   ApiResponse,
@@ -21,12 +22,14 @@ export class InboxModule {
   }
 
   async getMessages(threadId: string): Promise<ApiResponse<InboxMessageItem[]>> {
-    return this.client.get<ApiResponse<InboxMessageItem[]>>(`/inbox/threads/${threadId}/messages`);
+    return this.client.get<ApiResponse<InboxMessageItem[]>>(
+      `/inbox/threads/${encodePathSegment(threadId)}/messages`
+    );
   }
 
   async markRead(threadId: string): Promise<ApiResponse<{ updated: number }>> {
     return this.client.post<ApiResponse<{ updated: number }>>(
-      `/inbox/threads/${threadId}/read`,
+      `/inbox/threads/${encodePathSegment(threadId)}/read`,
       {}
     );
   }
@@ -36,7 +39,7 @@ export class InboxModule {
     dto: SendInboxMessageDto
   ): Promise<ApiResponse<InboxMessageItem>> {
     return this.client.post<ApiResponse<InboxMessageItem>>(
-      `/inbox/threads/${threadId}/messages`,
+      `/inbox/threads/${encodePathSegment(threadId)}/messages`,
       dto
     );
   }
@@ -60,7 +63,7 @@ export class InboxModule {
       body = fileOrFormData;
     }
     return this.client.post<ApiResponse<OrderMessageAttachmentDto>>(
-      `/inbox/threads/${threadId}/upload`,
+      `/inbox/threads/${encodePathSegment(threadId)}/upload`,
       body
     );
   }

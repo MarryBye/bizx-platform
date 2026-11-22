@@ -56,9 +56,13 @@ export class AuthModule {
    * Выход из системы (POST /auth/logout)
    */
   async logout(): Promise<ApiResponse<{ message: string }>> {
-    const res = await this.client.post<ApiResponse<{ message: string }>>('/auth/logout', {});
-    this.client.setAccessToken(null);
-    return res;
+    try {
+      return await this.client.post<ApiResponse<{ message: string }>>('/auth/logout', {}, {
+        skipAuthRefresh: true
+      });
+    } finally {
+      this.client.setAccessToken(null);
+    }
   }
 
   /**

@@ -1512,7 +1512,7 @@ export class I18n {
 
     if (params && typeof text === 'string') {
       return Object.entries(params).reduce((acc, [paramKey, val]) => {
-        return acc.replace(new RegExp(`\\{${paramKey}\\}`, 'g'), String(val));
+        return acc.replaceAll(`{${paramKey}}`, () => String(val));
       }, text);
     }
 
@@ -1521,12 +1521,17 @@ export class I18n {
 
   private resolveKey(dict: TranslationDictionary | undefined, key: string): unknown {
     if (!dict) return undefined;
-    if (dict[key] !== undefined) return dict[key];
+    if (Object.prototype.hasOwnProperty.call(dict, key)) return dict[key];
 
     const parts = key.split('.');
     let current: unknown = dict;
     for (const part of parts) {
-      if (current === null || current === undefined || typeof current !== 'object') {
+      if (
+        current === null ||
+        current === undefined ||
+        typeof current !== 'object' ||
+        !Object.prototype.hasOwnProperty.call(current, part)
+      ) {
         return undefined;
       }
       current = (current as Record<string, unknown>)[part];
@@ -1626,6 +1631,11 @@ export function translateApiError(rawMessage?: string | null, fallbackKey = 'com
   }
   if (lower.includes('failed to fetch') || lower.includes('network')) {
     return i18n.t('errors.networkError');
+  }
+
+  // Prevent raw HTML/proxy dumps or overly long internal errors from reaching UI banners
+  if (rawMessage.length > 240 || /<[a-z!/]/i.test(rawMessage)) {
+    return i18n.t(fallbackKey);
   }
 
   return rawMessage;
@@ -1768,4 +1778,251 @@ export function formatNationalPhoneNumber(digits: string, country: SharedPhoneCo
     parts.push(clean.slice(cursor));
   }
   return parts.join(' ');
+}
+
+/**
+ * ============================================================================
+ * BizX Shared Zero-Dependency Security Utilities
+ * ============================================================================
+ * Reusable defenses for URL sanitization, path encoding, CSV/Excel formula
+ * neutralization (CWE-1236), upload validation, hostname/slug allowlists,
+ * and PostgreSQL ILIKE wildcard escaping.
+ */
+
+const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+const HOSTNAME_RE =
+  /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
+const RESERVED_INTERNAL_TLDS = new Set([
+  'local',
+  'localhost',
+  'internal',
+  'arpa',
+  'lan',
+  'home',
+  'corp',
+  'localdomain',
+  'invalid',
+  'test',
+  'example'
+]);
+const FORMULA_TRIGGER_RE = /^[\s\u0000-\u001F]*[=+\-@\t\r]/;
+const CONTROL_CHAR_RE = /[\u0000-\u001F\u007F]/;
+
+export function isValidSlug(value: string | null | undefined): value is string {
+  return typeof value === 'string' && SLUG_RE.test(value);
+}
+
+export function isValidCustomHostname(host: string | null | undefined): host is string {
+  if (typeof host !== 'string') return false;
+  const clean = host.trim().toLowerCase();
+  if (!clean || clean === 'localhost' || /^\d+\.\d+\.\d+\.\d+$/.test(clean)) return false;
+  if (!HOSTNAME_RE.test(clean)) return false;
+  if (clean === 'bizx.ua' || clean.endsWith('.bizx.ua')) return false;
+  const tld = clean.slice(clean.lastIndexOf('.') + 1);
+  if (RESERVED_INTERNAL_TLDS.has(tld)) return false;
+  return true;
+}
+
+export function encodePathSegment(segment: string): string {
+  const trimmed = String(segment ?? '').trim();
+  if (!trimmed || trimmed === '.' || trimmed === '..' || /[\\/\r\n\0]/.test(trimmed)) {
+    throw new Error('Invalid API path segment');
+  }
+  return encodeURIComponent(trimmed);
+}
+
+export function escapeIlikePattern(raw: string): string {
+  return raw.replace(/[\\%_]/g, '\\$&');
+}
+
+export interface SafeUrlOptions {
+  allowHttp?: boolean;
+  allowedOrigins?: readonly string[];
+  allowRelative?: boolean;
+}
+
+/**
+ * Validates URLs for <a href>, window.open(), and React Native Linking.openURL().
+ * Strictly blocks javascript:, data:, vbscript:, file:, blob:, etc.
+ */
+export function sanitizeNavigationUrl(
+  raw: string | null | undefined,
+  options: SafeUrlOptions = {}
+): string | null {
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  if (!trimmed || CONTROL_CHAR_RE.test(trimmed)) return null;
+
+  if (options.allowRelative && trimmed.startsWith('/') && !trimmed.startsWith('//')) {
+    return trimmed;
+  }
+
+  try {
+    const parsed = new URL(trimmed);
+    const allowedProtocols = options.allowHttp ? ['https:', 'http:'] : ['https:'];
+    if (!allowedProtocols.includes(parsed.protocol)) return null;
+
+    if (options.allowedOrigins && options.allowedOrigins.length > 0) {
+      const originAllowed = options.allowedOrigins.some(
+        (origin) => origin.toLowerCase() === parsed.origin.toLowerCase()
+      );
+      if (!originAllowed) return null;
+    }
+
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Resolves and validates media/attachment URLs against trusted API/CDN origins.
+ * Strictly blocks data:, javascript:, vbscript:, and untrusted external origins.
+ */
+export function sanitizeMediaUrl(
+  urlOrPath: string | null | undefined,
+  apiBaseUrl: string,
+  trustedMediaOrigins: readonly string[] = [],
+  options: { allowLocalBlobPreview?: boolean; allowHttp?: boolean; blockSvg?: boolean } = {}
+): string | null {
+  if (!urlOrPath) return null;
+  const trimmed = urlOrPath.trim();
+  if (!trimmed || CONTROL_CHAR_RE.test(trimmed)) return null;
+
+  if (options.allowLocalBlobPreview && trimmed.startsWith('blob:')) {
+    return trimmed;
+  }
+
+  let baseOrigin: string;
+  try {
+    baseOrigin = new URL(apiBaseUrl).origin;
+  } catch {
+    return null;
+  }
+
+  const allowHttp = options.allowHttp ?? baseOrigin.startsWith('http://');
+  const origins = [baseOrigin, ...trustedMediaOrigins];
+
+  let resolvedStr: string | null = null;
+  if (trimmed.startsWith('/') && !trimmed.startsWith('//')) {
+    try {
+      const resolved = new URL(trimmed, baseOrigin);
+      if (resolved.origin !== baseOrigin) return null;
+      resolvedStr = resolved.toString();
+    } catch {
+      return null;
+    }
+  } else {
+    resolvedStr = sanitizeNavigationUrl(trimmed, {
+      allowHttp,
+      allowedOrigins: trustedMediaOrigins.length > 0 ? origins : undefined
+    });
+  }
+
+  if (!resolvedStr) return null;
+
+  if (options.blockSvg) {
+    try {
+      const pathLower = new URL(resolvedStr).pathname.toLowerCase();
+      if (pathLower.endsWith('.svg')) return null;
+    } catch {
+      return null;
+    }
+  }
+
+  return resolvedStr;
+}
+
+/**
+ * Neutralizes CSV / Excel Spreadsheet Formula Injection (CWE-1236).
+ */
+export function sanitizeSpreadsheetCell(value: unknown): string | number {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  if (value === null || value === undefined) return '';
+  const str = String(value);
+  return FORMULA_TRIGGER_RE.test(str) ? `'${str}` : str;
+}
+
+export function sanitizeSpreadsheetRows<T extends Record<string, unknown>>(
+  rows: ReadonlyArray<T>
+): Record<string, string | number>[] {
+  return rows.map((row) => {
+    const out: Record<string, string | number> = {};
+    for (const [key, val] of Object.entries(row)) {
+      out[key] = sanitizeSpreadsheetCell(val);
+    }
+    return out;
+  });
+}
+
+/**
+ * Zero-dependency RFC-4180 CSV serializer with automatic CWE-1236 formula neutralization.
+ */
+export function serializeSafeCsv(rows: ReadonlyArray<Record<string, unknown>>): string {
+  if (rows.length === 0) return '';
+  const headers = Object.keys(rows[0]);
+  const escapeCsvField = (raw: unknown): string => {
+    const safe = String(sanitizeSpreadsheetCell(raw));
+    return /[",\r\n]/.test(safe) ? `"${safe.replaceAll('"', '""')}"` : safe;
+  };
+  const lines = [
+    headers.map(escapeCsvField).join(','),
+    ...rows.map((row) => headers.map((h) => escapeCsvField(row[h])).join(','))
+  ];
+  return '\uFEFF' + lines.join('\r\n');
+}
+
+export function sanitizeFilenameSegment(raw: string | null | undefined, fallback = 'export'): string {
+  if (!raw) return fallback;
+  const cleaned = raw
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 64);
+  return cleaned || fallback;
+}
+
+export interface UploadPolicy {
+  allowedMimeTypes: readonly string[];
+  allowedExtensions: readonly string[];
+  maxBytes: number;
+}
+
+export const UPLOAD_POLICIES = {
+  rasterImage: {
+    allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
+    allowedExtensions: ['.jpg', '.jpeg', '.png', '.webp', '.gif'],
+    maxBytes: 10 * 1024 * 1024
+  },
+  chatAttachment: {
+    allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'],
+    allowedExtensions: ['.jpg', '.jpeg', '.png', '.webp', '.pdf'],
+    maxBytes: 10 * 1024 * 1024
+  }
+} as const satisfies Record<string, UploadPolicy>;
+
+export function validateUploadFile(
+  file: { name?: string | null; type?: string | null; size?: number | null },
+  policy: UploadPolicy
+): { ok: true } | { ok: false; code: 'INVALID_TYPE' | 'TOO_LARGE' | 'EMPTY' } {
+  if (typeof file.size === 'number' && file.size <= 0) return { ok: false, code: 'EMPTY' };
+  if (typeof file.size === 'number' && file.size > policy.maxBytes) {
+    return { ok: false, code: 'TOO_LARGE' };
+  }
+
+  const mime = (file.type || '').toLowerCase().trim();
+  const name = (file.name || '').toLowerCase().trim();
+
+  if (mime.includes('svg') || name.endsWith('.svg') || mime.includes('html')) {
+    return { ok: false, code: 'INVALID_TYPE' };
+  }
+
+  const hasAllowedMime = Boolean(mime && policy.allowedMimeTypes.includes(mime));
+  const hasAllowedExt = !name || policy.allowedExtensions.some((ext) => name.endsWith(ext));
+
+  if (!hasAllowedMime || !hasAllowedExt) {
+    return { ok: false, code: 'INVALID_TYPE' };
+  }
+  return { ok: true };
 }
