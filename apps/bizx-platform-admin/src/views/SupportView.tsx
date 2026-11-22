@@ -164,7 +164,10 @@ export const SupportView: React.FC<SupportViewProps> = ({ canReply, onSupportCha
   };
 
   const handleUploadAttachment = async (file: File): Promise<OrderChatAttachment> => {
-    const res = await platformApi.broadcasts.uploadPlatformSupportAttachment(file);
+    if (!selectedId) {
+      throw new Error(isEn ? 'Select a ticket first' : 'Оберіть звернення перед завантаженням');
+    }
+    const res = await platformApi.broadcasts.uploadPlatformSupportAttachment(file, selectedId);
     if (!res.success || !res.data) {
       throw new Error(isEn ? 'Upload failed' : 'Помилка завантаження файлу');
     }

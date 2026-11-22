@@ -51,19 +51,37 @@ export class StorageClientModule {
   }
 
   /**
-   * Отримання повного URL медіафайлу (якщо відносний шлях)
+   * Отримання безпечного повного URL медіафайлу.
+   * Блокує небезпечні схеми (javascript:, data:, vbscript:) та невалідні URL.
    */
-  resolveMediaUrl(urlOrPath: string | null | undefined): string | null {
+  resolveMediaUrl(
+    urlOrPath: string | null | undefined,
+    options?: { allowLocalBlobPreview?: boolean }
+  ): string | null {
     if (!urlOrPath) return null;
-    if (
-      urlOrPath.startsWith('http://') ||
-      urlOrPath.startsWith('https://') ||
-      urlOrPath.startsWith('blob:') ||
-      urlOrPath.startsWith('data:')
-    ) {
-      return urlOrPath;
+    const trimmed = urlOrPath.trim();
+    if (!trimmed || /[\u0000-\u001F\u007F]/.test(trimmed)) return null;
+
+    if (trimmed.startsWith('blob:')) {
+      return options?.allowLocalBlobPreview ? trimmed : null;
     }
-    const cleanPath = urlOrPath.startsWith('/') ? urlOrPath : `/${urlOrPath}`;
+
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      try {
+        const parsed = new URL(trimmed);
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+        return parsed.toString();
+      } catch {
+        return null;
+      }
+    }
+
+    if (trimmed.startsWith('//') || /^[a-z][a-z0-9+.-]*:/i.test(trimmed)) {
+      return null;
+    }
+
+    const cleanPath = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+    if (cleanPath.includes('..') || cleanPath.includes('\\')) return null;
     return `${this.client.getBaseUrl()}${cleanPath}`;
   }
 }

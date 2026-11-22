@@ -5,12 +5,18 @@ import { LoginView } from './views/LoginView';
 import { DashboardLayout } from './components/DashboardLayout';
 
 export const App: React.FC = () => {
-  const { user, isLoading, init } = useAuthStore();
+  const { user, isLoading, init, handleUnauthorized } = useAuthStore();
   const { fetchStores } = useBusinessStore();
 
   useEffect(() => {
     void init();
   }, [init]);
+
+  useEffect(() => {
+    const onUnauth = () => handleUnauthorized();
+    window.addEventListener('bizx:unauthorized', onUnauth);
+    return () => window.removeEventListener('bizx:unauthorized', onUnauth);
+  }, [handleUnauthorized]);
 
   useEffect(() => {
     if (user) {

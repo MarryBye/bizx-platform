@@ -14,6 +14,7 @@ import {
   ForbiddenException
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { Throttle } from '@nestjs/throttler';
 import type { Response } from 'express';
 import { storeMembers, stores, eq, and, isNull } from '@bizx/database';
 import { DatabaseService } from '../database/database.service.js';
@@ -27,6 +28,11 @@ import {
   MAX_IMAGE_FILE_SIZE,
   type UploadedFileDto
 } from '../common/file-upload.utils.js';
+import {
+  canonicalizeStorageKey,
+  SAFE_INLINE_IMAGE_MIMES,
+  sanitizeAttachmentFileName
+} from '../common/security/safe-storage-key.js';
 import {
   presignedUploadDtoSchema,
   type PresignedUploadDto,
@@ -47,19 +53,28 @@ export class StorageController {
     if (folder === 'avatars') return;
     const plat = await this.rbacService.getPlatformMemberAccess(userId);
     if (plat.isMember) return;
-    const [ownedOrMember] = await this.databaseService.db
+    const [owned] = await this.databaseService.db
       .select({ id: stores.id })
       .from(stores)
       .where(and(eq(stores.ownerId, userId), isNull(stores.archivedAt)))
       .limit(1);
-    if (ownedOrMember) return;
+    if (owned) return;
     const [staffRow] = await this.databaseService.db
       .select({ id: storeMembers.id })
       .from(storeMembers)
-      .where(and(eq(storeMembers.userId, userId), isNull(storeMembers.archivedAt)))
+      .innerJoin(stores, eq(storeMembers.storeId, stores.id))
+      .where(
+        and(
+          eq(storeMembers.userId, userId),
+          isNull(storeMembers.archivedAt),
+          isNull(stores.archivedAt)
+        )
+      )
       .limit(1);
     if (staffRow) return;
-    throw new ForbiddenException('Завантаження медіа в цю категорію доступне лише бізнес-акаунтам та адміністраторам');
+    throw new ForbiddenException(
+      'Завантаження медіа в цю категорію доступне лише активним бізнес-акаунтам та адміністраторам'
+    );
   }
 
   /**
@@ -68,7 +83,7 @@ export class StorageController {
   @Public()
   @Get('defaults/:name')
   getDefaultPlaceholder(@Param('name') name: string, @Res() res: Response): void {
-    const cleanName = name.replace(/\.svg$/, '');
+    const cleanName = String(name || '').replace(/\.svg$/, '');
     const svg = this.storageService.getDefaultPlaceholderSvg(cleanName);
 
     res.setHeader('Content-Type', 'image/svg+xml');
@@ -83,6 +98,7 @@ export class StorageController {
    */
   @Post('presigned-upload')
   @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { limit: 15, ttl: 60_000 } })
   @UsePipes(new ZodValidationPipe(presignedUploadDtoSchema))
   async getPresignedUpload(
     @Body() dto: PresignedUploadDto,
@@ -92,7 +108,9 @@ export class StorageController {
     const result = await this.storageService.getPresignedUploadUrl(
       dto.folder,
       dto.fileName,
-      dto.contentType
+      dto.contentType,
+      300,
+      dto.contentLength
     );
 
     return {
@@ -107,6 +125,7 @@ export class StorageController {
    */
   @Post('upload')
   @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { limit: 15, ttl: 60_000 } })
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_IMAGE_FILE_SIZE } }))
   async uploadFile(
     @UploadedFile() rawFile: UploadedFileDto | undefined,
@@ -118,7 +137,7 @@ export class StorageController {
     await this.assertCanUploadToFolder(userId, folder);
 
     const file = validateImageFile(rawFile);
-    const fileKey = this.storageService.generateFileKey(folder, file.originalname);
+    const fileKey = this.storageService.generateFileKey(folder, file.originalname, file.mimetype);
     const publicUrl = await this.storageService.uploadBuffer(fileKey, file.buffer, file.mimetype);
 
     return {
@@ -126,7 +145,7 @@ export class StorageController {
       data: {
         fileKey,
         publicUrl,
-        originalName: file.originalname,
+        originalName: sanitizeAttachmentFileName(file.originalname),
         size: file.size,
         mimeType: file.mimetype
       },
@@ -136,39 +155,53 @@ export class StorageController {
 
   /**
    * Отримання / стримінг медіафайлу з бакету Cloudflare R2.
-   * Приватні вкладення (order-chat/*, inbox/*) вимагають валідний HMAC-підпис з коротким TTL.
+   * Канонізує ключ по allowlist папок. Приватні вкладення (order-chat/*, inbox/*)
+   * вимагають валідний HMAC-підпис з коротким TTL.
    */
   @Public()
   @Get('file/*key')
   async getFile(
     @Param('key') keyParam: string | string[],
     @Res() res: Response,
-    @Query('exp') exp?: string,
-    @Query('sig') sig?: string
+    @Query('exp') exp?: unknown,
+    @Query('sig') sig?: unknown
   ): Promise<void> {
-    const rawKey = Array.isArray(keyParam) ? keyParam.join('/') : keyParam;
-    const fileKey = rawKey.replace(/^file\//, '').replace(/^\/+/, '');
+    const fileKey = canonicalizeStorageKey(keyParam);
     const isPrivate = this.storageService.isPrivateKey(fileKey);
 
     if (isPrivate && !this.storageService.verifyPrivateSignature(fileKey, exp, sig)) {
-      throw new ForbiddenException('Посилання на приватне вкладення недійсне або термін його дії вичерпано');
+      throw new ForbiddenException(
+        'Посилання на приватне вкладення недійсне або термін його дії вичерпано'
+      );
     }
 
     const { stream, contentType, contentLength } = await this.storageService.getFileStream(fileKey);
+    const normalizedType = contentType.split(';')[0].trim().toLowerCase();
 
     res.setHeader('Content-Type', contentType);
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
-    if (contentType === 'image/svg+xml' || contentType === 'text/html') {
-      res.setHeader('Content-Disposition', 'inline');
+
+    // Лише перевірені растрові зображення віддаються inline; PDF, SVG, HTML та інші — строго attachment
+    if (!SAFE_INLINE_IMAGE_MIMES.has(normalizedType)) {
+      const safeDownloadName = sanitizeAttachmentFileName(fileKey.split('/').pop() || 'file');
+      res.setHeader('Content-Disposition', `attachment; filename="${safeDownloadName}"`);
     }
+
     if (contentLength) {
       res.setHeader('Content-Length', contentLength);
     }
     res.setHeader('Cache-Control', isPrivate ? 'private, max-age=300' : 'public, max-age=86400');
 
-    // Стримимо файл клієнту
-    (stream as NodeJS.ReadableStream).pipe(res);
+    stream.on('error', () => {
+      if (!res.headersSent) {
+        res.status(502).json({ statusCode: 502, message: 'Помилка завантаження файлу зі сховища' });
+      } else {
+        res.end();
+      }
+    });
+
+    stream.pipe(res);
   }
 
   /**
@@ -181,8 +214,7 @@ export class StorageController {
     @CurrentUser('sub') userId: string
   ): Promise<ApiResponse<{ message: string }>> {
     await this.rbacService.assertPlatformPermission(userId, 'platform.stores.archive');
-    const rawKey = Array.isArray(keyParam) ? keyParam.join('/') : keyParam;
-    const fileKey = rawKey.replace(/^file\//, '').replace(/^\/+/, '');
+    const fileKey = canonicalizeStorageKey(keyParam);
 
     await this.storageService.deleteFile(fileKey);
 

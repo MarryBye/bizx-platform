@@ -55,7 +55,7 @@ export interface RoleIconProps {
  * При icon === null / '' не рендерит ничего (вариант «без иконки»).
  */
 export const RoleIcon: React.FC<RoleIconProps> = ({ icon, className = 'w-4 h-4', style }) => {
-  if (!icon) return null;
+  if (!icon || !Object.prototype.hasOwnProperty.call(ROLE_ICON_MAP, icon)) return null;
   const IconComp = ROLE_ICON_MAP[icon];
   if (!IconComp) return null;
   return <IconComp className={className} style={style} />;

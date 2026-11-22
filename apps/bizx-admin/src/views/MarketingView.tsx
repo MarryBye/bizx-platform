@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { api } from '../lib/api';
 import { resolveMediaUrl } from '../lib/media';
+import { validateUploadFile, UPLOAD_POLICIES } from '@bizx/utils';
 import { useBusinessStore } from '../store/useBusinessStore';
 import { useTranslation } from '../hooks/useTranslation';
 import type { StoreBroadcastSummary, Product } from '@bizx/common-types';
@@ -131,6 +132,19 @@ export const MarketingView: React.FC<MarketingViewProps> = ({ canSend }) => {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file || !activeStoreId) return;
+    const validation = validateUploadFile(file, UPLOAD_POLICIES.rasterImage);
+    if (!validation.ok) {
+      setError(
+        validation.code === 'TOO_LARGE'
+          ? isEn
+            ? 'Image must be 10 MB or smaller'
+            : 'Розмір зображення не повинен перевищувати 10 МБ'
+          : isEn
+            ? 'Only JPG, PNG, WebP, or GIF images are allowed'
+            : 'Дозволені лише зображення JPG, PNG, WebP або GIF'
+      );
+      return;
+    }
     setIsUploading(true);
     setError(null);
     try {
@@ -442,7 +456,7 @@ export const MarketingView: React.FC<MarketingViewProps> = ({ canSend }) => {
                   </span>
                   <input
                     type="file"
-                    accept="image/*"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
                     onChange={handleUploadImage}
                     disabled={isUploading}
                     className="hidden"

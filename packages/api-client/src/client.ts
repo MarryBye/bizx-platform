@@ -7,6 +7,8 @@ export interface ApiClientConfig {
   defaultHeaders?: Record<string, string>;
   getAccessToken?: () => string | null | Promise<string | null>;
   setAccessToken?: (token: string | null) => void | Promise<void>;
+  getRefreshToken?: () => string | null | Promise<string | null>;
+  setRefreshToken?: (token: string | null) => void | Promise<void>;
   onUnauthorized?: () => void | Promise<void>;
 }
 
@@ -22,6 +24,8 @@ export class ApiClient {
   private defaultHeaders: Record<string, string>;
   private getAccessTokenFn?: () => string | null | Promise<string | null>;
   private setAccessTokenFn?: (token: string | null) => void | Promise<void>;
+  private getRefreshTokenFn?: () => string | null | Promise<string | null>;
+  private setRefreshTokenFn?: (token: string | null) => void | Promise<void>;
   private onUnauthorizedFn?: () => void | Promise<void>;
 
   // Mutex promise to avoid multiple concurrent refresh token calls
@@ -33,6 +37,8 @@ export class ApiClient {
     this.defaultHeaders = config.defaultHeaders || {};
     this.getAccessTokenFn = config.getAccessToken;
     this.setAccessTokenFn = config.setAccessToken;
+    this.getRefreshTokenFn = config.getRefreshToken;
+    this.setRefreshTokenFn = config.setRefreshToken;
     this.onUnauthorizedFn = config.onUnauthorized;
   }
 
@@ -43,6 +49,17 @@ export class ApiClient {
   public setAccessToken(token: string | null) {
     if (this.setAccessTokenFn) {
       void this.setAccessTokenFn(token);
+    }
+  }
+
+  public async getRefreshToken(): Promise<string | null> {
+    if (!this.getRefreshTokenFn) return null;
+    return await this.getRefreshTokenFn();
+  }
+
+  public setRefreshToken(token: string | null) {
+    if (this.setRefreshTokenFn) {
+      void this.setRefreshTokenFn(token);
     }
   }
 
@@ -64,11 +81,19 @@ export class ApiClient {
     return url.toString();
   }
 
-  private async prepareHeaders(customHeaders?: HeadersInit, hasJsonBody = false): Promise<Headers> {
+  private async prepareHeaders(
+    customHeaders?: HeadersInit,
+    hasJsonBody = false,
+    includeCsrfHeader = false
+  ): Promise<Headers> {
     const headers = new Headers(this.defaultHeaders);
 
     if (hasJsonBody) {
       headers.set('Content-Type', 'application/json');
+    }
+
+    if (includeCsrfHeader && !headers.has('X-Requested-With')) {
+      headers.set('X-Requested-With', 'XMLHttpRequest');
     }
 
     if (this.getAccessTokenFn) {
@@ -95,15 +120,28 @@ export class ApiClient {
     this.refreshPromise = (async () => {
       try {
         const refreshUrl = this.buildUrl('/auth/refresh');
-        const headers = await this.prepareHeaders(undefined, true);
+        const headers = new Headers(this.defaultHeaders);
+        headers.set('Content-Type', 'application/json');
+        headers.set('X-Requested-With', 'XMLHttpRequest');
+
+        const storedRefreshToken = this.getRefreshTokenFn
+          ? await this.getRefreshTokenFn()
+          : null;
+        const payloadBody = storedRefreshToken
+          ? JSON.stringify({ refreshToken: storedRefreshToken })
+          : '{}';
 
         const response = await fetch(refreshUrl, {
           method: 'POST',
           headers,
+          body: payloadBody,
           credentials: this.credentials
         });
 
         if (!response.ok) {
+          if (this.setRefreshTokenFn) {
+            await this.setRefreshTokenFn(null);
+          }
           if (this.onUnauthorizedFn) {
             await this.onUnauthorizedFn();
           }
@@ -112,9 +150,13 @@ export class ApiClient {
 
         const data = (await response.json()) as ApiResponse<AuthResponse>;
         const newAccessToken = data.data.accessToken;
+        const newRefreshToken = data.data.refreshToken;
 
         if (this.setAccessTokenFn && newAccessToken) {
           await this.setAccessTokenFn(newAccessToken);
+        }
+        if (this.setRefreshTokenFn && newRefreshToken) {
+          await this.setRefreshTokenFn(newRefreshToken);
         }
 
         return newAccessToken;
@@ -136,8 +178,10 @@ export class ApiClient {
       options.body !== undefined &&
       typeof options.body === 'object' &&
       !(options.body instanceof FormData);
+    const method = (options.method || 'GET').toUpperCase();
+    const isMutating = method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS';
     const url = this.buildUrl(path, options.params);
-    const headers = await this.prepareHeaders(options.headers, isJsonBody);
+    const headers = await this.prepareHeaders(options.headers, isJsonBody, isMutating);
 
     const fetchOptions: RequestInit = {
       ...options,

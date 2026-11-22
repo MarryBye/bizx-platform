@@ -6,13 +6,13 @@ import {
   Delete,
   Param,
   Body,
-  UseGuards,
-  UsePipes
+  UseGuards
 } from '@nestjs/common';
 import { RbacService } from './rbac.service.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import { CurrentUser } from '../auth/decorators/auth.decorators.js';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
+import { SafeUuidPipe } from '../common/security/safe-uuid.pipe.js';
 import {
   createRoleDtoSchema,
   updateRoleDtoSchema,
@@ -48,7 +48,7 @@ export class RbacController {
 
   @Get('stores/:storeId/permissions')
   async getStorePermissions(
-    @Param('storeId') storeId: string,
+    @Param('storeId', SafeUuidPipe) storeId: string,
     @CurrentUser('sub') userId: string
   ): Promise<ApiResponse<PermissionsResponse>> {
     const data = await this.rbacService.getPermissionsForStore(storeId, userId);
@@ -57,7 +57,7 @@ export class RbacController {
 
   @Get('stores/:storeId/roles')
   async getStoreRoles(
-    @Param('storeId') storeId: string,
+    @Param('storeId', SafeUuidPipe) storeId: string,
     @CurrentUser('sub') userId: string
   ): Promise<ApiResponse<RoleItem[]>> {
     const data = await this.rbacService.listRoles('store', storeId, userId);
@@ -65,34 +65,31 @@ export class RbacController {
   }
 
   @Post('stores/:storeId/roles')
-  @UsePipes(new ZodValidationPipe(createRoleDtoSchema))
   async createStoreRole(
-    @Param('storeId') storeId: string,
+    @Param('storeId', SafeUuidPipe) storeId: string,
     @CurrentUser('sub') userId: string,
-    @Body() dto: CreateRoleDto
+    @Body(new ZodValidationPipe(createRoleDtoSchema)) dto: CreateRoleDto
   ): Promise<ApiResponse<RoleItem>> {
     const data = await this.rbacService.createRole('store', storeId, userId, dto);
     return { success: true, data, timestamp: new Date().toISOString() };
   }
 
   @Patch('stores/:storeId/roles/reorder')
-  @UsePipes(new ZodValidationPipe(reorderRolesDtoSchema))
   async reorderStoreRoles(
-    @Param('storeId') storeId: string,
+    @Param('storeId', SafeUuidPipe) storeId: string,
     @CurrentUser('sub') userId: string,
-    @Body() dto: ReorderRolesDto
+    @Body(new ZodValidationPipe(reorderRolesDtoSchema)) dto: ReorderRolesDto
   ): Promise<ApiResponse<RoleItem[]>> {
     const data = await this.rbacService.reorderRoles('store', storeId, userId, dto.orderedRoleIds);
     return { success: true, data, timestamp: new Date().toISOString() };
   }
 
   @Patch('stores/:storeId/roles/:roleId')
-  @UsePipes(new ZodValidationPipe(updateRoleDtoSchema))
   async updateStoreRole(
-    @Param('storeId') storeId: string,
-    @Param('roleId') roleId: string,
+    @Param('storeId', SafeUuidPipe) storeId: string,
+    @Param('roleId', SafeUuidPipe) roleId: string,
     @CurrentUser('sub') userId: string,
-    @Body() dto: UpdateRoleDto
+    @Body(new ZodValidationPipe(updateRoleDtoSchema)) dto: UpdateRoleDto
   ): Promise<ApiResponse<RoleItem>> {
     const data = await this.rbacService.updateRole('store', storeId, roleId, userId, dto);
     return { success: true, data, timestamp: new Date().toISOString() };
@@ -100,8 +97,8 @@ export class RbacController {
 
   @Delete('stores/:storeId/roles/:roleId')
   async archiveStoreRole(
-    @Param('storeId') storeId: string,
-    @Param('roleId') roleId: string,
+    @Param('storeId', SafeUuidPipe) storeId: string,
+    @Param('roleId', SafeUuidPipe) roleId: string,
     @CurrentUser('sub') userId: string
   ): Promise<ApiResponse<{ message: string }>> {
     const data = await this.rbacService.archiveRole('store', storeId, roleId, userId);
@@ -110,7 +107,7 @@ export class RbacController {
 
   @Get('stores/:storeId/members')
   async getStoreMembers(
-    @Param('storeId') storeId: string,
+    @Param('storeId', SafeUuidPipe) storeId: string,
     @CurrentUser('sub') userId: string
   ): Promise<ApiResponse<StoreMember[]>> {
     const data = await this.rbacService.listStoreMembers(storeId, userId);
@@ -118,23 +115,21 @@ export class RbacController {
   }
 
   @Post('stores/:storeId/members')
-  @UsePipes(new ZodValidationPipe(addStoreMemberDtoSchema))
   async addStoreMember(
-    @Param('storeId') storeId: string,
+    @Param('storeId', SafeUuidPipe) storeId: string,
     @CurrentUser('sub') userId: string,
-    @Body() dto: AddStoreMemberDto
+    @Body(new ZodValidationPipe(addStoreMemberDtoSchema)) dto: AddStoreMemberDto
   ): Promise<ApiResponse<StoreMember>> {
     const data = await this.rbacService.addStoreMember(storeId, userId, dto);
     return { success: true, data, timestamp: new Date().toISOString() };
   }
 
   @Patch('stores/:storeId/members/:memberId')
-  @UsePipes(new ZodValidationPipe(updateStoreMemberDtoSchema))
   async updateStoreMember(
-    @Param('storeId') storeId: string,
-    @Param('memberId') memberId: string,
+    @Param('storeId', SafeUuidPipe) storeId: string,
+    @Param('memberId', SafeUuidPipe) memberId: string,
     @CurrentUser('sub') userId: string,
-    @Body() dto: UpdateStoreMemberDto
+    @Body(new ZodValidationPipe(updateStoreMemberDtoSchema)) dto: UpdateStoreMemberDto
   ): Promise<ApiResponse<StoreMember>> {
     const data = await this.rbacService.updateStoreMember(storeId, memberId, userId, dto);
     return { success: true, data, timestamp: new Date().toISOString() };
@@ -142,8 +137,8 @@ export class RbacController {
 
   @Delete('stores/:storeId/members/:memberId')
   async removeStoreMember(
-    @Param('storeId') storeId: string,
-    @Param('memberId') memberId: string,
+    @Param('storeId', SafeUuidPipe) storeId: string,
+    @Param('memberId', SafeUuidPipe) memberId: string,
     @CurrentUser('sub') userId: string
   ): Promise<ApiResponse<{ message: string }>> {
     const data = await this.rbacService.removeStoreMember(storeId, memberId, userId);
@@ -169,31 +164,28 @@ export class RbacController {
   }
 
   @Post('platform/roles')
-  @UsePipes(new ZodValidationPipe(createRoleDtoSchema))
   async createPlatformRole(
     @CurrentUser('sub') userId: string,
-    @Body() dto: CreateRoleDto
+    @Body(new ZodValidationPipe(createRoleDtoSchema)) dto: CreateRoleDto
   ): Promise<ApiResponse<RoleItem>> {
     const data = await this.rbacService.createRole('platform', null, userId, dto);
     return { success: true, data, timestamp: new Date().toISOString() };
   }
 
   @Patch('platform/roles/reorder')
-  @UsePipes(new ZodValidationPipe(reorderRolesDtoSchema))
   async reorderPlatformRoles(
     @CurrentUser('sub') userId: string,
-    @Body() dto: ReorderRolesDto
+    @Body(new ZodValidationPipe(reorderRolesDtoSchema)) dto: ReorderRolesDto
   ): Promise<ApiResponse<RoleItem[]>> {
     const data = await this.rbacService.reorderRoles('platform', null, userId, dto.orderedRoleIds);
     return { success: true, data, timestamp: new Date().toISOString() };
   }
 
   @Patch('platform/roles/:roleId')
-  @UsePipes(new ZodValidationPipe(updateRoleDtoSchema))
   async updatePlatformRole(
-    @Param('roleId') roleId: string,
+    @Param('roleId', SafeUuidPipe) roleId: string,
     @CurrentUser('sub') userId: string,
-    @Body() dto: UpdateRoleDto
+    @Body(new ZodValidationPipe(updateRoleDtoSchema)) dto: UpdateRoleDto
   ): Promise<ApiResponse<RoleItem>> {
     const data = await this.rbacService.updateRole('platform', null, roleId, userId, dto);
     return { success: true, data, timestamp: new Date().toISOString() };
@@ -201,7 +193,7 @@ export class RbacController {
 
   @Delete('platform/roles/:roleId')
   async archivePlatformRole(
-    @Param('roleId') roleId: string,
+    @Param('roleId', SafeUuidPipe) roleId: string,
     @CurrentUser('sub') userId: string
   ): Promise<ApiResponse<{ message: string }>> {
     const data = await this.rbacService.archiveRole('platform', null, roleId, userId);
@@ -217,21 +209,19 @@ export class RbacController {
   }
 
   @Post('platform/members')
-  @UsePipes(new ZodValidationPipe(addPlatformMemberDtoSchema))
   async addPlatformMember(
     @CurrentUser('sub') userId: string,
-    @Body() dto: AddPlatformMemberDto
+    @Body(new ZodValidationPipe(addPlatformMemberDtoSchema)) dto: AddPlatformMemberDto
   ): Promise<ApiResponse<PlatformMember>> {
     const data = await this.rbacService.addPlatformMember(userId, dto);
     return { success: true, data, timestamp: new Date().toISOString() };
   }
 
   @Patch('platform/members/:memberId')
-  @UsePipes(new ZodValidationPipe(updatePlatformMemberDtoSchema))
   async updatePlatformMember(
-    @Param('memberId') memberId: string,
+    @Param('memberId', SafeUuidPipe) memberId: string,
     @CurrentUser('sub') userId: string,
-    @Body() dto: UpdatePlatformMemberDto
+    @Body(new ZodValidationPipe(updatePlatformMemberDtoSchema)) dto: UpdatePlatformMemberDto
   ): Promise<ApiResponse<PlatformMember>> {
     const data = await this.rbacService.updatePlatformMember(memberId, userId, dto);
     return { success: true, data, timestamp: new Date().toISOString() };
@@ -239,7 +229,7 @@ export class RbacController {
 
   @Delete('platform/members/:memberId')
   async removePlatformMember(
-    @Param('memberId') memberId: string,
+    @Param('memberId', SafeUuidPipe) memberId: string,
     @CurrentUser('sub') userId: string
   ): Promise<ApiResponse<{ message: string }>> {
     const data = await this.rbacService.removePlatformMember(memberId, userId);
@@ -260,7 +250,7 @@ export class RbacController {
 
   @Patch('platform/users/:targetUserId/status')
   async updatePlatformUserStatus(
-    @Param('targetUserId') targetUserId: string,
+    @Param('targetUserId', SafeUuidPipe) targetUserId: string,
     @CurrentUser('sub') userId: string,
     @Body(new ZodValidationPipe(updatePlatformUserStatusDtoSchema))
     dto: UpdatePlatformUserStatusDto
@@ -278,7 +268,7 @@ export class RbacController {
 
   @Patch('platform/users/:targetUserId/subscription')
   async updatePlatformUserSubscription(
-    @Param('targetUserId') targetUserId: string,
+    @Param('targetUserId', SafeUuidPipe) targetUserId: string,
     @CurrentUser('sub') userId: string,
     @Body(new ZodValidationPipe(updatePlatformUserSubscriptionDtoSchema))
     dto: UpdatePlatformUserSubscriptionDto

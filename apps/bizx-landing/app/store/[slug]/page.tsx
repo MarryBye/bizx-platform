@@ -7,7 +7,7 @@ import { api } from '../../lib/api';
 import { useTranslation } from '../../hooks/useTranslation';
 import { AuthModal } from '../../components/AuthModal';
 import { StoreReviewsSection } from './components/StoreReviewsSection';
-import { formatMoney as formatMoneyShared } from '@bizx/utils';
+import { formatMoney as formatMoneyShared, isValidSlug } from '@bizx/utils';
 import type { EnrichedOrderResponse } from '@bizx/api-client';
 import {
   DISPUTE_CATEGORIES,
@@ -133,7 +133,7 @@ export default function StorefrontPage() {
 
   const formatMoney = (kopecks: number) => formatMoneyShared(kopecks, locale);
 
-  // Load Store, Catalog, Reviews & Auth (supports private BizX Moderation Preview via ?preview=<token>)
+  // Load Store, Catalog, Reviews & Auth (supports private BizX Moderation Preview via #preview=<token>)
   useEffect(() => {
     let cancelled = false;
     const init = async () => {
@@ -141,11 +141,24 @@ export default function StorefrontPage() {
       setStoreNotFound(false);
       setIsPreviewMode(false);
       setPreviewReadiness(null);
+      if (!isValidSlug(slug)) {
+        setStoreNotFound(true);
+        setIsLoadingStore(false);
+        return;
+      }
       try {
-        const previewToken =
-          typeof window !== 'undefined'
-            ? new URLSearchParams(window.location.search).get('preview')
-            : null;
+        let previewToken: string | null = null;
+        if (typeof window !== 'undefined') {
+          const hashParams = new URLSearchParams(
+            window.location.hash.startsWith('#') ? window.location.hash.slice(1) : ''
+          );
+          const queryParams = new URLSearchParams(window.location.search);
+          previewToken = hashParams.get('preview') || queryParams.get('preview');
+          if (previewToken) {
+            // Scrub preview token immediately from address bar & browser history
+            window.history.replaceState(null, '', window.location.pathname);
+          }
+        }
 
         const meRes = await api.auth.me().catch(() => ({ success: false, data: null }));
         if (cancelled) return;

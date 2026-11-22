@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { platformApi } from '../lib/api';
 import { useTranslation } from '../hooks/useTranslation';
+import { validateUploadFile, UPLOAD_POLICIES } from '@bizx/utils';
 import type {
   PlatformBroadcastSummary,
   SubscriptionTier,
@@ -90,6 +91,19 @@ export const BroadcastsView: React.FC<BroadcastsViewProps> = ({
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
+    const validation = validateUploadFile(file, UPLOAD_POLICIES.chatAttachment);
+    if (!validation.ok) {
+      setError(
+        validation.code === 'TOO_LARGE'
+          ? isEn
+            ? 'File must be 10 MB or smaller'
+            : 'Розмір файлу не повинен перевищувати 10 МБ'
+          : isEn
+            ? 'Only JPG, PNG, WebP images and PDF documents are allowed'
+            : 'Дозволені лише зображення JPG, PNG, WebP та PDF-документи'
+      );
+      return;
+    }
     setIsUploading(true);
     setError(null);
     try {
@@ -411,7 +425,7 @@ export const BroadcastsView: React.FC<BroadcastsViewProps> = ({
                   </span>
                   <input
                     type="file"
-                    accept="image/*,application/pdf"
+                    accept="image/jpeg,image/png,image/webp,application/pdf"
                     onChange={handleUploadFile}
                     disabled={isUploading}
                     className="hidden"

@@ -482,7 +482,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({
             <a
               href="http://localhost:3100"
               target="_blank"
-              rel="noreferrer"
+              rel="noopener noreferrer"
               className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-colors text-xs font-medium"
             >
               <span>{t('nav.mainPortal')}</span>
@@ -491,7 +491,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({
             <a
               href="http://localhost:3102"
               target="_blank"
-              rel="noreferrer"
+              rel="noopener noreferrer"
               className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-colors text-xs font-medium"
             >
               <span>{t('nav.businessAdmin')}</span>

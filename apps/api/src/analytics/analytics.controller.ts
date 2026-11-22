@@ -4,6 +4,7 @@ import { RbacService } from '../rbac/rbac.service.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import { CurrentUser } from '../auth/decorators/auth.decorators.js';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
+import { SafeUuidPipe } from '../common/security/safe-uuid.pipe.js';
 import {
   analyticsQuerySchema,
   type AnalyticsQuery,
@@ -22,7 +23,7 @@ export class AnalyticsController {
 
   @Get('stores/:storeId')
   async getStoreAnalytics(
-    @Param('storeId') storeId: string,
+    @Param('storeId', SafeUuidPipe) storeId: string,
     @CurrentUser('sub') userId: string,
     @Query(new ZodValidationPipe(analyticsQuerySchema)) query: AnalyticsQuery
   ): Promise<ApiResponse<StoreAnalytics>> {

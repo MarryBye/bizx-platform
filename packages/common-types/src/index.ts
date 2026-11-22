@@ -341,7 +341,7 @@ export const createRoleDtoSchema = z.object({
   icon: z.string().max(50).nullable().optional(),
   color: z.string().min(4).max(20).default('#334155').optional(),
   priority: z.number().int().min(1).max(OWNER_ROLE_PRIORITY - 1).optional(),
-  permissionIds: z.array(z.number().int().positive()).default([])
+  permissionIds: z.array(z.number().int().positive()).max(100).default([])
 });
 export type CreateRoleDto = z.infer<typeof createRoleDtoSchema>;
 
@@ -350,12 +350,12 @@ export const updateRoleDtoSchema = z.object({
   icon: z.string().max(50).nullable().optional(),
   color: z.string().min(4).max(20).optional(),
   priority: z.number().int().min(1).max(OWNER_ROLE_PRIORITY - 1).optional(),
-  permissionIds: z.array(z.number().int().positive()).optional()
+  permissionIds: z.array(z.number().int().positive()).max(100).optional()
 });
 export type UpdateRoleDto = z.infer<typeof updateRoleDtoSchema>;
 
 export const reorderRolesDtoSchema = z.object({
-  orderedRoleIds: z.array(z.string().uuid()).min(1)
+  orderedRoleIds: z.array(z.string().uuid()).min(1).max(100)
 });
 export type ReorderRolesDto = z.infer<typeof reorderRolesDtoSchema>;
 
@@ -388,7 +388,7 @@ export const addStoreMemberDtoSchema = z
     phone: z.string().min(7, { message: 'Некоректний номер телефону' }).optional(),
     roleId: z.string().uuid().nullable().optional(),
     isCustom: z.boolean().optional().default(false),
-    permissionIds: z.array(z.number().int().positive()).optional().default([])
+    permissionIds: z.array(z.number().int().positive()).max(100).optional().default([])
   })
   .refine((data) => Boolean(data.email || data.phone), {
     message: 'Вкажіть email або номер телефону працівника',
@@ -400,7 +400,7 @@ export type AddStoreMemberDto = z.infer<typeof addStoreMemberDtoSchema>;
 export const updateStoreMemberDtoSchema = z.object({
   roleId: z.string().uuid().nullable().optional(),
   isCustom: z.boolean().optional(),
-  permissionIds: z.array(z.number().int().positive()).optional()
+  permissionIds: z.array(z.number().int().positive()).max(100).optional()
 });
 
 export type UpdateStoreMemberDto = z.infer<typeof updateStoreMemberDtoSchema>;
@@ -432,7 +432,7 @@ export const addPlatformMemberDtoSchema = z
     department: z.string().max(100).optional(),
     roleId: z.string().uuid().nullable().optional(),
     isCustom: z.boolean().optional().default(false),
-    permissionIds: z.array(z.number().int().positive()).optional().default([])
+    permissionIds: z.array(z.number().int().positive()).max(100).optional().default([])
   })
   .refine((data) => Boolean(data.email || data.phone), {
     message: 'Вкажіть email або номер телефону співробітника',
@@ -472,10 +472,23 @@ export const userProfileSchema = z.object({
 
 export type UserProfile = z.infer<typeof userProfileSchema>;
 
+export const safeMediaUrlSchema = z
+  .string()
+  .trim()
+  .max(500, { message: 'Посилання занадто довге (макс. 500 символів)' })
+  .refine(
+    (v) =>
+      v === '' ||
+      (!/[\u0000-\u001F\u007F]/.test(v) &&
+        ((v.startsWith('/storage/') && !v.includes('..') && !v.includes('\\')) ||
+          /^https?:\/\/[^\s"'<>]+$/i.test(v))),
+    { message: 'Недопустимий формат посилання' }
+  );
+
 export const updateUserProfileDtoSchema = z.object({
-  name: z.string().min(2, { message: 'Имя должно содержать минимум 2 символа' }).optional(),
-  phone: z.string().nullable().optional(),
-  avatarUrl: z.string().nullable().optional(),
+  name: z.string().trim().min(2, { message: 'Ім’я має містити щонайменше 2 символи' }).max(150).optional(),
+  phone: z.string().max(32).nullable().optional(),
+  avatarUrl: safeMediaUrlSchema.nullable().optional(),
   preferredLanguage: supportedLocaleSchema.optional()
 });
 
@@ -494,23 +507,26 @@ export function normalizePhone(raw?: string | null): string | null {
 }
 
 export const registerDtoSchema = z.object({
-  email: z.string().email({ message: 'Некорректный email адрес' }),
-  password: z.string().min(6, { message: 'Пароль должен содержать минимум 6 символов' }),
-  name: z.string().min(2, { message: 'Имя должно содержать минимум 2 символа' }),
-  phone: z.string().nullable().optional()
+  email: z.string().trim().email({ message: 'Некоректний email адрес' }).max(255),
+  password: z
+    .string()
+    .min(8, { message: 'Пароль має містити щонайменше 8 символів' })
+    .max(128, { message: 'Пароль не може перевищувати 128 символів' }),
+  name: z.string().trim().min(2, { message: 'Ім’я має містити щонайменше 2 символи' }).max(150),
+  phone: z.string().max(32).nullable().optional()
 });
 
 export type RegisterDto = z.infer<typeof registerDtoSchema>;
 
 export const loginDtoSchema = z
   .object({
-    email: z.string().email({ message: 'Некорректный email адрес' }).optional(),
-    phone: z.string().min(7, { message: 'Некорректный номер телефона' }).optional(),
-    identifier: z.string().min(3, { message: 'Введите email или телефон' }).optional(),
-    password: z.string().min(1, { message: 'Введите пароль' })
+    email: z.string().trim().email({ message: 'Некоректний email адрес' }).max(255).optional(),
+    phone: z.string().min(7, { message: 'Некоректний номер телефону' }).max(32).optional(),
+    identifier: z.string().trim().min(3, { message: 'Введіть email або телефон' }).max(255).optional(),
+    password: z.string().min(1, { message: 'Введіть пароль' }).max(128)
   })
   .refine((data) => Boolean(data.email || data.phone || data.identifier), {
-    message: 'Укажите email или номер телефона',
+    message: 'Вкажіть email або номер телефону',
     path: ['email']
   });
 
@@ -603,18 +619,21 @@ export const storeSchema = z.object({
 export type Store = z.infer<typeof storeSchema>;
 
 export const createStoreDtoSchema = z.object({
-  name: z.string().min(2, 'Название магазина должно быть не короче 2 символов'),
+  name: z.string().trim().min(2, 'Назва закладу має містити щонайменше 2 символи').max(200),
   slug: z
     .string()
-    .min(2, 'Slug должен содержать минимум 2 символа')
-    .regex(/^[a-z0-9-]+$/, 'Slug может содержать только строчные латинские буквы, цифры и дефисы'),
+    .trim()
+    .toLowerCase()
+    .min(2, 'Slug має містити щонайменше 2 символи')
+    .max(63, 'Slug не може перевищувати 63 символи')
+    .regex(/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/, 'Slug може містити лише латинські літери, цифри та дефіси'),
   categoryId: z.string().uuid().optional(),
-  description: z.string().optional(),
-  logoUrl: z.string().optional(),
-  bannerUrl: z.string().optional(),
-  address: z.string().optional(),
-  phone: z.string().optional(),
-  email: z.string().email().optional()
+  description: z.string().trim().max(4000).optional(),
+  logoUrl: safeMediaUrlSchema.optional(),
+  bannerUrl: safeMediaUrlSchema.optional(),
+  address: z.string().trim().max(300).optional(),
+  phone: z.string().trim().max(32).optional(),
+  email: z.string().trim().email().max(255).optional()
 });
 export type CreateStoreDto = z.infer<typeof createStoreDtoSchema>;
 
@@ -627,7 +646,7 @@ export type UpdateStoreDto = z.infer<typeof updateStoreDtoSchema>;
 
 export const storeFilterQuerySchema = z.object({
   categoryId: z.string().uuid().optional(),
-  search: z.string().optional(),
+  search: z.string().trim().max(120).optional(),
   status: storeStatusSchema.optional(),
   page: z.coerce.number().int().positive().default(1),
   pageSize: z.coerce.number().int().positive().max(100).default(20)
@@ -660,8 +679,8 @@ export const updateProductCategoryDtoSchema = z.object({
 export type UpdateProductCategoryDto = z.infer<typeof updateProductCategoryDtoSchema>;
 
 export const changePasswordDtoSchema = z.object({
-  currentPassword: z.string().min(1, 'Вкажіть поточний пароль'),
-  newPassword: z.string().min(6, 'Новий пароль має містити щонайменше 6 символів').max(128)
+  currentPassword: z.string().min(1, 'Вкажіть поточний пароль').max(128),
+  newPassword: z.string().min(8, 'Новий пароль має містити щонайменше 8 символів').max(128)
 });
 export type ChangePasswordDto = z.infer<typeof changePasswordDtoSchema>;
 
@@ -697,19 +716,8 @@ export const productSchema = z.object({
 });
 export type Product = z.infer<typeof productSchema>;
 
-const safeMediaUrlSchema = z
-  .string()
-  .trim()
-  .refine(
-    (v) =>
-      v === '' ||
-      v.startsWith('/storage/') ||
-      /^https?:\/\/[^\s]+$/i.test(v),
-    { message: 'Недопустимий формат посилання' }
-  );
-
 export const createProductDtoSchema = z.object({
-  name: z.string().trim().min(2, 'Название товара должно быть не короче 2 символов'),
+  name: z.string().trim().min(2, 'Назва товару має містити щонайменше 2 символи').max(255),
   categoryId: z.string().uuid().nullable().optional(),
   sku: z.string().trim().max(120).nullable().optional(),
   description: z.string().trim().max(4000).nullable().optional(),
@@ -727,7 +735,7 @@ export type UpdateProductDto = z.infer<typeof updateProductDtoSchema>;
 export const productFilterQuerySchema = z.object({
   storeId: z.string().uuid().optional(),
   categoryId: z.string().uuid().optional(),
-  search: z.string().optional(),
+  search: z.string().trim().max(120).optional(),
   isActive: z.preprocess(
     (v) => (v === 'true' || v === true ? true : v === 'false' || v === false ? false : undefined),
     z.boolean().optional()
@@ -888,8 +896,9 @@ export interface PlatformAnalytics {
  */
 export const presignedUploadDtoSchema = z.object({
   folder: z.enum(['avatars', 'stores/logos', 'stores/banners', 'products']),
-  fileName: z.string().trim().min(1, 'Имя файла обязательно').max(255),
-  contentType: z.enum(['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
+  fileName: z.string().trim().min(1, 'Ім’я файлу обов’язкове').max(255),
+  contentType: z.enum(['image/jpeg', 'image/png', 'image/webp', 'image/gif']),
+  contentLength: z.number().int().positive().max(10 * 1024 * 1024).optional()
 });
 export type PresignedUploadDto = z.infer<typeof presignedUploadDtoSchema>;
 
@@ -945,9 +954,16 @@ export const orderMessageAttachmentSchema = z.object({
     .string()
     .trim()
     .min(1)
-    .refine((v) => v.startsWith('/storage/') || /^https?:\/\/[^\s]+$/i.test(v), {
-      message: 'Недопустиме посилання на вкладення'
-    }),
+    .max(500)
+    .refine(
+      (v) =>
+        !/[\u0000-\u001F\u007F\\]/.test(v) &&
+        !v.includes('..') &&
+        (v.startsWith('/storage/') || /^https?:\/\/[^\s]+$/i.test(v)),
+      {
+        message: 'Недопустиме посилання на вкладення'
+      }
+    ),
   fileName: z.string().trim().min(1).max(255),
   mimeType: z.string().trim().min(1).max(120),
   size: z.number().int().nonnegative().max(15 * 1024 * 1024).optional()
@@ -1106,8 +1122,8 @@ export type CreateStoreReviewDto = z.infer<typeof createStoreReviewDtoSchema>;
 export interface StoreReviewItem {
   id: string;
   storeId: string;
-  orderId: string;
-  customerId: string | null;
+  orderId?: string;
+  customerId?: string | null;
   customerName: string;
   rating: number;
   comment: string | null;
@@ -1121,19 +1137,39 @@ export interface StoreReviewsResponse {
   reviews: StoreReviewItem[];
 }
 
+const RESERVED_INTERNAL_DOMAIN_TLDS = new Set([
+  'local',
+  'localhost',
+  'internal',
+  'arpa',
+  'lan',
+  'home',
+  'corp',
+  'localdomain',
+  'invalid',
+  'test',
+  'example'
+]);
+
 export const updateStoreDomainDtoSchema = z.object({
   customDomain: z
     .string()
     .trim()
     .toLowerCase()
-    .max(255)
+    .max(253)
     .nullable()
     .refine(
       (val) => {
         if (!val) return true;
-        return /^(?!-)[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(val) && !val.endsWith('.bizx.ua') && val !== 'bizx.ua';
+        if (/^\d+\.\d+\.\d+\.\d+$/.test(val)) return false;
+        if (!/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(val)) {
+          return false;
+        }
+        if (val.endsWith('.bizx.ua') || val === 'bizx.ua') return false;
+        const tld = val.slice(val.lastIndexOf('.') + 1);
+        return !RESERVED_INTERNAL_DOMAIN_TLDS.has(tld);
       },
-      { message: 'Введіть коректне доменне ім’я (наприклад, shop.example.ua)' }
+      { message: 'Введіть коректне публічне доменне ім’я (наприклад, shop.example.ua)' }
     )
 });
 export type UpdateStoreDomainDto = z.infer<typeof updateStoreDomainDtoSchema>;

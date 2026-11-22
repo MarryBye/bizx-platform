@@ -25,10 +25,18 @@ export class QueuesService implements OnModuleInit, OnModuleDestroy {
       }
     });
 
+    let safeRedisHost = 'localhost:6379';
+    try {
+      const parsed = new URL(redisUrl);
+      safeRedisHost = `${parsed.hostname}:${parsed.port || '6379'}`;
+    } catch {
+      safeRedisHost = 'redis';
+    }
+
     let loggedWarning = false;
     this.redisConnection.on('error', (err) => {
       if (!loggedWarning) {
-        logger.warn(`Redis connection warning (is Redis running on ${redisUrl}?): ${err.message}`);
+        logger.warn(`Redis connection warning (is Redis running on ${safeRedisHost}?): ${err.message}`);
         loggedWarning = true;
       }
     });

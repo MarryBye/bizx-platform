@@ -5,7 +5,10 @@ import {
   HttpException,
   HttpStatus
 } from '@nestjs/common';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
+import { createLogger } from '@bizx/utils';
+
+const logger = createLogger('GlobalExceptionFilter');
 
 /**
  * Global exception filter that converts PostgreSQL driver constraint/syntax errors
@@ -45,6 +48,15 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       return;
     }
 
+    if (pgCode === '22001') {
+      response.status(HttpStatus.BAD_REQUEST).json({
+        statusCode: HttpStatus.BAD_REQUEST,
+        error: 'Bad Request',
+        message: 'Текстове значення перевищує максимально допустиму довжину'
+      });
+      return;
+    }
+
     if (pgCode === '22003') {
       response.status(HttpStatus.BAD_REQUEST).json({
         statusCode: HttpStatus.BAD_REQUEST,
@@ -80,6 +92,12 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       });
       return;
     }
+
+    const request = ctx.getRequest<Request>();
+    const errMsg = exception instanceof Error ? exception.message : 'Unknown error';
+    logger.error(
+      `Unhandled exception on ${request?.method || '?'} ${request?.path || '?'}: ${errMsg}`
+    );
 
     response.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
       statusCode: HttpStatus.INTERNAL_SERVER_ERROR,

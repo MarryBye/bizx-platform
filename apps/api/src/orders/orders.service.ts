@@ -5,12 +5,14 @@ import {
   ForbiddenException,
   ConflictException
 } from '@nestjs/common';
+import { randomInt } from 'node:crypto';
 import { DatabaseService } from '../database/database.service.js';
 import { StoresService } from '../stores/stores.service.js';
 import { RbacService } from '../rbac/rbac.service.js';
 import { StorageService } from '../storage/storage.service.js';
 import { BroadcastsService } from '../broadcasts/broadcasts.service.js';
 import { validateChatAttachmentFile, type UploadedFileDto } from '../common/file-upload.utils.js';
+import { sanitizeAttachmentFileName } from '../common/security/safe-storage-key.js';
 import {
   orders,
   orderItems,
@@ -94,7 +96,7 @@ export class OrdersService {
 
   private generateOrderNumber(): string {
     const datePart = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    const randomPart = Math.floor(100000 + Math.random() * 900000);
+    const randomPart = randomInt(100000, 1000000);
     return `BX-${datePart}-${randomPart}`;
   }
 
@@ -616,32 +618,44 @@ export class OrdersService {
       throw new BadRequestException('Неможливо скасувати статус оплати для вже оплаченого замовлення');
     }
 
-    // Перевіряємо чи немає відкритого спору перед розмороженням Escrow
-    const [activeDispute] = await this.databaseService.db
-      .select({ id: orderDisputes.id })
-      .from(orderDisputes)
-      .where(
-        and(
-          eq(orderDisputes.orderId, orderId),
-          inArray(orderDisputes.status, ['open_store', 'escalated_platform'])
-        )
-      );
-
-    // Escrow розморожується ТІЛЬКИ якщо замовлення доставлено, реально оплачено (або готівка) і немає спору
-    const isActuallyPaid =
-      nextPaymentStatus === 'paid' || order.paymentMethod === 'cash';
-    const shouldReleaseEscrow =
-      nextStatus === 'delivered' &&
-      order.payoutStatus === 'held' &&
-      isActuallyPaid &&
-      !activeDispute;
-
     return await this.databaseService.db.transaction(async (tx) => {
+      // Серіалізуємо паралельні оновлення Escrow/статусу на рядку замовлення
+      await tx.execute(sql`SELECT id FROM orders WHERE id = ${orderId} FOR UPDATE`);
+
+      const [lockedOrder] = await tx
+        .select()
+        .from(orders)
+        .where(eq(orders.id, orderId));
+
+      if (!lockedOrder) {
+        throw new NotFoundException('Замовлення не знайдено');
+      }
+
+      const [activeDispute] = await tx
+        .select({ id: orderDisputes.id })
+        .from(orderDisputes)
+        .where(
+          and(
+            eq(orderDisputes.orderId, orderId),
+            inArray(orderDisputes.status, ['open_store', 'escalated_platform'])
+          )
+        );
+
+      const lockedNextStatus = dto?.status ?? lockedOrder.status;
+      const lockedNextPayment = dto?.paymentStatus ?? lockedOrder.paymentStatus;
+      const isActuallyPaid =
+        lockedNextPayment === 'paid' || lockedOrder.paymentMethod === 'cash';
+      const shouldReleaseEscrow =
+        lockedNextStatus === 'delivered' &&
+        lockedOrder.payoutStatus === 'held' &&
+        isActuallyPaid &&
+        !activeDispute;
+
       const [updated] = await tx
         .update(orders)
         .set({
-          status: nextStatus,
-          paymentStatus: nextPaymentStatus,
+          status: lockedNextStatus,
+          paymentStatus: lockedNextPayment,
           ...(shouldReleaseEscrow ? { payoutStatus: 'released' } : {}),
           updatedAt: new Date()
         })
@@ -660,10 +674,10 @@ export class OrdersService {
         await tx
           .update(stores)
           .set({
-            payoutBalance: sql`${stores.payoutBalance} + ${order.totalAmount}`,
+            payoutBalance: sql`${stores.payoutBalance} + ${lockedOrder.totalAmount}`,
             updatedAt: new Date()
           })
-          .where(eq(stores.id, order.storeId));
+          .where(eq(stores.id, lockedOrder.storeId));
       }
 
       return updated;
@@ -761,8 +775,9 @@ export class OrdersService {
   ): Promise<OrderMessageItem> {
     const { actorType } = await this.assertOrderChatAccess(orderId, userId, 'write');
     const now = new Date();
-    const cleanAttachments = this.storageService.stripAttachmentsSignatures(
-      (dto.attachments || []) as OrderMessageAttachmentDto[]
+    const cleanAttachments = this.storageService.assertAttachmentsScopedToPrefix(
+      (dto.attachments || []) as OrderMessageAttachmentDto[],
+      `order-chat/${orderId}`
     );
 
     const [inserted] = await this.databaseService.db
@@ -842,12 +857,16 @@ export class OrdersService {
   ): Promise<OrderMessageAttachmentDto> {
     await this.assertOrderChatAccess(orderId, userId, 'write');
     const file = validateChatAttachmentFile(rawFile);
-    const fileKey = this.storageService.generateFileKey('order-chat', file.originalname);
+    const fileKey = this.storageService.generateFileKey(
+      `order-chat/${orderId}`,
+      file.originalname,
+      file.mimetype
+    );
     const publicUrl = await this.storageService.uploadBuffer(fileKey, file.buffer, file.mimetype);
 
     return {
       url: this.storageService.signPrivateUrl(publicUrl),
-      fileName: file.originalname,
+      fileName: sanitizeAttachmentFileName(file.originalname),
       mimeType: file.mimetype,
       size: file.size
     };
@@ -940,14 +959,27 @@ export class OrdersService {
     }
 
     const now = new Date();
-    const refundAmount = order.refundOfferAmount ?? order.totalAmount;
 
     await this.databaseService.db.transaction(async (tx) => {
+      // Атомарно блокуємо рядок замовлення для захисту від double-clawback / паралельних підтверджень
+      await tx.execute(sql`SELECT id FROM orders WHERE id = ${orderId} FOR UPDATE`);
+
+      const [lockedOrder] = await tx
+        .select()
+        .from(orders)
+        .where(eq(orders.id, orderId));
+
+      if (!lockedOrder || lockedOrder.refundOfferStatus !== 'pending_customer') {
+        throw new ConflictException('Пропозицію повернення вже було оброблено');
+      }
+
+      const refundAmount = lockedOrder.refundOfferAmount ?? lockedOrder.totalAmount;
+
       if (dto.accept) {
-        const wasReleased = order.payoutStatus === 'released';
+        const wasReleased = lockedOrder.payoutStatus === 'released';
         const nextPayoutStatus = wasReleased ? 'clawback' : 'refunded';
 
-        await tx
+        const [updatedOrder] = await tx
           .update(orders)
           .set({
             status: 'cancelled',
@@ -956,7 +988,14 @@ export class OrdersService {
             refundOfferStatus: 'accepted',
             updatedAt: now
           })
-          .where(eq(orders.id, orderId));
+          .where(
+            and(eq(orders.id, orderId), eq(orders.refundOfferStatus, 'pending_customer'))
+          )
+          .returning({ id: orders.id });
+
+        if (!updatedOrder) {
+          throw new ConflictException('Пропозицію повернення вже було оброблено');
+        }
 
         // Якщо кошти вже встигли перейти у баланс виплат, утримуємо з майбутніх виплат (clawback)
         if (wasReleased) {
@@ -966,7 +1005,7 @@ export class OrdersService {
               payoutBalance: sql`${stores.payoutBalance} - ${refundAmount}`,
               updatedAt: now
             })
-            .where(eq(stores.id, order.storeId));
+            .where(eq(stores.id, lockedOrder.storeId));
         }
 
         // Закриваємо активний спір автоматично БЕЗ страйку
@@ -996,13 +1035,20 @@ export class OrdersService {
           readByStoreAt: null
         });
       } else {
-        await tx
+        const [declinedOrder] = await tx
           .update(orders)
           .set({
             refundOfferStatus: 'declined',
             updatedAt: now
           })
-          .where(eq(orders.id, orderId));
+          .where(
+            and(eq(orders.id, orderId), eq(orders.refundOfferStatus, 'pending_customer'))
+          )
+          .returning({ id: orders.id });
+
+        if (!declinedOrder) {
+          throw new ConflictException('Пропозицію повернення вже було оброблено');
+        }
 
         await tx.insert(orderMessages).values({
           orderId,

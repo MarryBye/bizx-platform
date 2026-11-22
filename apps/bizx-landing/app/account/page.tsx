@@ -20,7 +20,13 @@ import { AccountOrders } from './components/AccountOrders';
 import { AccountBusinesses } from './components/AccountBusinesses';
 import { AccountSubscriptions } from './components/AccountSubscriptions';
 import { useTranslation } from '../hooks/useTranslation';
-import { translateApiError, getInitials, type SupportedLocale } from '@bizx/utils';
+import {
+  translateApiError,
+  getInitials,
+  validateUploadFile,
+  UPLOAD_POLICIES,
+  type SupportedLocale
+} from '@bizx/utils';
 import type {
   UserProfile,
   Store,
@@ -180,6 +186,7 @@ export default function AccountPage() {
     const handleUnauthorized = () => {
       setUser(null);
       setMyStores([]);
+      setSubDetails(null);
       setInboxUnreadCount(0);
     };
 
@@ -211,7 +218,22 @@ export default function AccountPage() {
 
   const handleAvatarFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
+    const check = validateUploadFile(file, UPLOAD_POLICIES.rasterImage);
+    if (!check.ok) {
+      setProfileError(
+        check.code === 'TOO_LARGE'
+          ? locale === 'en'
+            ? 'Image must be 10 MB or smaller'
+            : 'Розмір зображення не повинен перевищувати 10 МБ'
+          : locale === 'en'
+            ? 'Only JPG, PNG, WebP, or GIF images are allowed'
+            : 'Дозволені лише зображення JPG, PNG, WebP або GIF'
+      );
+      return;
+    }
+    setProfileError(null);
     setAvatarUploading(true);
     try {
       const res = await api.auth.uploadAvatar(file);
@@ -221,7 +243,9 @@ export default function AccountPage() {
         setAvatarError(false);
       }
     } catch {
-      // Ignore
+      setProfileError(
+        locale === 'en' ? 'Failed to upload photo' : 'Не вдалося завантажити фотографію'
+      );
     } finally {
       setAvatarUploading(false);
     }
@@ -258,11 +282,11 @@ export default function AccountPage() {
     e.preventDefault();
     setPasswordNotice(null);
     setPasswordError(null);
-    if (newPassword.length < 6) {
+    if (newPassword.length < 8) {
       setPasswordError(
         locale === 'en'
-          ? 'New password must be at least 6 characters'
-          : 'Новий пароль має містити щонайменше 6 символів'
+          ? 'New password must be at least 8 characters'
+          : 'Новий пароль має містити щонайменше 8 символів'
       );
       return;
     }
@@ -696,7 +720,7 @@ export default function AccountPage() {
                           </span>
                           <input
                             type="file"
-                            accept="image/*"
+                            accept="image/jpeg,image/png,image/webp,image/gif"
                             disabled={avatarUploading}
                             onChange={handleAvatarFile}
                             className="hidden"
@@ -850,6 +874,8 @@ export default function AccountPage() {
                       </label>
                       <input
                         type="password"
+                        autoComplete="current-password"
+                        maxLength={128}
                         value={currentPassword}
                         onChange={(e) => setCurrentPassword(e.target.value)}
                         placeholder="••••••••"
@@ -864,10 +890,12 @@ export default function AccountPage() {
                       </label>
                       <input
                         type="password"
+                        autoComplete="new-password"
+                        maxLength={128}
                         value={newPassword}
                         onChange={(e) => setNewPassword(e.target.value)}
                         placeholder="••••••••"
-                        minLength={6}
+                        minLength={8}
                         className="w-full text-xs px-3 py-2 bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-slate-900"
                         required
                       />
@@ -879,10 +907,12 @@ export default function AccountPage() {
                       </label>
                       <input
                         type="password"
+                        autoComplete="new-password"
+                        maxLength={128}
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
                         placeholder="••••••••"
-                        minLength={6}
+                        minLength={8}
                         className="w-full text-xs px-3 py-2 bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-slate-900"
                         required
                       />

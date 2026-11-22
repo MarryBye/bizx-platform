@@ -274,7 +274,26 @@ export const App: React.FC = () => {
     return () => window.clearInterval(timer);
   }, [myAccess, refreshDisputesSummary, refreshPendingStoresSummary, refreshSupportSummary]);
 
-  // Check auth on mount
+  const clearSessionState = useCallback(() => {
+    setCurrentUser(null);
+    setMyAccess(null);
+    setPermsLoaded(false);
+    setAnalytics(null);
+    setBusinesses([]);
+    setUsersList([]);
+    setSelectedBusiness(null);
+    setIsBusinessModalOpen(false);
+    setSelectedUser(null);
+    setIsUserModalOpen(false);
+    setPendingDisputesCount(0);
+    setPendingStoresCount(0);
+    setUnreadSupportCount(0);
+    setNewPendingAlert(null);
+    setActionError(null);
+    prevPendingStoresRef.current = null;
+  }, []);
+
+  // Check auth on mount & listen for global 401 unauthorized events
   useEffect(() => {
     const initAuth = async () => {
       setIsLoadingAuth(true);
@@ -287,17 +306,24 @@ export const App: React.FC = () => {
             await loadPlatformData();
           }
         } else {
-          setCurrentUser(null);
+          clearSessionState();
         }
       } catch {
-        setCurrentUser(null);
+        clearSessionState();
       } finally {
         setIsLoadingAuth(false);
       }
     };
 
     void initAuth();
-  }, [loadPlatformData]);
+
+    const handleUnauthorized = () => {
+      platformApi.client.setAccessToken(null);
+      clearSessionState();
+    };
+    window.addEventListener('bizx:unauthorized', handleUnauthorized);
+    return () => window.removeEventListener('bizx:unauthorized', handleUnauthorized);
+  }, [loadPlatformData, clearSessionState]);
 
   // Handler: Update Business Status (with optional timed suspension & mandatory reason)
   const handleUpdateBusinessStatus = async (
@@ -441,7 +467,7 @@ export const App: React.FC = () => {
     try {
       const res = await platformApi.stores.createPreviewToken(store.id);
       if (res.success && res.data?.previewToken) {
-        const previewUrl = `http://localhost:3100/store/${encodeURIComponent(store.slug)}?preview=${encodeURIComponent(res.data.previewToken)}`;
+        const previewUrl = `http://localhost:3100/store/${encodeURIComponent(store.slug)}#preview=${encodeURIComponent(res.data.previewToken)}`;
         window.open(previewUrl, '_blank', 'noopener,noreferrer');
       }
     } catch (err: any) {
@@ -536,14 +562,10 @@ export const App: React.FC = () => {
       await platformApi.auth.logout();
     } catch {
       // Ignore
+    } finally {
+      platformApi.client.setAccessToken(null);
+      clearSessionState();
     }
-    platformApi.client.setAccessToken(null);
-    localStorage.removeItem('bizx_platform_admin_token');
-    localStorage.removeItem('bizx_access_token');
-    localStorage.removeItem('bizx_admin_access_token');
-    setCurrentUser(null);
-    setMyAccess(null);
-    setPermsLoaded(false);
   };
 
   if (isLoadingAuth) {

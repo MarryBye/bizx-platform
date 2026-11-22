@@ -9,6 +9,7 @@ import {
   Linking
 } from 'react-native';
 import type { OrderMessageAttachmentDto } from '@bizx/common-types';
+import { sanitizeNavigationUrl } from '@bizx/utils';
 import { MaterialIcon } from './MaterialIcon';
 import { SafeImage } from './SafeImage';
 import { resolveMobileMediaUrl } from '../lib/media';
@@ -62,6 +63,20 @@ export const MobileChatThread: React.FC<MobileChatThreadProps> = ({
   scrollable = false
 }) => {
   const canSubmit = !isSending && (text.trim().length > 0 || pendingAttachments.length > 0);
+
+  const openSafeAttachment = async (rawUrl: string) => {
+    const resolved = resolveMobileMediaUrl(rawUrl);
+    const safeUrl = sanitizeNavigationUrl(resolved, { allowHttp: true });
+    if (!safeUrl) return;
+    try {
+      const supported = await Linking.canOpenURL(safeUrl);
+      if (supported) {
+        await Linking.openURL(safeUrl);
+      }
+    } catch {
+      // Ignore unopenable attachment URLs
+    }
+  };
 
   const renderMessagesBody = () => (
     <View className={scrollable ? 'gap-2.5' : 'p-3.5 bg-slate-50/50 space-y-2.5 min-h-[180px]'}>
@@ -118,12 +133,13 @@ export const MobileChatThread: React.FC<MobileChatThreadProps> = ({
                 {m.attachments && m.attachments.length > 0 && (
                   <View className="mt-2 gap-1.5">
                     {m.attachments.map((att, idx) => {
-                      const isImage = att.mimeType.startsWith('image/');
-                      const resolvedUrl = resolveMobileMediaUrl(att.url) || att.url;
+                      const isImage =
+                        att.mimeType.startsWith('image/') &&
+                        !att.mimeType.toLowerCase().includes('svg');
                       return isImage ? (
                         <TouchableOpacity
                           key={`${m.id}-att-${idx}`}
-                          onPress={() => Linking.openURL(resolvedUrl).catch(() => {})}
+                          onPress={() => void openSafeAttachment(att.url)}
                           className="rounded-lg overflow-hidden border border-slate-200"
                         >
                           <SafeImage
@@ -140,7 +156,7 @@ export const MobileChatThread: React.FC<MobileChatThreadProps> = ({
                       ) : (
                         <TouchableOpacity
                           key={`${m.id}-att-${idx}`}
-                          onPress={() => Linking.openURL(resolvedUrl).catch(() => {})}
+                          onPress={() => void openSafeAttachment(att.url)}
                           className={`flex-row items-center gap-1.5 px-2.5 py-1.5 rounded-lg border ${
                             isOwn
                               ? 'bg-slate-800 border-slate-700'

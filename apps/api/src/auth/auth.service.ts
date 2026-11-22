@@ -223,7 +223,8 @@ export class AuthService {
       }
     }
 
-    const passwordHash = await bcrypt.hash(dto.password, 10);
+    const bcryptRounds = Number(process.env.BCRYPT_ROUNDS) || 12;
+    const passwordHash = await bcrypt.hash(dto.password, bcryptRounds);
 
     const [newUser] = await this.databaseService.db
       .insert(users)
@@ -261,14 +262,13 @@ export class AuthService {
 
     if (phoneInput) {
       const normalizedPhone = normalizePhone(phoneInput);
-      if (!normalizedPhone) {
-        throw new UnauthorizedException('Невірний номер телефону або пароль');
+      if (normalizedPhone) {
+        const [foundByPhone] = await this.databaseService.db
+          .select()
+          .from(users)
+          .where(eq(users.phone, normalizedPhone));
+        user = foundByPhone;
       }
-      const [foundByPhone] = await this.databaseService.db
-        .select()
-        .from(users)
-        .where(eq(users.phone, normalizedPhone));
-      user = foundByPhone;
     } else if (emailInput) {
       const [foundByEmail] = await this.databaseService.db
         .select()
@@ -277,12 +277,10 @@ export class AuthService {
       user = foundByEmail;
     }
 
-    if (!user) {
-      throw new UnauthorizedException('Невірний логін або пароль');
-    }
-
-    const isMatch = await bcrypt.compare(dto.password, user.passwordHash);
-    if (!isMatch) {
+    // Equalize response timing against account enumeration via dummy bcrypt verification
+    const dummyHash = '$2b$10$CwTycUXWue0Thq9StjUM0uJ8u1q7o6J3l6B4h5qL2K5wY5W7w8z9a';
+    const isMatch = await bcrypt.compare(dto.password, user?.passwordHash ?? dummyHash);
+    if (!user || !isMatch) {
       throw new UnauthorizedException('Невірний логін або пароль');
     }
 
@@ -306,26 +304,25 @@ export class AuthService {
     metadata: { userAgent?: string; ipAddress?: string } = {}
   ): Promise<AuthResponse> {
     const tokenHash = this.hashToken(rawRefreshToken);
+    const now = new Date();
 
-    const [tokenRecord] = await this.databaseService.db
-      .select()
-      .from(refreshTokens)
-      .where(and(eq(refreshTokens.tokenHash, tokenHash), gt(refreshTokens.expiresAt, new Date())));
+    // Atomic single-use token consumption (prevents concurrent refresh race minting duplicate sessions)
+    const [consumedToken] = await this.databaseService.db
+      .delete(refreshTokens)
+      .where(and(eq(refreshTokens.tokenHash, tokenHash), gt(refreshTokens.expiresAt, now)))
+      .returning();
 
-    if (!tokenRecord) {
-      throw new UnauthorizedException('Недействительный или истекший refresh токен');
+    if (!consumedToken) {
+      throw new UnauthorizedException('Недійсний або прострочений refresh токен');
     }
-
-    // Удаляем старый токен (Token Rotation)
-    await this.databaseService.db.delete(refreshTokens).where(eq(refreshTokens.id, tokenRecord.id));
 
     const [user] = await this.databaseService.db
       .select()
       .from(users)
-      .where(eq(users.id, tokenRecord.userId));
+      .where(eq(users.id, consumedToken.userId));
 
     if (!user) {
-      throw new UnauthorizedException('Пользователь не найден');
+      throw new UnauthorizedException('Користувача не знайдено');
     }
 
     const activeUser = await this.assertUserNotBlocked(user);
@@ -360,7 +357,7 @@ export class AuthService {
           sub?: string;
           tokenType?: string;
           type?: string;
-        }>(bearerToken, { ignoreExpiration: true });
+        }>(bearerToken, { ignoreExpiration: true, algorithms: ['HS256'] });
         if (
           verified?.tokenType === 'access' &&
           verified?.type !== 'store_preview' &&
@@ -514,7 +511,8 @@ export class AuthService {
       throw new BadRequestException('Новий пароль має відрізнятися від поточного');
     }
 
-    const newHash = await bcrypt.hash(newPassword, 10);
+    const bcryptRounds = Number(process.env.BCRYPT_ROUNDS) || 12;
+    const newHash = await bcrypt.hash(newPassword, bcryptRounds);
     await this.databaseService.db.transaction(async (tx) => {
       await tx
         .update(users)

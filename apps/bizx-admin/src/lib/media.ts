@@ -5,5 +5,5 @@ import { api } from './api';
  * у повноцінний абсолютний URL із доменом бекенда, або повертає blob/http URL без змін.
  */
 export function resolveMediaUrl(urlOrPath: string | null | undefined): string | null {
-  return api.storage.resolveMediaUrl(urlOrPath);
+  return api.storage.resolveMediaUrl(urlOrPath, { allowLocalBlobPreview: true });
 }

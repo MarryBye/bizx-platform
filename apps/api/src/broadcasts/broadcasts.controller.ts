@@ -5,10 +5,11 @@ import {
   Patch,
   Param,
   Body,
+  Query,
   UseGuards,
-  UsePipes,
   UseInterceptors,
-  UploadedFile
+  UploadedFile,
+  BadRequestException
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Throttle } from '@nestjs/throttler';
@@ -18,6 +19,8 @@ import { RbacService } from '../rbac/rbac.service.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import { CurrentUser } from '../auth/decorators/auth.decorators.js';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
+import { SafeUuidPipe } from '../common/security/safe-uuid.pipe.js';
+import { sanitizeAttachmentFileName } from '../common/security/safe-storage-key.js';
 import {
   validateImageFile,
   validateChatAttachmentFile,
@@ -46,6 +49,8 @@ import {
   type ApiResponse
 } from '@bizx/common-types';
 
+const UUID_CHECK = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 @Controller()
 @UseGuards(JwtAuthGuard)
 export class BroadcastsController {
@@ -59,12 +64,12 @@ export class BroadcastsController {
     folder: string,
     file: UploadedFileDto
   ): Promise<UploadFileResponse> {
-    const fileKey = this.storageService.generateFileKey(folder, file.originalname);
+    const fileKey = this.storageService.generateFileKey(folder, file.originalname, file.mimetype);
     const publicUrl = await this.storageService.uploadBuffer(fileKey, file.buffer, file.mimetype);
     return {
       fileKey,
       publicUrl: this.storageService.signPrivateUrl(publicUrl),
-      originalName: file.originalname,
+      originalName: sanitizeAttachmentFileName(file.originalname),
       size: file.size,
       mimeType: file.mimetype
     };
@@ -74,7 +79,7 @@ export class BroadcastsController {
 
   @Get('stores/:storeId/marketing-subscription')
   async getStoreMarketingSubscription(
-    @Param('storeId') storeId: string,
+    @Param('storeId', SafeUuidPipe) storeId: string,
     @CurrentUser('sub') userId: string
   ): Promise<ApiResponse<StoreMarketingSubscriptionState>> {
     const data = await this.broadcastsService.getStoreMarketingSubscription(storeId, userId);
@@ -82,11 +87,11 @@ export class BroadcastsController {
   }
 
   @Post('stores/:storeId/marketing-subscription')
-  @UsePipes(new ZodValidationPipe(updateStoreMarketingSubscriptionDtoSchema))
   async updateStoreMarketingSubscription(
-    @Param('storeId') storeId: string,
+    @Param('storeId', SafeUuidPipe) storeId: string,
     @CurrentUser('sub') userId: string,
-    @Body() dto: UpdateStoreMarketingSubscriptionDto
+    @Body(new ZodValidationPipe(updateStoreMarketingSubscriptionDtoSchema))
+    dto: UpdateStoreMarketingSubscriptionDto
   ): Promise<ApiResponse<StoreMarketingSubscriptionState>> {
     const data = await this.broadcastsService.updateStoreMarketingSubscription(
       storeId,
@@ -100,7 +105,7 @@ export class BroadcastsController {
 
   @Get('stores/:storeId/broadcasts/summary')
   async getStoreBroadcastSummary(
-    @Param('storeId') storeId: string,
+    @Param('storeId', SafeUuidPipe) storeId: string,
     @CurrentUser('sub') userId: string
   ): Promise<ApiResponse<StoreBroadcastSummary>> {
     const data = await this.broadcastsService.getStoreBroadcastSummary(storeId, userId);
@@ -108,11 +113,11 @@ export class BroadcastsController {
   }
 
   @Patch('stores/:storeId/broadcasts/settings')
-  @UsePipes(new ZodValidationPipe(updateStoreBroadcastSettingsDtoSchema))
   async updateStoreBroadcastSettings(
-    @Param('storeId') storeId: string,
+    @Param('storeId', SafeUuidPipe) storeId: string,
     @CurrentUser('sub') userId: string,
-    @Body() dto: UpdateStoreBroadcastSettingsDto
+    @Body(new ZodValidationPipe(updateStoreBroadcastSettingsDtoSchema))
+    dto: UpdateStoreBroadcastSettingsDto
   ): Promise<ApiResponse<{ autoDiscountBroadcastEnabled: boolean }>> {
     const data = await this.broadcastsService.updateStoreBroadcastSettings(storeId, userId, dto);
     return { success: true, data, timestamp: new Date().toISOString() };
@@ -120,11 +125,10 @@ export class BroadcastsController {
 
   @Post('stores/:storeId/broadcasts')
   @Throttle({ default: { limit: 15, ttl: 60_000 } })
-  @UsePipes(new ZodValidationPipe(sendStoreBroadcastDtoSchema))
   async sendStoreBroadcast(
-    @Param('storeId') storeId: string,
+    @Param('storeId', SafeUuidPipe) storeId: string,
     @CurrentUser('sub') userId: string,
-    @Body() dto: SendStoreBroadcastDto
+    @Body(new ZodValidationPipe(sendStoreBroadcastDtoSchema)) dto: SendStoreBroadcastDto
   ): Promise<ApiResponse<BroadcastCampaignItem>> {
     const data = await this.broadcastsService.sendStoreBroadcast(storeId, userId, dto);
     return { success: true, data, timestamp: new Date().toISOString() };
@@ -134,15 +138,15 @@ export class BroadcastsController {
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_IMAGE_FILE_SIZE } }))
   async uploadStoreBroadcastImage(
-    @Param('storeId') storeId: string,
+    @Param('storeId', SafeUuidPipe) storeId: string,
     @CurrentUser('sub') userId: string,
     @UploadedFile() file: UploadedFileDto
   ): Promise<ApiResponse<UploadFileResponse>> {
     await this.rbacService.assertStorePermission(storeId, userId, 'marketing.broadcasts.send', {
       write: true
     });
-    validateImageFile(file);
-    const data = await this.saveUploadedFile('broadcasts', file);
+    const validated = validateImageFile(file);
+    const data = await this.saveUploadedFile('broadcasts', validated);
     return { success: true, data, timestamp: new Date().toISOString() };
   }
 
@@ -158,10 +162,9 @@ export class BroadcastsController {
 
   @Post('platform/broadcasts')
   @Throttle({ default: { limit: 15, ttl: 60_000 } })
-  @UsePipes(new ZodValidationPipe(sendPlatformBroadcastDtoSchema))
   async sendPlatformBroadcast(
     @CurrentUser('sub') userId: string,
-    @Body() dto: SendPlatformBroadcastDto
+    @Body(new ZodValidationPipe(sendPlatformBroadcastDtoSchema)) dto: SendPlatformBroadcastDto
   ): Promise<ApiResponse<BroadcastCampaignItem>> {
     const data = await this.broadcastsService.sendPlatformBroadcast(userId, dto);
     return { success: true, data, timestamp: new Date().toISOString() };
@@ -175,8 +178,8 @@ export class BroadcastsController {
     @UploadedFile() file: UploadedFileDto
   ): Promise<ApiResponse<UploadFileResponse>> {
     await this.rbacService.assertPlatformPermission(userId, 'platform.broadcasts.send');
-    validateChatAttachmentFile(file);
-    const data = await this.saveUploadedFile('broadcasts', file);
+    const validated = validateChatAttachmentFile(file);
+    const data = await this.saveUploadedFile('broadcasts', validated);
     return { success: true, data, timestamp: new Date().toISOString() };
   }
 
@@ -200,7 +203,7 @@ export class BroadcastsController {
 
   @Get('platform/support/threads/:threadId/messages')
   async getPlatformSupportMessages(
-    @Param('threadId') threadId: string,
+    @Param('threadId', SafeUuidPipe) threadId: string,
     @CurrentUser('sub') userId: string
   ): Promise<ApiResponse<InboxMessageItem[]>> {
     const data = await this.broadcastsService.getPlatformSupportMessages(threadId, userId);
@@ -208,11 +211,10 @@ export class BroadcastsController {
   }
 
   @Post('platform/support/threads/:threadId/messages')
-  @UsePipes(new ZodValidationPipe(sendInboxMessageDtoSchema))
   async replyToPlatformSupportThread(
-    @Param('threadId') threadId: string,
+    @Param('threadId', SafeUuidPipe) threadId: string,
     @CurrentUser('sub') userId: string,
-    @Body() dto: SendInboxMessageDto
+    @Body(new ZodValidationPipe(sendInboxMessageDtoSchema)) dto: SendInboxMessageDto
   ): Promise<ApiResponse<InboxMessageItem>> {
     const data = await this.broadcastsService.replyToPlatformSupportThread(threadId, userId, dto);
     return { success: true, data, timestamp: new Date().toISOString() };
@@ -220,10 +222,25 @@ export class BroadcastsController {
 
   @Post('platform/support/threads/:threadId/read')
   async markPlatformSupportThreadRead(
-    @Param('threadId') threadId: string,
+    @Param('threadId', SafeUuidPipe) threadId: string,
     @CurrentUser('sub') userId: string
   ): Promise<ApiResponse<{ updated: number }>> {
     const data = await this.broadcastsService.markPlatformSupportThreadRead(threadId, userId);
+    return { success: true, data, timestamp: new Date().toISOString() };
+  }
+
+  @Post('platform/support/threads/:threadId/upload')
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_IMAGE_FILE_SIZE } }))
+  async uploadPlatformSupportThreadAttachment(
+    @Param('threadId', SafeUuidPipe) threadId: string,
+    @CurrentUser('sub') userId: string,
+    @UploadedFile() file: UploadedFileDto
+  ): Promise<ApiResponse<UploadFileResponse>> {
+    await this.rbacService.assertPlatformPermission(userId, 'platform.support.reply');
+    await this.broadcastsService.assertSupportThreadExists(threadId);
+    const validated = validateChatAttachmentFile(file);
+    const data = await this.saveUploadedFile(`inbox/${threadId}`, validated);
     return { success: true, data, timestamp: new Date().toISOString() };
   }
 
@@ -232,11 +249,16 @@ export class BroadcastsController {
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_IMAGE_FILE_SIZE } }))
   async uploadPlatformSupportAttachment(
     @CurrentUser('sub') userId: string,
-    @UploadedFile() file: UploadedFileDto
+    @UploadedFile() file: UploadedFileDto,
+    @Query('threadId') threadId?: string
   ): Promise<ApiResponse<UploadFileResponse>> {
     await this.rbacService.assertPlatformPermission(userId, 'platform.support.reply');
-    validateChatAttachmentFile(file);
-    const data = await this.saveUploadedFile('inbox', file);
+    if (typeof threadId !== 'string' || !UUID_CHECK.test(threadId)) {
+      throw new BadRequestException('Вкажіть коректний ідентифікатор діалогу підтримки (threadId)');
+    }
+    await this.broadcastsService.assertSupportThreadExists(threadId);
+    const validated = validateChatAttachmentFile(file);
+    const data = await this.saveUploadedFile(`inbox/${threadId}`, validated);
     return { success: true, data, timestamp: new Date().toISOString() };
   }
 }

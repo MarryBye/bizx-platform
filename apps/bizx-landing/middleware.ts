@@ -1,7 +1,31 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { isValidSlug, isValidCustomHostname } from '@bizx/utils';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3101';
+const API_BASE =
+  process.env.INTERNAL_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3101';
 const RESERVED_SUBDOMAINS = new Set(['www', 'admin', 'panel', 'api', 'shops']);
+
+const HOST_CACHE_TTL_MS = 30_000;
+const HOST_CACHE_MAX_ENTRIES = 500;
+const hostCache = new Map<string, { slug: string | null; expiresAt: number }>();
+
+function getCachedSlug(host: string): { hit: boolean; slug: string | null } {
+  const entry = hostCache.get(host);
+  if (!entry) return { hit: false, slug: null };
+  if (entry.expiresAt <= Date.now()) {
+    hostCache.delete(host);
+    return { hit: false, slug: null };
+  }
+  return { hit: true, slug: entry.slug };
+}
+
+function setCachedSlug(host: string, slug: string | null): void {
+  if (hostCache.size >= HOST_CACHE_MAX_ENTRIES) {
+    const oldestKey = hostCache.keys().next().value;
+    if (oldestKey) hostCache.delete(oldestKey);
+  }
+  hostCache.set(host, { slug, expiresAt: Date.now() + HOST_CACHE_TTL_MS });
+}
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -35,34 +59,55 @@ export async function middleware(request: NextRequest) {
     subSlug = hostHeader.slice(0, -'.localhost'.length);
   }
 
-  if (subSlug && !subSlug.includes('.') && !RESERVED_SUBDOMAINS.has(subSlug)) {
+  if (subSlug && isValidSlug(subSlug) && !RESERVED_SUBDOMAINS.has(subSlug)) {
     const url = request.nextUrl.clone();
     url.pathname = `/store/${subSlug}`;
     return NextResponse.rewrite(url);
   }
 
   // 2. Verified custom domain routing (e.g. shop.mycoffee.ua)
+  if (!isValidCustomHostname(hostHeader)) {
+    return NextResponse.next();
+  }
+
+  const cached = getCachedSlug(hostHeader);
+  if (cached.hit) {
+    if (cached.slug && isValidSlug(cached.slug)) {
+      const url = request.nextUrl.clone();
+      url.pathname = `/store/${cached.slug}`;
+      return NextResponse.rewrite(url);
+    }
+    return NextResponse.next();
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 1500);
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 1500);
     const res = await fetch(
       `${API_BASE}/stores/resolve-host?host=${encodeURIComponent(hostHeader)}`,
-      { signal: controller.signal }
+      {
+        signal: controller.signal,
+        redirect: 'error'
+      }
     );
-    clearTimeout(timeout);
     if (res.ok) {
       const json = (await res.json()) as {
         success?: boolean;
         data?: { slug: string } | null;
       };
-      if (json?.success && json.data?.slug) {
+      const resolvedSlug = json?.success && json.data?.slug ? json.data.slug : null;
+      if (resolvedSlug && isValidSlug(resolvedSlug)) {
+        setCachedSlug(hostHeader, resolvedSlug);
         const url = request.nextUrl.clone();
-        url.pathname = `/store/${json.data.slug}`;
+        url.pathname = `/store/${resolvedSlug}`;
         return NextResponse.rewrite(url);
       }
+      setCachedSlug(hostHeader, null);
     }
   } catch {
     // Fallback to normal landing route if API is unreachable
+  } finally {
+    clearTimeout(timeout);
   }
 
   return NextResponse.next();

@@ -1,4 +1,9 @@
-import { Injectable, type OnModuleInit, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  type OnModuleInit,
+  NotFoundException,
+  BadRequestException
+} from '@nestjs/common';
 import {
   S3Client,
   PutObjectCommand,
@@ -10,6 +15,13 @@ import { createLogger } from '@bizx/utils';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as crypto from 'crypto';
+import { getMediaSigningSecret } from '../common/security/security-config.js';
+import {
+  canonicalizeStorageKey,
+  isPrivateStorageKey,
+  getSafeExtensionForMime,
+  MIME_TO_SAFE_EXT
+} from '../common/security/safe-storage-key.js';
 
 const logger = createLogger('StorageService(R2)');
 
@@ -19,12 +31,13 @@ export interface FileStreamResult {
   contentLength?: number;
 }
 
-const PRIVATE_STORAGE_PREFIXES = ['order-chat/', 'inbox/'] as const;
+const ALLOWED_FALLBACK_EXTS = new Set(Object.values(MIME_TO_SAFE_EXT));
 
 @Injectable()
 export class StorageService implements OnModuleInit {
   private s3Client!: S3Client;
-  private bucketName!: string;
+  private publicBucketName!: string;
+  private privateBucketName!: string;
   private publicDomain!: string;
   private signingSecret!: string;
 
@@ -32,13 +45,12 @@ export class StorageService implements OnModuleInit {
     const accountId = process.env.CLOUDFLARE_R2_ACCOUNT_ID || 'dummy_account_id';
     const accessKeyId = process.env.CLOUDFLARE_R2_ACCESS_KEY_ID || 'dummy_access_key';
     const secretAccessKey = process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY || 'dummy_secret_key';
-    this.bucketName = process.env.CLOUDFLARE_R2_BUCKET_NAME || 'bizx-assets';
+    this.publicBucketName = process.env.CLOUDFLARE_R2_BUCKET_NAME || 'bizx-assets';
+    this.privateBucketName =
+      process.env.CLOUDFLARE_R2_PRIVATE_BUCKET_NAME?.trim() || this.publicBucketName;
     this.publicDomain =
       process.env.CLOUDFLARE_R2_PUBLIC_DOMAIN || `https://${accountId}.r2.cloudflarestorage.com`;
-    this.signingSecret =
-      process.env.MEDIA_SIGNING_SECRET ||
-      process.env.JWT_SECRET ||
-      'bizx-dev-media-signing-secret';
+    this.signingSecret = getMediaSigningSecret();
 
     this.s3Client = new S3Client({
       region: 'auto',
@@ -49,23 +61,35 @@ export class StorageService implements OnModuleInit {
       }
     });
 
-    logger.info(`Cloudflare R2 client configured for bucket: ${this.bucketName}`);
+    logger.info(
+      `Cloudflare R2 configured (public=${this.publicBucketName}, private=${this.privateBucketName})`
+    );
+  }
+
+  private resolveBucketForKey(key: string): string {
+    return this.isPrivateKey(key) ? this.privateBucketName : this.publicBucketName;
   }
 
   isPrivateKey(fileKey: string): boolean {
-    const clean = fileKey.replace(/^\/+/, '');
-    return PRIVATE_STORAGE_PREFIXES.some((prefix) => clean.startsWith(prefix));
+    return isPrivateStorageKey(fileKey);
   }
 
+  /**
+   * Extracts a canonical storage key ONLY from relative `/storage/file/<key>` paths.
+   * Never matches `/storage/file/` inside arbitrary external `https://` URLs.
+   */
   private extractStorageKeyFromUrl(url: string): { basePath: string; fileKey: string } | null {
     if (!url || typeof url !== 'string') return null;
-    const [withoutQuery] = url.split('?');
-    const marker = '/storage/file/';
-    const idx = withoutQuery.indexOf(marker);
-    if (idx === -1) return null;
-    const fileKey = withoutQuery.slice(idx + marker.length).replace(/^\/+/, '');
-    if (!fileKey) return null;
-    return { basePath: withoutQuery, fileKey };
+    const trimmed = url.trim();
+    const [withoutQuery] = trimmed.split('?');
+    if (!withoutQuery.startsWith('/storage/file/')) return null;
+
+    try {
+      const fileKey = canonicalizeStorageKey(withoutQuery.slice('/storage/file/'.length));
+      return { basePath: `/storage/file/${fileKey}`, fileKey };
+    } catch {
+      return null;
+    }
   }
 
   private computeSignature(fileKey: string, exp: number): string {
@@ -102,10 +126,45 @@ export class StorageService implements OnModuleInit {
   }
 
   /**
+   * Перевіряє, що кожне вкладення належить саме поточному ресурсу (наприклад `order-chat/<orderId>/`
+   * або `inbox/<threadId>/`). Запобігає cross-tenant HMAC signing oracle.
+   */
+  assertAttachmentsScopedToPrefix<T extends { url: string }>(
+    attachments: T[],
+    expectedFolderPrefix: string
+  ): T[] {
+    const cleanPrefix = `${expectedFolderPrefix.replace(/^\/+|\/+$/g, '')}/`;
+    return attachments.map((att) => {
+      const extracted = this.extractStorageKeyFromUrl(att.url);
+      if (!extracted || !extracted.fileKey.startsWith(cleanPrefix)) {
+        throw new BadRequestException(
+          'Вкладення має бути завантажене безпосередньо в цей чат через форму завантаження'
+        );
+      }
+      return {
+        ...att,
+        url: extracted.basePath
+      };
+    });
+  }
+
+  /**
+   * Забороняє передавати приватні ключі (order-chat/*, inbox/*) у публічних чи групових розсилках.
+   */
+  assertNotPrivateAttachmentUrl(url: string | null | undefined): void {
+    if (!url) return;
+    const extracted = this.extractStorageKeyFromUrl(url);
+    if (extracted && this.isPrivateKey(extracted.fileKey)) {
+      throw new BadRequestException('Приватні вкладення не можна використовувати у розсилках');
+    }
+  }
+
+  /**
    * Перевіряє HMAC-підпис і термін дії приватного медіафайлу у constant-time режимі.
    */
-  verifyPrivateSignature(fileKey: string, expParam?: string, sigParam?: string): boolean {
-    if (!expParam || !sigParam) return false;
+  verifyPrivateSignature(fileKey: string, expParam?: unknown, sigParam?: unknown): boolean {
+    if (typeof expParam !== 'string' || typeof sigParam !== 'string') return false;
+    if (!expParam || !sigParam || sigParam.length !== 64) return false;
     const exp = Number(expParam);
     if (!Number.isInteger(exp) || exp < Math.floor(Date.now() / 1000)) {
       return false;
@@ -146,9 +205,15 @@ export class StorageService implements OnModuleInit {
     return `/storage/file/${key.replace(/^\//, '')}`;
   }
 
-  generateFileKey(folder: string, originalFileName: string): string {
-    const ext = path.extname(originalFileName) || '.jpg';
-    const randomHex = crypto.randomBytes(8).toString('hex');
+  generateFileKey(folder: string, originalFileName: string, validatedMimeType?: string): string {
+    let ext: string;
+    if (validatedMimeType) {
+      ext = getSafeExtensionForMime(validatedMimeType);
+    } else {
+      const candidate = path.extname(originalFileName || '').toLowerCase();
+      ext = ALLOWED_FALLBACK_EXTS.has(candidate) ? candidate : '.jpg';
+    }
+    const randomHex = crypto.randomBytes(12).toString('hex');
     const timestamp = Date.now();
     const cleanFolder = folder.replace(/^\/+|\/+$/g, '');
     return `${cleanFolder}/${timestamp}-${randomHex}${ext}`;
@@ -156,7 +221,7 @@ export class StorageService implements OnModuleInit {
 
   async uploadBuffer(key: string, buffer: Buffer, contentType: string): Promise<string> {
     const command = new PutObjectCommand({
-      Bucket: this.bucketName,
+      Bucket: this.resolveBucketForKey(key),
       Key: key,
       Body: buffer,
       ContentType: contentType
@@ -171,14 +236,16 @@ export class StorageService implements OnModuleInit {
     folder: string,
     fileName: string,
     contentType: string,
-    expiresInSeconds = 3600
+    expiresInSeconds = 300,
+    contentLength?: number
   ): Promise<{ uploadUrl: string; fileKey: string; publicUrl: string }> {
-    const key = this.generateFileKey(folder, fileName);
+    const key = this.generateFileKey(folder, fileName, contentType);
 
     const command = new PutObjectCommand({
-      Bucket: this.bucketName,
+      Bucket: this.resolveBucketForKey(key),
       Key: key,
-      ContentType: contentType
+      ContentType: contentType,
+      ...(typeof contentLength === 'number' ? { ContentLength: contentLength } : {})
     });
 
     const uploadUrl = await getSignedUrl(this.s3Client, command, {
@@ -193,9 +260,9 @@ export class StorageService implements OnModuleInit {
     };
   }
 
-  async getPresignedDownloadUrl(key: string, expiresInSeconds = 3600): Promise<string> {
+  async getPresignedDownloadUrl(key: string, expiresInSeconds = 300): Promise<string> {
     const command = new GetObjectCommand({
-      Bucket: this.bucketName,
+      Bucket: this.resolveBucketForKey(key),
       Key: key
     });
 
@@ -207,7 +274,7 @@ export class StorageService implements OnModuleInit {
   async getFileStream(key: string): Promise<FileStreamResult> {
     try {
       const command = new GetObjectCommand({
-        Bucket: this.bucketName,
+        Bucket: this.resolveBucketForKey(key),
         Key: key
       });
 
@@ -224,7 +291,7 @@ export class StorageService implements OnModuleInit {
 
   async deleteFile(key: string): Promise<void> {
     const command = new DeleteObjectCommand({
-      Bucket: this.bucketName,
+      Bucket: this.resolveBucketForKey(key),
       Key: key
     });
 
@@ -242,7 +309,6 @@ export class StorageService implements OnModuleInit {
       return fs.readFileSync(localPath, 'utf-8');
     }
 
-    // Запасной встроенный SVG если файл не найден на диске
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"><circle cx="64" cy="64" r="64" fill="#3b82f6"/><circle cx="64" cy="50" r="22" fill="#ffffff"/><path d="M64 78 C42 78 24 94 24 116 C35 124 50 128 64 128 C78 128 93 124 104 116 C104 94 86 78 64 78 Z" fill="#ffffff"/></svg>`;
   }
 }

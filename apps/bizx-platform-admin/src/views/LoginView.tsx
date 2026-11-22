@@ -34,6 +34,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onSuccess }) => {
         const loggedUser = res.data.user;
         if (!loggedUser.isPlatformStaff) {
           setError(t('auth.staffOnlyError'));
+          await platformApi.auth.logout().catch(() => {});
           platformApi.client.setAccessToken(null);
           return;
         }

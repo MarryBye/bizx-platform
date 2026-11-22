@@ -1,5 +1,13 @@
 import { create } from 'zustand';
-import { mobileApi, setMobileToken } from '../lib/api';
+import {
+  mobileApi,
+  hydrateMobileTokens,
+  setMobileTokens,
+  clearMobileTokens,
+  registerMobileUnauthorizedHandler
+} from '../lib/api';
+import { useCartStore } from './useCartStore';
+import { useMobileStoresStore } from './useMobileStoresStore';
 import { i18n, translateApiError } from '@bizx/utils';
 import type { UserProfile, LoginDto, RegisterDto } from '@bizx/common-types';
 
@@ -23,13 +31,18 @@ export const useMobileAuthStore = create<MobileAuthState>((set) => ({
 
   init: async () => {
     try {
+      const stored = await hydrateMobileTokens();
+      if (!stored.accessToken && !stored.refreshToken) {
+        set({ user: null, isInitialized: true });
+        return;
+      }
       const res = await mobileApi.auth.me();
       if (res.success && res.data) {
         set({ user: res.data, isInitialized: true });
         return;
       }
     } catch {
-      // Guest
+      await clearMobileTokens();
     }
     set({ user: null, isInitialized: true });
   },
@@ -39,7 +52,7 @@ export const useMobileAuthStore = create<MobileAuthState>((set) => ({
     try {
       const res = await mobileApi.auth.login(dto);
       if (res.success && res.data) {
-        setMobileToken(res.data.accessToken);
+        await setMobileTokens(res.data.accessToken, res.data.refreshToken ?? null);
         set({ user: res.data.user, isLoading: false, isInitialized: true });
         return true;
       }
@@ -57,7 +70,7 @@ export const useMobileAuthStore = create<MobileAuthState>((set) => ({
     try {
       const res = await mobileApi.auth.register(dto);
       if (res.success && res.data) {
-        setMobileToken(res.data.accessToken);
+        await setMobileTokens(res.data.accessToken, res.data.refreshToken ?? null);
         set({ user: res.data.user, isLoading: false, isInitialized: true });
         return true;
       }
@@ -91,9 +104,18 @@ export const useMobileAuthStore = create<MobileAuthState>((set) => ({
     try {
       await mobileApi.auth.logout();
     } catch {
-      // Ignore
+      // Ignore network errors on logout
+    } finally {
+      await clearMobileTokens();
+      useCartStore.getState().clearCart();
+      useMobileStoresStore.getState().clearUserData();
+      set({ user: null, error: null });
     }
-    setMobileToken(null);
-    set({ user: null, error: null });
   }
 }));
+
+registerMobileUnauthorizedHandler(() => {
+  useCartStore.getState().clearCart();
+  useMobileStoresStore.getState().clearUserData();
+  useMobileAuthStore.setState({ user: null, error: null, isLoading: false });
+});

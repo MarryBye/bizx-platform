@@ -8,9 +8,12 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { randomBytes } from 'node:crypto';
 import * as dns from 'node:dns/promises';
+import { escapeIlikePattern } from '@bizx/utils';
 import { DatabaseService } from '../database/database.service.js';
 import { RbacService } from '../rbac/rbac.service.js';
 import { InboxService } from '../inbox/inbox.service.js';
+import { AuthTokenVerifierService } from '../auth/auth-token-verifier.service.js';
+import { getPreviewJwtSecret } from '../common/security/security-config.js';
 import {
   stores,
   storeCategories,
@@ -31,6 +34,7 @@ import {
   count,
   isNull,
   inArray,
+  sql,
   type StoreRecord,
   type StoreCategoryRecord
 } from '@bizx/database';
@@ -94,7 +98,8 @@ export class StoresService {
     private readonly databaseService: DatabaseService,
     private readonly rbacService: RbacService,
     private readonly inboxService: InboxService,
-    private readonly jwtService: JwtService
+    private readonly jwtService: JwtService,
+    private readonly authTokenVerifier: AuthTokenVerifierService
   ) {}
 
   // ==================== КАТЕГОРИИ МАГАЗИНОВ ====================
@@ -160,13 +165,19 @@ export class StoresService {
       }
     }
 
+    const categoryPatch: Partial<typeof storeCategories.$inferInsert> = {
+      updatedAt: new Date()
+    };
+    if (dto.name !== undefined) categoryPatch.name = dto.name;
+    if (dto.slug !== undefined) categoryPatch.slug = dto.slug.toLowerCase();
+    if (dto.description !== undefined) categoryPatch.description = dto.description;
+    if (dto.icon !== undefined) categoryPatch.icon = dto.icon;
+    if (dto.sortOrder !== undefined) categoryPatch.sortOrder = dto.sortOrder;
+    if (dto.isActive !== undefined) categoryPatch.isActive = dto.isActive;
+
     const [updated] = await this.databaseService.db
       .update(storeCategories)
-      .set({
-        ...dto,
-        slug: dto.slug ? dto.slug.toLowerCase() : undefined,
-        updatedAt: new Date()
-      })
+      .set(categoryPatch)
       .where(eq(storeCategories.id, id))
       .returning();
 
@@ -207,15 +218,7 @@ export class StoresService {
   // ==================== МАГАЗИНЫ ====================
 
   async createStore(ownerId: string, dto: CreateStoreDto): Promise<StoreRecord> {
-    const [existing] = await this.databaseService.db
-      .select({ id: stores.id })
-      .from(stores)
-      .where(eq(stores.slug, dto.slug.toLowerCase()));
-
-    if (existing) {
-      throw new ConflictException('Магазин с таким slug уже существует');
-    }
-
+    const normalizedSlug = dto.slug.toLowerCase();
     const { hasActiveBizSub, maxAllowedStores, isStaff } = await this.reconcileOwnerStores(ownerId);
 
     if (!isStaff && !hasActiveBizSub) {
@@ -224,22 +227,11 @@ export class StoresService {
       );
     }
 
-    const ownedStores = await this.databaseService.db
-      .select({ id: stores.id, status: stores.status })
-      .from(stores)
-      .where(and(eq(stores.ownerId, ownerId), isNull(stores.archivedAt)));
-
-    if (!isStaff && ownedStores.length >= maxAllowedStores) {
-      throw new ForbiddenException(
-        `Ви досягли максимального ліміту закладів для вашого тарифу (${maxAllowedStores}). Оновіть тарифний план для відкриття нових бізнесів.`
-      );
-    }
-
     if (dto.categoryId) {
       const [category] = await this.databaseService.db
         .select({ id: storeCategories.id })
         .from(storeCategories)
-        .where(eq(storeCategories.id, dto.categoryId));
+        .where(and(eq(storeCategories.id, dto.categoryId), isNull(storeCategories.archivedAt)));
 
       if (!category) {
         throw new NotFoundException('Указанная категория магазина не найдена');
@@ -247,13 +239,36 @@ export class StoresService {
     }
 
     const newStore = await this.databaseService.db.transaction(async (tx) => {
+      // Серіалізуємо створення закладів власника, щоб уникнути TOCTOU обходу ліміту тарифу
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${'store_quota:' + ownerId}))`);
+
+      const [existing] = await tx
+        .select({ id: stores.id })
+        .from(stores)
+        .where(eq(stores.slug, normalizedSlug));
+
+      if (existing) {
+        throw new ConflictException('Магазин с таким slug уже существует');
+      }
+
+      const ownedStores = await tx
+        .select({ id: stores.id, status: stores.status })
+        .from(stores)
+        .where(and(eq(stores.ownerId, ownerId), isNull(stores.archivedAt)));
+
+      if (!isStaff && ownedStores.length >= maxAllowedStores) {
+        throw new ForbiddenException(
+          `Ви досягли максимального ліміту закладів для вашого тарифу (${maxAllowedStores}). Оновіть тарифний план для відкриття нових бізнесів.`
+        );
+      }
+
       const [insertedStore] = await tx
         .insert(stores)
         .values({
           ownerId,
           categoryId: dto.categoryId,
           name: dto.name,
-          slug: dto.slug.toLowerCase(),
+          slug: normalizedSlug,
           description: dto.description,
           logoUrl: dto.logoUrl,
           bannerUrl: dto.bannerUrl,
@@ -292,7 +307,7 @@ export class StoresService {
     }
 
     if (query.search) {
-      conditions.push(ilike(stores.name, `%${query.search}%`));
+      conditions.push(ilike(stores.name, `%${escapeIlikePattern(query.search)}%`));
     }
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
@@ -456,8 +471,12 @@ export class StoresService {
 
     return rows.map(({ isCustom, ...rest }, idx) => {
       const access = accessList[idx];
+      const canSeeDomainToken = access.isOwner || access.permissions.includes('store.edit');
+      const canSeeFinance = access.isOwner || access.permissions.includes('analytics.read');
       return {
         ...rest,
+        domainVerificationToken: canSeeDomainToken ? rest.domainVerificationToken : undefined,
+        payoutBalance: canSeeFinance ? rest.payoutBalance : undefined,
         ratingAvg: Number((Number(rest.ratingAvg || 0) / 100).toFixed(2)),
         activeStrikesCount: strikesByStore.get(rest.id) ?? 0,
         isOwner: access.isOwner,
@@ -673,7 +692,7 @@ export class StoresService {
       }
     }
 
-    const { suspensionDays, suspensionReason, ...storeFields } = dto ?? {};
+    const { suspensionDays, suspensionReason } = dto ?? {};
     const nowUpdate = new Date();
 
     const suspensionPatch: {
@@ -681,30 +700,46 @@ export class StoresService {
       suspensionReason?: string | null;
     } = {};
 
-    if (dto?.status === 'suspended') {
+    // КРИТИЧНО (H-1): не-платформний користувач НІКОЛИ не може скинути suspendedUntil/suspensionReason
+    // повторним запитом `{ status: 'suspended' }` на вже заблокований модератором заклад!
+    if (isActuallyChangingStatus && dto?.status === 'suspended') {
       suspensionPatch.suspendedUntil =
         viaPlatform && typeof suspensionDays === 'number' && suspensionDays > 0
           ? new Date(nowUpdate.getTime() + suspensionDays * 24 * 60 * 60 * 1000)
           : null;
       suspensionPatch.suspensionReason = viaPlatform ? suspensionReason?.trim() || null : null;
+    } else if (!isActuallyChangingStatus && dto?.status === 'suspended' && viaPlatform) {
+      suspensionPatch.suspendedUntil =
+        typeof suspensionDays === 'number' && suspensionDays > 0
+          ? new Date(nowUpdate.getTime() + suspensionDays * 24 * 60 * 60 * 1000)
+          : null;
+      suspensionPatch.suspensionReason = suspensionReason?.trim() || null;
     } else if (isActuallyChangingStatus) {
       suspensionPatch.suspendedUntil = null;
       suspensionPatch.suspensionReason = null;
     }
 
+    const storeUpdatePayload: Partial<typeof stores.$inferInsert> = {
+      ...suspensionPatch,
+      updatedAt: nowUpdate
+    };
+    if (dto?.name !== undefined) storeUpdatePayload.name = dto.name;
+    if (dto?.slug !== undefined) storeUpdatePayload.slug = dto.slug.toLowerCase();
+    if (dto?.categoryId !== undefined) storeUpdatePayload.categoryId = dto.categoryId;
+    if (dto?.description !== undefined) storeUpdatePayload.description = dto.description;
+    if (dto?.logoUrl !== undefined) storeUpdatePayload.logoUrl = dto.logoUrl;
+    if (dto?.bannerUrl !== undefined) storeUpdatePayload.bannerUrl = dto.bannerUrl;
+    if (dto?.address !== undefined) storeUpdatePayload.address = dto.address;
+    if (dto?.phone !== undefined) storeUpdatePayload.phone = dto.phone;
+    if (dto?.email !== undefined) storeUpdatePayload.email = dto.email;
+    if (isActuallyChangingStatus && dto?.status !== undefined) {
+      storeUpdatePayload.status = dto.status;
+      storeUpdatePayload.archivedAt = dto.status === 'archived' ? nowUpdate : null;
+    }
+
     const [updated] = await this.databaseService.db
       .update(stores)
-      .set({
-        ...storeFields,
-        ...suspensionPatch,
-        slug: storeFields.slug ? storeFields.slug.toLowerCase() : undefined,
-        ...(dto?.status === 'archived'
-          ? { archivedAt: nowUpdate }
-          : dto?.status !== undefined
-            ? { archivedAt: null }
-            : {}),
-        updatedAt: nowUpdate
-      })
+      .set(storeUpdatePayload)
       .where(eq(stores.id, storeId))
       .returning();
 
@@ -824,14 +859,32 @@ export class StoresService {
     let txtMatched = false;
     let cnameMatched = false;
 
+    const resolver = new dns.Resolver({ timeout: 3000, tries: 1 });
+    resolver.setServers(['1.1.1.1', '8.8.8.8']);
+
+    const withDnsTimeout = <T>(promise: Promise<T>, ms = 3500): Promise<T> =>
+      new Promise<T>((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error('DNS lookup timeout')), ms);
+        promise.then(
+          (val) => {
+            clearTimeout(timer);
+            resolve(val);
+          },
+          (err) => {
+            clearTimeout(timer);
+            reject(err);
+          }
+        );
+      });
+
     try {
-      const records = await dns.resolveTxt(txtHost);
+      const records = await withDnsTimeout(resolver.resolveTxt(txtHost));
       const flat = records.map((r) => r.join(''));
       txtMatched = flat.some((val) => val.trim() === store.domainVerificationToken);
     } catch {
       // Fallback: check root TXT record too
       try {
-        const rootRecords = await dns.resolveTxt(store.customDomain);
+        const rootRecords = await withDnsTimeout(resolver.resolveTxt(store.customDomain));
         const flatRoot = rootRecords.map((r) => r.join(''));
         txtMatched = flatRoot.some((val) => val.trim() === store.domainVerificationToken);
       } catch {
@@ -840,7 +893,7 @@ export class StoresService {
     }
 
     try {
-      const cnames = await dns.resolveCname(store.customDomain);
+      const cnames = await withDnsTimeout(resolver.resolveCname(store.customDomain));
       cnameMatched = cnames.some(
         (c) => c.toLowerCase().replace(/\.$/, '') === cnameTarget
       );
@@ -873,6 +926,9 @@ export class StoresService {
   }
 
   async resolveHost(rawHost: string): Promise<{ slug: string; storeId: string; name: string } | null> {
+    if (typeof rawHost !== 'string' || !rawHost || rawHost.length > 255) {
+      return null;
+    }
     const cleanHost = rawHost.split(':')[0].trim().toLowerCase();
     if (!cleanHost || cleanHost === 'localhost' || cleanHost === '127.0.0.1' || cleanHost === 'bizx.ua' || cleanHost === 'www.bizx.ua') {
       return null;
@@ -941,8 +997,6 @@ export class StoresService {
       .select({
         id: storeReviews.id,
         storeId: storeReviews.storeId,
-        orderId: storeReviews.orderId,
-        customerId: storeReviews.customerId,
         customerName: users.name,
         rating: storeReviews.rating,
         comment: storeReviews.comment,
@@ -967,8 +1021,6 @@ export class StoresService {
       reviews: rows.map((r) => ({
         id: r.id,
         storeId: r.storeId,
-        orderId: r.orderId,
-        customerId: r.customerId,
         customerName: r.customerName || 'Покупець BizX',
         rating: r.rating,
         comment: r.comment,
@@ -1130,10 +1182,10 @@ export class StoresService {
       throw new ForbiddenException('Немає прав на попередній перегляд цього закладу');
     }
 
-    const previewSecret = `${process.env.JWT_SECRET || 'bizx-jwt-dev-secret-key-32chars-min!'}:store_preview`;
+    const previewSecret = getPreviewJwtSecret();
     const previewToken = this.jwtService.sign(
       { type: 'store_preview', storeId: store.id, actorId: userId },
-      { secret: previewSecret, expiresIn: '15m' }
+      { secret: previewSecret, expiresIn: '15m', algorithm: 'HS256' }
     );
 
     return {
@@ -1183,32 +1235,41 @@ export class StoresService {
     }
 
     let authorized = false;
+    let verifiedActorId: string | null = null;
 
     if (options.previewToken) {
       try {
-        const previewSecret = `${process.env.JWT_SECRET || 'bizx-jwt-dev-secret-key-32chars-min!'}:store_preview`;
+        const previewSecret = getPreviewJwtSecret();
         const decoded = this.jwtService.verify<{
           type?: string;
           storeId?: string;
           actorId?: string;
-        }>(options.previewToken, { secret: previewSecret });
-        if (decoded?.type === 'store_preview' && decoded?.storeId === storeRow.id) {
-          authorized = true;
+        }>(options.previewToken, { secret: previewSecret, algorithms: ['HS256'] });
+        if (
+          decoded?.type === 'store_preview' &&
+          decoded?.storeId === storeRow.id &&
+          typeof decoded?.actorId === 'string'
+        ) {
+          await this.authTokenVerifier.assertUserActive(decoded.actorId);
+          authorized = await this.canUserPreviewStore(storeRow.id, decoded.actorId);
+          if (authorized) {
+            verifiedActorId = decoded.actorId;
+          }
         }
       } catch {
         authorized = false;
       }
     }
 
-    if (!authorized && options.authHeader && options.authHeader.startsWith('Bearer ')) {
-      try {
-        const bearer = options.authHeader.slice(7).trim();
-        const decoded = this.jwtService.verify<{ sub?: string; tokenType?: string }>(bearer);
-        if (decoded?.tokenType === 'access' && decoded?.sub) {
-          authorized = await this.canUserPreviewStore(storeRow.id, decoded.sub);
+    if (!authorized && options.authHeader) {
+      const callerUserId = await this.authTokenVerifier.verifyOptionalBearerHeader(
+        options.authHeader
+      );
+      if (callerUserId) {
+        authorized = await this.canUserPreviewStore(storeRow.id, callerUserId);
+        if (authorized) {
+          verifiedActorId = callerUserId;
         }
-      } catch {
-        authorized = false;
       }
     }
 
@@ -1217,6 +1278,14 @@ export class StoresService {
         'Попередній перегляд вітрини доступний лише співробітникам модерації BizX або команді закладу'
       );
     }
+
+    let isPlatformViewer = false;
+    if (verifiedActorId) {
+      const platAccess = await this.rbacService.getPlatformMemberAccess(verifiedActorId);
+      isPlatformViewer = platAccess.isMember;
+    }
+
+    const { ownerEmail, ...safeStoreRow } = storeRow;
 
     const [catRows, prodRows] = await Promise.all([
       this.databaseService.db
@@ -1247,7 +1316,8 @@ export class StoresService {
 
     return {
       store: {
-        ...storeRow,
+        ...safeStoreRow,
+        ...(isPlatformViewer ? { ownerEmail } : {}),
         status: storeRow.status as StorePreviewResponse['store']['status'],
         ratingAvg: Number((Number(storeRow.ratingAvg || 0) / 100).toFixed(2)),
         createdAt: storeRow.createdAt.toISOString(),

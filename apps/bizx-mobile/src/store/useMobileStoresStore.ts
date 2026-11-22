@@ -32,6 +32,7 @@ interface MobileStoresState {
   setSelectedProductCategoryId: (id: string | null) => void;
   fetchMyOrders: () => Promise<void>;
   fetchUnreadSummary: () => Promise<void>;
+  clearUserData: () => void;
 }
 
 export const useMobileStoresStore = create<MobileStoresState>((set) => ({
@@ -127,5 +128,13 @@ export const useMobileStoresStore = create<MobileStoresState>((set) => ({
     } catch {
       // Ignore
     }
+  },
+
+  clearUserData: () => {
+    set({
+      myOrders: [],
+      unreadMessagesCount: 0,
+      pendingRefundOffersCount: 0
+    });
   }
 }));
