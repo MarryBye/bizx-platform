@@ -42,14 +42,14 @@
 
 | ID | Критичність | Категорія / Проблема | Статус | Як виправлено |
 |---|---|---|---|---|
-| **FE-H1** | High | Зберігання access JWT у `localStorage` + перехресне читання ключів між лендингом, бізнес-адмінкою та платформною адмінкою | **Частково виправлено / Потребує погодження архітектури** | Негайно ізольовано `localStorage`-ключі по застосунках (прибрано перехресне читання/запис між 3 веб-застосунками) та підключено повне очищення стану на 401/logout. Повна міграція на in-memory access token + same-site cookie винесена на погодження користувача (див. Розділ 4). |
+| **FE-H1** | High | Зберігання access JWT у `localStorage` + перехресне читання ключів між лендингом, бізнес-адмінкою та платформною адмінкою | **Виправлено (погоджено Варіант 2)** | Ізольовано `localStorage`-ключі по застосунках (прибрано перехресне читання/запис), підключено повне очищення стану на `401`/logout, додано суворий CSP та `HttpOnly` refresh cookie з `path: '/auth'`. |
 | **FE-H2** | High | Відсутність HTTP-заголовків безпеки (CSP, `X-Frame-Options`, `nosniff`, `Referrer-Policy`, `Permissions-Policy`) у Next.js лендингу та Vite-адмінках | **Виправлено** | Налаштовано `headers()` і `poweredByHeader: false` у `apps/bizx-landing/next.config.ts`; додано `server.headers` / `preview.headers` та `<meta name="referrer" content="no-referrer" />` в `apps/bizx-admin` та `apps/bizx-platform-admin`. |
 | **FE-H3** | High | Відсутність валідації URL вкладень у `OrderChatBox` та `MobileChatThread` (ризик `javascript:`/`data:` URI при ін’єкції або підміні відповіді) | **Виправлено** | Додано `sanitizeUiUrl` у `@bizx/ui` та `sanitizeNavigationUrl` + `Linking.canOpenURL` у `MobileChatThread`; оновлено `resolveMediaUrl` та `resolveMobileMediaUrl` з жорсткою забороною `javascript:`, `data:`, `vbscript:` та несанкціонованого `blob:`. |
 | **FE-H4** | High | Несанітизовані `host`/`slug` у Next.js `middleware.ts` без кешу та з витоком таймерів | **Виправлено** | Впроваджено `isValidSlug`, `isValidCustomHostname`, `INTERNAL_API_URL`, `redirect: 'error'`, `finally { clearTimeout }`, та обмежений TTL-кеш (до 500 записів / 30с). |
 | **FE-H5** | High | Витік `previewToken` через URL query string `?preview=...` у `Referer` / історію браузера / логи | **Виправлено** | Перенесено токен у URL-фрагмент `#preview=...`, негайне очищення адресного рядка через `window.history.replaceState`, а API-клієнт передає його у заголовку `X-Store-Preview-Token`. |
-| **FE-H6** | High | Spreadsheet Formula Injection (CWE-1236) при експорті CSV/Excel в аналітиці + відомі CVE у `xlsx@0.18.5` | **Виправлено (CWE-1236) / Потребує погодження залежності (`xlsx`)** | Усі клітинки Excel/CSV нейтралізуються через `sanitizeSpreadsheetRows()` (префікс `'` для `=`, `+`, `-`, `@`, `\t`, `\r`); експорт CSV переведено на zero-dep `serializeSafeCsv()` + `sanitizeFilenameSegment()`. Заміна пакета `xlsx` винесена на погодження (Розділ 4). |
+| **FE-H6** | High | Spreadsheet Formula Injection (CWE-1236) при експорті CSV/Excel в аналітиці + відомі CVE у `xlsx@0.18.5` | **Виправлено (погоджено Варіант 1)** | Повністю видалено вразливий пакет `xlsx@0.18.5` з монорепозиторію, замінено на `write-excel-file/browser` з універсальною функцією `buildSafeExcelSheetData()` (нейтралізація CWE-1236); експорт CSV працює через zero-dep `serializeSafeCsv()` + `sanitizeFilenameSegment()`. |
 | **FE-M1..M5** | Medium | Необроблена подія `bizx:unauthorized` в обох адмінках та мобільному додатку (застарілі дані лишалися у пам’яті після 401/logout); відхилений логін в адмінках не викликав `auth.logout()` на сервері; широкі `<input accept="image/*">` (приймали `.svg`) без клієнтської перевірки розміру/MIME; неекранований `encodePathSegment` у маршрутах API-клієнта; прототипні пошуки в `I18n.resolveKey` та `RoleIcon`; відсутність `noopener` у `PlatformLayout` | **Виправлено** | Підключено `bizx:unauthorized` і повний reset сторів у `bizx-admin`, `bizx-platform-admin`, `bizx-landing`, `bizx-mobile`; при відхиленні доступу викликається `auth.logout()`; усі file-інпути переведено на явні MIME + `validateUploadFile()` + revoke `blob:` URL; додано `encodePathSegment()` у `@bizx/api-client`; виправлено `hasOwnProperty` у `I18n` і `RoleIcon` та `replaceAll` замість `new RegExp`; додано `rel="noopener noreferrer"`; додано `autoComplete` та `minLength={8}` на полях паролів. |
-| **FE-M6** | Medium | Відсутність `expo-secure-store` у мобільному додатку (токен лише в оперативній пам’яті, `EXPO_PUBLIC_API_URL` не враховувався) | **Частково виправлено / Потребує погодження залежності** | Додано підтримку `process.env.EXPO_PUBLIC_API_URL` та очищення `useCartStore`/`useMobileStoresStore` на 401/logout. Додавання `expo-secure-store` винесено на погодження (Розділ 4). |
+| **FE-M6** | Medium | Відсутність захищеного персистентного сховища сесії у мобільному додатку + ігнорування `EXPO_PUBLIC_API_URL` | **Виправлено (погоджено Варіант 1)** | Встановлено `expo-secure-store` (`apps/bizx-mobile/src/lib/secure-storage.ts`, `WHEN_UNLOCKED_THIS_DEVICE_ONLY`), збереження й автоматична ротація `accessToken` та `refreshToken` через iOS Keychain / Android Keystore (з автоматичним fallback у пам’ять на web), підтримка `EXPO_PUBLIC_API_URL` і повне очищення при `401`/виході. |
 
 ---
 
@@ -76,7 +76,7 @@
 |---|---|---|
 | `isValidSlug`, `isValidCustomHostname`, `encodePathSegment`, `escapeIlikePattern` | `@bizx/utils` | Безпечна валідація маршрутів, хостів та екранування `ILIKE` запитів. |
 | `sanitizeNavigationUrl`, `sanitizeMediaUrl` | `@bizx/utils` | Суворий allowlist протоколів (`https:`/`http:`/відносні), блокування `javascript:`, `data:`, `vbscript:`, `blob:`, SVG. |
-| `sanitizeSpreadsheetCell`, `sanitizeSpreadsheetRows`, `serializeSafeCsv`, `sanitizeFilenameSegment` | `@bizx/utils` | Повний захист від CSV/Excel Formula Injection (CWE-1236) та безпечні імена файлів. |
+| `sanitizeSpreadsheetCell`, `sanitizeSpreadsheetRows`, `buildSafeExcelSheetData`, `serializeSafeCsv`, `sanitizeFilenameSegment` | `@bizx/utils` | Повний захист від CSV/Excel Formula Injection (CWE-1236), типізовані матриці для `write-excel-file` та безпечні імена файлів. |
 | `UPLOAD_POLICIES`, `validateUploadFile` | `@bizx/utils` | Єдина клієнтська перевірка MIME, розширення та ліміту 10 МБ перед завантаженням. |
 | `SafeExternalLink`, `sanitizeUiUrl`, `SAFE_CHAT_ACCEPT`, `SAFE_RASTER_IMAGE_ACCEPT` | `@bizx/ui` | Готовий компонент зовнішніх посилань (`noopener noreferrer` + URL-санітизація) і константи `accept`. |
 | `safeMediaUrlSchema` | `@bizx/common-types` | Zod-схема для всіх URL медіафайлів у DTO. |
@@ -94,16 +94,8 @@
 
 ---
 
-## 4. Архітектурні та пакетні рішення, що потребують погодження користувача
+## 4. Погоджені рішення користувача (етап 2)
 
-Відповідно до правил `AGENTS.md` (п. 1 — заборона встановлення залежностей без схвалення; п. 2 — погодження глибоких/ламаючих архітектурних змін), наступні 3 покращення підготовлені як пропозиції на вибір:
-
-1. **Повна відмова від `localStorage` для веб-access JWT (перехід на in-memory closure + `HttpOnly` cookie silent refresh):**
-   - *Наразі:* ключі вже ізольовані між застосунками, але у разі XSS-вразливості токен все ще доступний з `localStorage`.
-   - *Нюанс:* потребує єдиного домену/піддоменів у prod (наприклад, `api.bizx.ua`, `admin.bizx.ua`, `panel.bizx.ua` з `Domain=.bizx.ua` і `SameSite=Lax`/`Strict`) або reverse-proxy у dev.
-2. **Заміна `xlsx@0.18.5` (містить відомі CVE: `CVE-2023-30533`, `CVE-2024-22363`) у `apps/bizx-admin` та `apps/bizx-platform-admin`:**
-   - *Наразі:* експорт CSV вже переведено на власний zero-dep `serializeSafeCsv()`, а всі комірки Excel нейтралізовані від CWE-1236, проте сама бібліотека `xlsx@0.18.5` досі використовується для генерації `.xlsx`.
-   - *Варіанти:* перехід на `exceljs` / `write-excel-file` (найлегший і без відомих CVE) або відмова від `.xlsx` на користь безпечного `.csv`.
-3. **Захищене зберігання сесії у мобільному застосунку (`expo-secure-store`):**
-   - *Наразі:* токен зберігається в пам’яті (скидається при перезапуску додатку).
-   - *Варіант:* встановлення `expo-secure-store` (Keychain на iOS / Keystore на Android) для персистентної та апаратно захищеної авторизації.
+1. **Веб-сховище access JWT (обрано Варіант 2):** залишено ізольовані ключі `localStorage` для кожного застосунку + суворий CSP + короткий TTL (15 хв) + `HttpOnly` refresh cookie (`path: '/auth'`).
+2. **Заміна `xlsx@0.18.5` (обрано Варіант 1 — виконано):** пакет `xlsx` повністю видалено з монорепозиторію (усунуто `CVE-2023-30533` та `CVE-2024-22363`); експорт `.xlsx` в `apps/bizx-admin` та `apps/bizx-platform-admin` переведено на `write-excel-file` із CWE-1236 нейтралізацією через `buildSafeExcelSheetData()`.
+3. **Мобільне сховище сесії (обрано Варіант 1 — виконано):** встановлено `expo-secure-store@~14.0.1` у `apps/bizx-mobile`, реалізовано [secure-storage.ts](../apps/bizx-mobile/src/lib/secure-storage.ts) (`WHEN_UNLOCKED_THIS_DEVICE_ONLY`) і повну підтримку збереження, гідратації, автоматичної ротації та відкликання `accessToken`/`refreshToken` на рівні `@bizx/api-client` і `useMobileAuthStore`.
