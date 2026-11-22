@@ -26,7 +26,12 @@ import {
   AnalyticsChartCard,
   AnalyticsDataTableShell
 } from '@bizx/ui';
-import { formatMoney as formatMoneyShared } from '@bizx/utils';
+import {
+  formatMoney as formatMoneyShared,
+  sanitizeSpreadsheetRows,
+  serializeSafeCsv,
+  sanitizeFilenameSegment
+} from '@bizx/utils';
 import {
   TrendingUp,
   BarChart3,
@@ -176,7 +181,7 @@ export const DetailedAnalyticsView: React.FC<{ canExport?: boolean }> = ({ canEx
     if (!activeStore || !data) return;
     const wb = XLSX.utils.book_new();
 
-    const summaryRows = [
+    const summaryRows = sanitizeSpreadsheetRows([
       {
         Metric: t('admin.totalRevenue'),
         Value: `${(data.totalRevenue / 100).toFixed(2)} UAH`
@@ -186,33 +191,40 @@ export const DetailedAnalyticsView: React.FC<{ canExport?: boolean }> = ({ canEx
         Metric: t('admin.averageOrderValue'),
         Value: `${(data.averageOrderValue / 100).toFixed(2)} UAH`
       }
-    ];
+    ]);
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summaryRows), 'Summary');
 
-    const dailyRows = dailyChartData.map((d) => ({
-      [t('common.date')]: d.date,
-      [t('analytics.ordersAxis')]: d.ordersCount,
-      [t('analytics.revenueAxis')]: d.revenueUah,
-      [t('analytics.avgCheck')]: d.aovUah
-    }));
+    const dailyRows = sanitizeSpreadsheetRows(
+      dailyChartData.map((d) => ({
+        [t('common.date')]: d.date,
+        [t('analytics.ordersAxis')]: d.ordersCount,
+        [t('analytics.revenueAxis')]: d.revenueUah,
+        [t('analytics.avgCheck')]: d.aovUah
+      }))
+    );
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dailyRows), 'Daily');
 
-    const monthlyRows = monthlyChartData.map((m) => ({
-      Month: m.month,
-      [t('analytics.ordersAxis')]: m.ordersCount,
-      [t('analytics.revenueAxis')]: m.revenueUah
-    }));
+    const monthlyRows = sanitizeSpreadsheetRows(
+      monthlyChartData.map((m) => ({
+        Month: m.month,
+        [t('analytics.ordersAxis')]: m.ordersCount,
+        [t('analytics.revenueAxis')]: m.revenueUah
+      }))
+    );
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(monthlyRows), 'Monthly');
 
-    const productRows = productsScatterData.map((p) => ({
-      [t('admin.productCol')]: p.name,
-      [t('analytics.quantityAxis')]: p.quantity,
-      [t('analytics.revenueAxis')]: p.revenueUah
-    }));
+    const productRows = sanitizeSpreadsheetRows(
+      productsScatterData.map((p) => ({
+        [t('admin.productCol')]: p.name,
+        [t('analytics.quantityAxis')]: p.quantity,
+        [t('analytics.revenueAxis')]: p.revenueUah
+      }))
+    );
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(productRows), 'Products');
 
     const dateTag = new Date().toISOString().slice(0, 10);
-    XLSX.writeFile(wb, `bizx-store-analytics-${activeStore.slug}-${dateTag}.xlsx`);
+    const safeSlug = sanitizeFilenameSegment(activeStore.slug, 'store');
+    XLSX.writeFile(wb, `bizx-store-analytics-${safeSlug}-${dateTag}.xlsx`);
   };
 
   const handleExportCsv = () => {
@@ -241,13 +253,13 @@ export const DetailedAnalyticsView: React.FC<{ canExport?: boolean }> = ({ canEx
       }));
     }
 
-    const ws = XLSX.utils.json_to_sheet(rows);
-    const csv = '\uFEFF' + XLSX.utils.sheet_to_csv(ws);
+    const csv = serializeSafeCsv(rows);
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `bizx-store-${tableTab}-${activeStore.slug}-${new Date().toISOString().slice(0, 10)}.csv`;
+    const safeSlug = sanitizeFilenameSegment(activeStore.slug, 'store');
+    a.download = `bizx-store-${tableTab}-${safeSlug}-${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };

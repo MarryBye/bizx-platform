@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { api } from '../lib/api';
+import { useBusinessStore } from './useBusinessStore';
 import { i18n, translateApiError } from '@bizx/utils';
 import type { UserProfile, LoginDto } from '@bizx/common-types';
 
@@ -11,6 +12,7 @@ interface AuthState {
   init: () => Promise<void>;
   login: (dto: LoginDto) => Promise<boolean>;
   logout: () => Promise<void>;
+  handleUnauthorized: () => void;
   updateAvatar: (file: File) => Promise<boolean>;
   updateProfile: (dto: { name?: string; phone?: string }) => Promise<boolean>;
 }
@@ -54,7 +56,9 @@ export const useAuthStore = create<AuthState>((set) => ({
         const hasStores = activeSub ? true : await hasAnyOwnedOrMemberStore();
 
         if (!activeSub && !hasStores) {
+          await api.auth.logout().catch(() => {});
           api.client.setAccessToken(null);
+          useBusinessStore.getState().reset();
           set({
             user: null,
             hasActiveSubscription: false,
@@ -92,7 +96,9 @@ export const useAuthStore = create<AuthState>((set) => ({
         const hasStores = activeSub ? true : await hasAnyOwnedOrMemberStore();
 
         if (!activeSub && !hasStores) {
+          await api.auth.logout().catch(() => {});
           api.client.setAccessToken(null);
+          useBusinessStore.getState().reset();
           set({
             user: null,
             hasActiveSubscription: false,
@@ -129,13 +135,15 @@ export const useAuthStore = create<AuthState>((set) => ({
       // Ignore error on logout
     } finally {
       api.client.setAccessToken(null);
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('bizx_admin_access_token');
-        localStorage.removeItem('bizx_access_token');
-        localStorage.removeItem('bizx_platform_admin_token');
-      }
+      useBusinessStore.getState().reset();
     }
     set({ user: null, hasActiveSubscription: false, error: null });
+  },
+
+  handleUnauthorized: () => {
+    api.client.setAccessToken(null);
+    useBusinessStore.getState().reset();
+    set({ user: null, hasActiveSubscription: false, isLoading: false, error: null });
   },
 
   updateAvatar: async (file: File) => {

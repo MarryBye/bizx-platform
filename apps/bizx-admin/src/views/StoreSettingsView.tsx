@@ -3,6 +3,7 @@ import { useBusinessStore } from '../store/useBusinessStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { useTranslation } from '../hooks/useTranslation';
 import { api } from '../lib/api';
+import { validateUploadFile, UPLOAD_POLICIES } from '@bizx/utils';
 import type { DomainVerificationResult, StoreStrikeItem } from '@bizx/common-types';
 import { Card, CardHeader, CardTitle, CardContent, Button, Input, Textarea, PhoneInput, ConfirmModal, StatusBadge } from '@bizx/ui';
 import {
@@ -150,6 +151,22 @@ export const StoreSettingsView: React.FC<{
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    const validation = validateUploadFile(file, UPLOAD_POLICIES.rasterImage);
+    if (!validation.ok) {
+      e.target.value = '';
+      setStatusMessage({
+        text:
+          validation.code === 'TOO_LARGE'
+            ? locale === 'en'
+              ? 'Logo must be 10 MB or smaller'
+              : 'Розмір логотипу не повинен перевищувати 10 МБ'
+            : locale === 'en'
+              ? 'Only JPG, PNG, WebP, or GIF images are allowed'
+              : 'Дозволені лише зображення JPG, PNG, WebP або GIF',
+        isError: true
+      });
+      return;
+    }
 
     if (logoPreview?.startsWith('blob:')) {
       URL.revokeObjectURL(logoPreview);
@@ -183,6 +200,22 @@ export const StoreSettingsView: React.FC<{
   const handleBannerUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    const validation = validateUploadFile(file, UPLOAD_POLICIES.rasterImage);
+    if (!validation.ok) {
+      e.target.value = '';
+      setStatusMessage({
+        text:
+          validation.code === 'TOO_LARGE'
+            ? locale === 'en'
+              ? 'Banner must be 10 MB or smaller'
+              : 'Розмір банера не повинен перевищувати 10 МБ'
+            : locale === 'en'
+              ? 'Only JPG, PNG, WebP, or GIF images are allowed'
+              : 'Дозволені лише зображення JPG, PNG, WebP або GIF',
+        isError: true
+      });
+      return;
+    }
 
     if (bannerPreview?.startsWith('blob:')) {
       URL.revokeObjectURL(bannerPreview);
@@ -242,7 +275,7 @@ export const StoreSettingsView: React.FC<{
       const res = await api.stores.createPreviewToken(activeStore.id);
       if (res.success && res.data?.previewToken) {
         window.open(
-          `http://localhost:3100/store/${activeStore.slug}?preview=${encodeURIComponent(res.data.previewToken)}`,
+          `http://localhost:3100/store/${encodeURIComponent(activeStore.slug)}#preview=${encodeURIComponent(res.data.previewToken)}`,
           '_blank',
           'noopener,noreferrer'
         );
@@ -368,7 +401,7 @@ export const StoreSettingsView: React.FC<{
                     {isUploadingBanner ? 'Завантаження...' : 'Завантажити новий банер'}
                     <input
                       type="file"
-                      accept="image/*"
+                      accept="image/jpeg,image/png,image/webp,image/gif"
                       disabled={isUploadingBanner || !canEdit}
                       onChange={handleBannerUpload}
                       className="hidden"
@@ -399,7 +432,7 @@ export const StoreSettingsView: React.FC<{
                     {isUploadingLogo ? 'Завантаження...' : 'Обрати новий логотип'}
                     <input
                       type="file"
-                      accept="image/*"
+                      accept="image/jpeg,image/png,image/webp,image/gif"
                       disabled={isUploadingLogo || !canEdit}
                       onChange={handleLogoUpload}
                       className="hidden"
@@ -636,7 +669,7 @@ export const StoreSettingsView: React.FC<{
                         </button>
                       </td>
                     </tr>
-                    {activeStore.domainVerificationToken && (
+                    {canEdit && activeStore.domainVerificationToken && (
                       <tr>
                         <td className="py-2 px-3 font-bold text-slate-900">TXT</td>
                         <td className="py-2 px-3 text-slate-700">

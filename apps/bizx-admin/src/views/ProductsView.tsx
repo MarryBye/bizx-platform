@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useBusinessStore } from '../store/useBusinessStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { useTranslation } from '../hooks/useTranslation';
+import { validateUploadFile, UPLOAD_POLICIES } from '@bizx/utils';
 import { Button, Input, Textarea, Card, CardContent, Badge, Modal, ConfirmModal, ProductPlaceholder, Select } from '@bizx/ui';
 import { Plus, Search, Archive, Image as ImageIcon, Upload, AlertCircle, Pencil, FolderTree, Check, X } from 'lucide-react';
 import { api } from '../lib/api';
@@ -153,12 +154,33 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
     setIsModalOpen(true);
   };
 
+  useEffect(() => {
+    return () => {
+      if (imagePreview?.startsWith('blob:')) {
+        URL.revokeObjectURL(imagePreview);
+      }
+    };
+  }, [imagePreview]);
+
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      setImageFile(file);
-      setImagePreview(URL.createObjectURL(file));
+    if (!file) return;
+    const validation = validateUploadFile(file, UPLOAD_POLICIES.rasterImage);
+    if (!validation.ok) {
+      e.target.value = '';
+      setFormError(
+        validation.code === 'TOO_LARGE'
+          ? 'Розмір зображення не повинен перевищувати 10 МБ'
+          : 'Дозволені лише зображення PNG, JPG, GIF або WebP'
+      );
+      return;
     }
+    setFormError(null);
+    if (imagePreview?.startsWith('blob:')) {
+      URL.revokeObjectURL(imagePreview);
+    }
+    setImageFile(file);
+    setImagePreview(URL.createObjectURL(file));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {

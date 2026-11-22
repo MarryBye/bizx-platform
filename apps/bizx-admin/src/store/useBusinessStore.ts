@@ -38,6 +38,7 @@ interface BusinessState {
     status?: OrderStatus,
     paymentStatus?: PaymentStatus
   ) => Promise<boolean>;
+  reset: () => void;
 }
 
 export const useBusinessStore = create<BusinessState>((set, get) => ({
@@ -262,5 +263,19 @@ export const useBusinessStore = create<BusinessState>((set, get) => ({
       set({ error: err.message || 'Не вдалося оновити статус замовлення' });
       return false;
     }
+  },
+
+  reset: () => {
+    set({
+      stores: [],
+      activeStoreId: null,
+      activeStore: null,
+      analytics: null,
+      products: [],
+      categories: [],
+      orders: [],
+      isLoading: false,
+      error: null
+    });
   }
 }));
