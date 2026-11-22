@@ -15,6 +15,7 @@ import { MobileModal, MobileActionSheet } from '../components/MobileModal';
 import { MobileBadge, getOrderStatusMeta } from '../components/MobileBadge';
 import { MobileChatThread, type MobileChatMessage } from '../components/MobileChatThread';
 import { mobileApi } from '../lib/api';
+import { validateUploadFile, UPLOAD_POLICIES } from '@bizx/utils';
 import {
   DISPUTE_CATEGORIES,
   CUSTOMER_QUICK_REPLIES,
@@ -160,11 +161,24 @@ export const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
       if (result.canceled || !result.assets || result.assets.length === 0) return;
 
       const asset = result.assets[0];
+      const fileName = asset.fileName || `photo-${Date.now()}.jpg`;
+      const mimeType = asset.mimeType || 'image/jpeg';
+      const validation = validateUploadFile(
+        { name: fileName, type: mimeType, size: asset.fileSize ?? undefined },
+        UPLOAD_POLICIES.rasterImage
+      );
+      if (!validation.ok) {
+        setErrorMsg(
+          validation.code === 'TOO_LARGE'
+            ? 'Розмір зображення не повинен перевищувати 10 МБ'
+            : 'Дозволені лише зображення JPG, PNG, WebP або GIF'
+        );
+        return;
+      }
+
       setIsUploading(true);
 
       const formData = new FormData();
-      const fileName = asset.fileName || `photo-${Date.now()}.jpg`;
-      const mimeType = asset.mimeType || 'image/jpeg';
 
       if (Platform.OS === 'web') {
         const webFile = (asset as any).file;

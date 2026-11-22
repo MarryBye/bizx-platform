@@ -1,10 +1,18 @@
 import { Platform } from 'react-native';
 import { createApiClient, type BizXClient } from '@bizx/api-client';
 
-const DEFAULT_API_URL = Platform.OS === 'android' ? 'http://10.0.2.2:3101' : 'http://localhost:3101';
+const CONFIGURED_API_URL = process.env.EXPO_PUBLIC_API_URL?.trim();
+const DEFAULT_API_URL =
+  CONFIGURED_API_URL ||
+  (Platform.OS === 'android' ? 'http://10.0.2.2:3101' : 'http://localhost:3101');
 
 let authToken: string | null = null;
 let clientInstance: BizXClient | null = null;
+let unauthorizedHandler: (() => void) | null = null;
+
+export function registerMobileUnauthorizedHandler(handler: () => void) {
+  unauthorizedHandler = handler;
+}
 
 export function getMobileApiClient(): BizXClient {
   if (!clientInstance) {
@@ -16,6 +24,7 @@ export function getMobileApiClient(): BizXClient {
       },
       onUnauthorized: () => {
         authToken = null;
+        unauthorizedHandler?.();
       }
     });
   }

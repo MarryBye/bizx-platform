@@ -1,5 +1,7 @@
 import { create } from 'zustand';
-import { mobileApi, setMobileToken } from '../lib/api';
+import { mobileApi, setMobileToken, registerMobileUnauthorizedHandler } from '../lib/api';
+import { useCartStore } from './useCartStore';
+import { useMobileStoresStore } from './useMobileStoresStore';
 import { i18n, translateApiError } from '@bizx/utils';
 import type { UserProfile, LoginDto, RegisterDto } from '@bizx/common-types';
 
@@ -92,8 +94,17 @@ export const useMobileAuthStore = create<MobileAuthState>((set) => ({
       await mobileApi.auth.logout();
     } catch {
       // Ignore
+    } finally {
+      setMobileToken(null);
+      useCartStore.getState().clearCart();
+      useMobileStoresStore.getState().clearUserData();
+      set({ user: null, error: null });
     }
-    setMobileToken(null);
-    set({ user: null, error: null });
   }
 }));
+
+registerMobileUnauthorizedHandler(() => {
+  useCartStore.getState().clearCart();
+  useMobileStoresStore.getState().clearUserData();
+  useMobileAuthStore.setState({ user: null, error: null, isLoading: false });
+});
