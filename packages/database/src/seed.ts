@@ -128,6 +128,11 @@ const ALL_PERMISSIONS = [...STORE_PERMISSIONS, ...PLATFORM_PERMISSIONS];
 dotenv.config({ path: path.resolve(process.cwd(), '../../.env') });
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
+if (process.env.NODE_ENV === 'production' && process.env.ALLOW_DESTRUCTIVE_SEED !== 'true') {
+  console.error('❌ Refusing to run destructive database seed in NODE_ENV=production!');
+  process.exit(1);
+}
+
 const connectionString =
   process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/bizx_db';
 

@@ -51,13 +51,18 @@ services:
       - '3101:3101'
     environment:
       PORT: 3101
-      NODE_ENV: production
+      NODE_ENV: ${NODE_ENV:-production}
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-bizx_db}
       REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set to a 32+ char random secret}
+      MEDIA_SIGNING_SECRET: ${MEDIA_SIGNING_SECRET:?MEDIA_SIGNING_SECRET must be set to a distinct 32+ char random secret}
+      TRUST_PROXY: ${TRUST_PROXY:-1}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
       CLOUDFLARE_R2_ACCOUNT_ID: ${CLOUDFLARE_R2_ACCOUNT_ID:-}
       CLOUDFLARE_R2_ACCESS_KEY_ID: ${CLOUDFLARE_R2_ACCESS_KEY_ID:-}
       CLOUDFLARE_R2_SECRET_ACCESS_KEY: ${CLOUDFLARE_R2_SECRET_ACCESS_KEY:-}
       CLOUDFLARE_R2_BUCKET_NAME: ${CLOUDFLARE_R2_BUCKET_NAME:-bizx-assets}
+      CLOUDFLARE_R2_PRIVATE_BUCKET_NAME: ${CLOUDFLARE_R2_PRIVATE_BUCKET_NAME:-}
       CLOUDFLARE_R2_PUBLIC_DOMAIN: ${CLOUDFLARE_R2_PUBLIC_DOMAIN:-https://assets.bizx.io}
     depends_on:
       postgres:
