@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import * as XLSX from 'xlsx';
+import writeXlsxFile from 'write-excel-file/browser';
 import {
   ResponsiveContainer,
   LineChart,
@@ -28,7 +28,7 @@ import {
 } from '@bizx/ui';
 import {
   formatMoney as formatMoneyShared,
-  sanitizeSpreadsheetRows,
+  buildSafeExcelSheetData,
   serializeSafeCsv
 } from '@bizx/utils';
 import {
@@ -182,51 +182,59 @@ export const PlatformAnalyticsView: React.FC<PlatformAnalyticsViewProps> = ({
   const rangeFrom = activeRowsCount === 0 ? 0 : startIdx + 1;
   const rangeTo = Math.min(startIdx + pageSize, activeRowsCount);
 
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     if (!data) return;
-    const wb = XLSX.utils.book_new();
 
-    const summaryRows = sanitizeSpreadsheetRows([
-      { Metric: t('platform.gmv'), Value: `${(data.totalPlatformRevenue / 100).toFixed(2)} UAH` },
-      { Metric: t('platform.orders'), Value: data.totalOrders },
-      { Metric: t('platform.stores'), Value: data.totalStores },
-      { Metric: t('platform.activeStores'), Value: data.activeStores },
-      { Metric: t('platform.products'), Value: data.totalProducts }
-    ]);
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summaryRows), 'Summary');
-
-    const storesRows = sanitizeSpreadsheetRows(
-      storesChartData.map((s) => ({
-        [t('platform.storeCol')]: s.storeName,
-        [t('analytics.ordersAxis')]: s.ordersCount,
-        [t('analytics.revenueAxis')]: s.revenueUah,
-        [t('analytics.avgCheck')]: s.aovUah,
-        [t('analytics.shareOfRevenue')]: `${s.sharePct}%`
-      }))
+    const summaryData = buildSafeExcelSheetData(
+      ['Metric', 'Value'],
+      [
+        [t('platform.gmv'), `${(data.totalPlatformRevenue / 100).toFixed(2)} UAH`],
+        [t('platform.orders'), data.totalOrders],
+        [t('platform.stores'), data.totalStores],
+        [t('platform.activeStores'), data.activeStores],
+        [t('platform.products'), data.totalProducts]
+      ]
     );
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(storesRows), 'Stores');
 
-    const dailyRows = sanitizeSpreadsheetRows(
-      dailyChartData.map((d) => ({
-        [t('common.date')]: d.date,
-        [t('analytics.ordersAxis')]: d.ordersCount,
-        [t('analytics.revenueAxis')]: d.revenueUah,
-        [t('analytics.avgCheck')]: d.aovUah
-      }))
+    const storesData = buildSafeExcelSheetData(
+      [
+        t('platform.storeCol'),
+        t('analytics.ordersAxis'),
+        t('analytics.revenueAxis'),
+        t('analytics.avgCheck'),
+        t('analytics.shareOfRevenue')
+      ],
+      storesChartData.map((s) => [
+        s.storeName,
+        s.ordersCount,
+        s.revenueUah,
+        s.aovUah,
+        `${s.sharePct}%`
+      ])
     );
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dailyRows), 'Daily');
 
-    const monthlyRows = sanitizeSpreadsheetRows(
-      monthlyChartData.map((m) => ({
-        Month: m.month,
-        [t('analytics.ordersAxis')]: m.ordersCount,
-        [t('analytics.revenueAxis')]: m.revenueUah
-      }))
+    const dailyData = buildSafeExcelSheetData(
+      [
+        t('common.date'),
+        t('analytics.ordersAxis'),
+        t('analytics.revenueAxis'),
+        t('analytics.avgCheck')
+      ],
+      dailyChartData.map((d) => [d.date, d.ordersCount, d.revenueUah, d.aovUah])
     );
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(monthlyRows), 'Monthly');
+
+    const monthlyData = buildSafeExcelSheetData(
+      ['Month', t('analytics.ordersAxis'), t('analytics.revenueAxis')],
+      monthlyChartData.map((m) => [m.month, m.ordersCount, m.revenueUah])
+    );
 
     const dateTag = new Date().toISOString().slice(0, 10);
-    XLSX.writeFile(wb, `bizx-platform-analytics-${dateTag}.xlsx`);
+    await writeXlsxFile([
+      { sheet: 'Summary', data: summaryData },
+      { sheet: 'Stores', data: storesData },
+      { sheet: 'Daily', data: dailyData },
+      { sheet: 'Monthly', data: monthlyData }
+    ]).toFile(`bizx-platform-analytics-${dateTag}.xlsx`);
   };
 
   const handleExportCsv = () => {

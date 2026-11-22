@@ -1955,6 +1955,34 @@ export function sanitizeSpreadsheetRows<T extends Record<string, unknown>>(
   });
 }
 
+export type SafeExcelCell =
+  | { type: typeof String; value: string; fontWeight?: 'bold' }
+  | { type: typeof Number; value: number; fontWeight?: 'bold' };
+
+/**
+ * Builds formula-safe typed 2D sheet data compatible with `write-excel-file`.
+ * Automatically applies CWE-1236 neutralization to all headers and cells.
+ */
+export function buildSafeExcelSheetData(
+  headers: ReadonlyArray<string>,
+  rows: ReadonlyArray<ReadonlyArray<unknown>>
+): SafeExcelCell[][] {
+  const headerRow: SafeExcelCell[] = headers.map((h) => ({
+    type: String,
+    value: String(sanitizeSpreadsheetCell(h)),
+    fontWeight: 'bold'
+  }));
+  const dataRows: SafeExcelCell[][] = rows.map((row) =>
+    row.map((val) => {
+      const safe = sanitizeSpreadsheetCell(val);
+      return typeof safe === 'number'
+        ? { type: Number, value: safe }
+        : { type: String, value: safe };
+    })
+  );
+  return [headerRow, ...dataRows];
+}
+
 /**
  * Zero-dependency RFC-4180 CSV serializer with automatic CWE-1236 formula neutralization.
  */
