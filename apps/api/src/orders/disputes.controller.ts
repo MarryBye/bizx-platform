@@ -5,13 +5,13 @@ import {
   Param,
   Query,
   Body,
-  UseGuards,
-  UsePipes
+  UseGuards
 } from '@nestjs/common';
 import { DisputesService } from './disputes.service.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import { CurrentUser } from '../auth/decorators/auth.decorators.js';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
+import { SafeUuidPipe } from '../common/security/safe-uuid.pipe.js';
 import {
   resolveDisputeDtoSchema,
   issueStoreStrikeDtoSchema,
@@ -35,7 +35,10 @@ export class DisputesController {
     @CurrentUser('sub') userId: string,
     @Query('status') status?: string
   ): Promise<ApiResponse<PlatformDisputeListItem[]>> {
-    const data = await this.disputesService.listPlatformDisputes(userId, status);
+    const data = await this.disputesService.listPlatformDisputes(
+      userId,
+      typeof status === 'string' ? status : undefined
+    );
     return { success: true, data, timestamp: new Date().toISOString() };
   }
 
@@ -49,7 +52,7 @@ export class DisputesController {
 
   @Get('disputes/:disputeId')
   async getDisputeDetail(
-    @Param('disputeId') disputeId: string,
+    @Param('disputeId', SafeUuidPipe) disputeId: string,
     @CurrentUser('sub') userId: string
   ): Promise<ApiResponse<unknown>> {
     const data = await this.disputesService.getPlatformDisputeDetail(disputeId, userId);
@@ -57,11 +60,10 @@ export class DisputesController {
   }
 
   @Post('disputes/:disputeId/resolve')
-  @UsePipes(new ZodValidationPipe(resolveDisputeDtoSchema))
   async resolveDispute(
-    @Param('disputeId') disputeId: string,
+    @Param('disputeId', SafeUuidPipe) disputeId: string,
     @CurrentUser('sub') userId: string,
-    @Body() dto: ResolveDisputeDto
+    @Body(new ZodValidationPipe(resolveDisputeDtoSchema)) dto: ResolveDisputeDto
   ): Promise<
     ApiResponse<{ dispute: OrderDisputeItem; strikeIssued: boolean; storeSuspended: boolean }>
   > {
@@ -71,7 +73,7 @@ export class DisputesController {
 
   @Get('stores/:storeId/strikes')
   async getStoreStrikes(
-    @Param('storeId') storeId: string,
+    @Param('storeId', SafeUuidPipe) storeId: string,
     @CurrentUser('sub') userId: string
   ): Promise<ApiResponse<StoreStrikeItem[]>> {
     const data = await this.disputesService.getStoreStrikes(storeId, userId);
@@ -80,7 +82,7 @@ export class DisputesController {
 
   @Post('stores/:storeId/strikes')
   async issueStoreStrike(
-    @Param('storeId') storeId: string,
+    @Param('storeId', SafeUuidPipe) storeId: string,
     @CurrentUser('sub') userId: string,
     @Body(new ZodValidationPipe(issueStoreStrikeDtoSchema)) dto: IssueStoreStrikeDto
   ): Promise<
@@ -91,11 +93,10 @@ export class DisputesController {
   }
 
   @Post('strikes/:strikeId/revoke')
-  @UsePipes(new ZodValidationPipe(revokeStrikeDtoSchema))
   async revokeStrike(
-    @Param('strikeId') strikeId: string,
+    @Param('strikeId', SafeUuidPipe) strikeId: string,
     @CurrentUser('sub') userId: string,
-    @Body() dto: RevokeStrikeDto
+    @Body(new ZodValidationPipe(revokeStrikeDtoSchema)) dto: RevokeStrikeDto
   ): Promise<ApiResponse<{ strike: StoreStrikeItem; storeSuspensionLifted: boolean }>> {
     const data = await this.disputesService.revokeStrike(strikeId, userId, dto);
     return { success: true, data, timestamp: new Date().toISOString() };

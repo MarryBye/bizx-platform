@@ -18,6 +18,7 @@ import type { Request, Response } from 'express';
 import { AuthService } from './auth.service.js';
 import { StorageService } from '../storage/storage.service.js';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
+import { CsrfOriginGuard } from '../common/security/csrf-origin.guard.js';
 import { JwtAuthGuard } from './guards/jwt-auth.guard.js';
 import { CurrentUser, Public } from './decorators/auth.decorators.js';
 import {
@@ -55,18 +56,21 @@ export class AuthController {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      path: '/',
+      path: '/auth',
       maxAge: REFRESH_MAX_AGE
     });
   }
 
   private clearRefreshCookie(res: Response) {
-    res.clearCookie(REFRESH_COOKIE_NAME, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      path: '/'
-    });
+    // Clear both scoped /auth cookie and any legacy / cookie
+    for (const cookiePath of ['/auth', '/']) {
+      res.clearCookie(REFRESH_COOKIE_NAME, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: cookiePath
+      });
+    }
   }
 
   @Public()
@@ -122,6 +126,7 @@ export class AuthController {
   }
 
   @Public()
+  @UseGuards(CsrfOriginGuard)
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Post('refresh')
   async refresh(
@@ -139,7 +144,7 @@ export class AuthController {
     const rawToken = cookieToken || bodyToken;
 
     if (!rawToken) {
-      throw new UnauthorizedException('Refresh токен не передан');
+      throw new UnauthorizedException('Refresh токен не передано');
     }
 
     const metadata = {
@@ -159,22 +164,28 @@ export class AuthController {
     };
   }
 
+  @Public()
+  @UseGuards(CsrfOriginGuard)
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Post('logout')
   async logout(
     @Req() req: Request,
-    @Res({ passthrough: true }) res: Response,
-    @CurrentUser('sub') userId?: string
+    @Res({ passthrough: true }) res: Response
   ): Promise<ApiResponse<{ message: string }>> {
     const rawToken =
-      req.cookies?.[REFRESH_COOKIE_NAME] || (req.body as RefreshTokenDto)?.refreshToken;
+      typeof req.cookies?.[REFRESH_COOKIE_NAME] === 'string'
+        ? req.cookies[REFRESH_COOKIE_NAME]
+        : typeof (req.body as RefreshTokenDto)?.refreshToken === 'string'
+          ? (req.body as RefreshTokenDto).refreshToken
+          : undefined;
     const authHeader = req.headers.authorization;
     const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.split(' ')[1] : undefined;
-    await this.authService.logout(rawToken, userId, bearerToken);
+    await this.authService.logout(rawToken, undefined, bearerToken);
     this.clearRefreshCookie(res);
 
     return {
       success: true,
-      data: { message: 'Вы успешно вышли из системы' },
+      data: { message: 'Ви успішно вийшли з системи' },
       timestamp: new Date().toISOString()
     };
   }
@@ -206,13 +217,14 @@ export class AuthController {
 
   @Post('me/avatar')
   @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_IMAGE_FILE_SIZE } }))
   async uploadAvatar(
     @CurrentUser('sub') userId: string,
     @UploadedFile() rawFile?: UploadedFileDto
   ): Promise<ApiResponse<UserProfile>> {
     const file = validateImageFile(rawFile);
-    const fileKey = this.storageService.generateFileKey('avatars', file.originalname);
+    const fileKey = this.storageService.generateFileKey('avatars', file.originalname, file.mimetype);
     const publicUrl = await this.storageService.uploadBuffer(fileKey, file.buffer, file.mimetype);
 
     const profile = await this.authService.updateAvatar(userId, publicUrl);

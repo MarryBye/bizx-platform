@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service.js';
+import { isLocalDevEnv } from '../common/security/security-config.js';
 import { users, stores, storeMembers, platformMembers, eq, and, isNull, inArray } from '@bizx/database';
 import type {
   SubscriptionPlan,
@@ -175,12 +176,12 @@ export class SubscriptionsService {
     dto: SubscribeDto
   ): Promise<UserSubscriptionDetails> {
     if (
-      process.env.NODE_ENV === 'production' &&
+      !isLocalDevEnv() &&
       process.env.ALLOW_MOCK_BILLING !== 'true' &&
       dto.tier !== 'free'
     ) {
       throw new ForbiddenException(
-        'Пряма активація платних тарифів вимкнена в production. Оплатіть підписку через платіжний шлюз.'
+        'Пряма активація платних тарифів вимкнена поза локальним середовищем розробки. Оплатіть підписку через платіжний шлюз.'
       );
     }
 

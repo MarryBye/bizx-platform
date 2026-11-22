@@ -258,7 +258,10 @@ export class InboxService {
     }
 
     const bodyText = dto.body?.trim() || null;
-    const attachments = this.storageService.stripAttachmentsSignatures(dto.attachments || []);
+    const attachments = this.storageService.assertAttachmentsScopedToPrefix(
+      dto.attachments || [],
+      `inbox/${threadId}`
+    );
     if (!bodyText && attachments.length === 0) {
       throw new BadRequestException('Повідомлення не може бути порожнім');
     }

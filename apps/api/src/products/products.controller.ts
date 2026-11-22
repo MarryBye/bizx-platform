@@ -14,7 +14,7 @@ import {
   UploadedFile
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { JwtService } from '@nestjs/jwt';
+import { Throttle } from '@nestjs/throttler';
 import type { Request } from 'express';
 import {
   ProductsService,
@@ -22,9 +22,11 @@ import {
   type ProductDetailItem
 } from './products.service.js';
 import { StorageService } from '../storage/storage.service.js';
+import { AuthTokenVerifierService } from '../auth/auth-token-verifier.service.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import { CurrentUser, Public } from '../auth/decorators/auth.decorators.js';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
+import { SafeUuidPipe } from '../common/security/safe-uuid.pipe.js';
 import {
   validateImageFile,
   MAX_IMAGE_FILE_SIZE,
@@ -52,24 +54,11 @@ export class ProductsController {
   constructor(
     private readonly productsService: ProductsService,
     private readonly storageService: StorageService,
-    private readonly jwtService: JwtService
+    private readonly authTokenVerifier: AuthTokenVerifierService
   ) {}
 
   private async extractOptionalUserId(req: Request): Promise<string | undefined> {
-    const authHeader = req.headers.authorization;
-    const token =
-      (authHeader?.startsWith('Bearer ') ? authHeader.slice(7).trim() : undefined) ||
-      req.cookies?.['access_token'];
-    if (!token) return undefined;
-    try {
-      const payload = await this.jwtService.verifyAsync<{ sub?: string; tokenType?: string }>(token);
-      if (payload?.tokenType === 'access' && typeof payload.sub === 'string') {
-        return payload.sub;
-      }
-    } catch {
-      // ignore invalid optional token on public route
-    }
-    return undefined;
+    return this.authTokenVerifier.verifyOptionalBearerHeader(req.headers.authorization);
   }
 
   // ==================== КАТЕГОРИИ ТОВАРОВ ====================
@@ -77,7 +66,7 @@ export class ProductsController {
   @Public()
   @Get('store/:storeId/categories')
   async getCategories(
-    @Param('storeId') storeId: string,
+    @Param('storeId', SafeUuidPipe) storeId: string,
     @Req() req: Request
   ): Promise<ApiResponse<ProductCategoryRecord[]>> {
     const callerUserId = await this.extractOptionalUserId(req);
@@ -90,11 +79,10 @@ export class ProductsController {
   }
 
   @Post('store/:storeId/categories')
-  @UsePipes(new ZodValidationPipe(createProductCategoryDtoSchema))
   async createCategory(
-    @Param('storeId') storeId: string,
+    @Param('storeId', SafeUuidPipe) storeId: string,
     @CurrentUser('sub') userId: string,
-    @Body() dto: CreateProductCategoryDto
+    @Body(new ZodValidationPipe(createProductCategoryDtoSchema)) dto: CreateProductCategoryDto
   ): Promise<ApiResponse<ProductCategoryRecord>> {
     const category = await this.productsService.createProductCategory(storeId, userId, dto);
     return {
@@ -106,7 +94,7 @@ export class ProductsController {
 
   @Patch('categories/:id')
   async updateCategory(
-    @Param('id') id: string,
+    @Param('id', SafeUuidPipe) id: string,
     @CurrentUser('sub') userId: string,
     @Body(new ZodValidationPipe(updateProductCategoryDtoSchema)) dto: UpdateProductCategoryDto
   ): Promise<ApiResponse<ProductCategoryRecord>> {
@@ -120,7 +108,7 @@ export class ProductsController {
 
   @Delete('categories/:id')
   async deleteCategory(
-    @Param('id') id: string,
+    @Param('id', SafeUuidPipe) id: string,
     @CurrentUser('sub') userId: string
   ): Promise<ApiResponse<{ message: string }>> {
     const result = await this.productsService.deleteProductCategory(id, userId);
@@ -136,7 +124,7 @@ export class ProductsController {
   @Public()
   @Get('store/:storeId')
   async getStoreProducts(
-    @Param('storeId') storeId: string,
+    @Param('storeId', SafeUuidPipe) storeId: string,
     @Query(new ZodValidationPipe(productFilterQuerySchema))
     query: ProductFilterQuery,
     @Req() req: Request
@@ -153,7 +141,7 @@ export class ProductsController {
   @Public()
   @Get(':id')
   async getProductById(
-    @Param('id') id: string,
+    @Param('id', SafeUuidPipe) id: string,
     @Req() req: Request
   ): Promise<ApiResponse<ProductDetailItem>> {
     const callerUserId = await this.extractOptionalUserId(req);
@@ -166,11 +154,10 @@ export class ProductsController {
   }
 
   @Post('store/:storeId')
-  @UsePipes(new ZodValidationPipe(createProductDtoSchema))
   async createProduct(
-    @Param('storeId') storeId: string,
+    @Param('storeId', SafeUuidPipe) storeId: string,
     @CurrentUser('sub') userId: string,
-    @Body() dto: CreateProductDto
+    @Body(new ZodValidationPipe(createProductDtoSchema)) dto: CreateProductDto
   ): Promise<ApiResponse<ProductRecord>> {
     const product = await this.productsService.createProduct(storeId, userId, dto);
     return {
@@ -181,11 +168,10 @@ export class ProductsController {
   }
 
   @Patch(':id')
-  @UsePipes(new ZodValidationPipe(updateProductDtoSchema))
   async updateProduct(
-    @Param('id') id: string,
+    @Param('id', SafeUuidPipe) id: string,
     @CurrentUser('sub') userId: string,
-    @Body() dto: UpdateProductDto
+    @Body(new ZodValidationPipe(updateProductDtoSchema)) dto: UpdateProductDto
   ): Promise<ApiResponse<ProductRecord>> {
     const updated = await this.productsService.updateProduct(id, userId, dto);
     return {
@@ -196,15 +182,20 @@ export class ProductsController {
   }
 
   @Post(':id/image')
+  @Throttle({ default: { limit: 15, ttl: 60_000 } })
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_IMAGE_FILE_SIZE } }))
   async uploadProductImage(
-    @Param('id') id: string,
+    @Param('id', SafeUuidPipe) id: string,
     @CurrentUser('sub') userId: string,
     @UploadedFile() rawFile?: UploadedFileDto
   ): Promise<ApiResponse<ProductRecord>> {
     await this.productsService.assertProductOwnership(id, userId);
     const file = validateImageFile(rawFile);
-    const fileKey = this.storageService.generateFileKey('products', file.originalname);
+    const fileKey = this.storageService.generateFileKey(
+      'products',
+      file.originalname,
+      file.mimetype
+    );
     const publicUrl = await this.storageService.uploadBuffer(fileKey, file.buffer, file.mimetype);
 
     const updated = await this.productsService.updateProduct(id, userId, { imageUrl: publicUrl });
@@ -217,7 +208,7 @@ export class ProductsController {
 
   @Delete(':id')
   async deleteProduct(
-    @Param('id') id: string,
+    @Param('id', SafeUuidPipe) id: string,
     @CurrentUser('sub') userId: string
   ): Promise<ApiResponse<{ message: string }>> {
     const result = await this.productsService.deleteProduct(id, userId);

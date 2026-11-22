@@ -189,11 +189,6 @@ export class DisputesService {
       throw new BadRequestException('Цей спір вже закрито');
     }
 
-    const [order] = await this.databaseService.db
-      .select()
-      .from(orders)
-      .where(eq(orders.id, orderId));
-
     const now = new Date();
     const updated = await this.databaseService.db.transaction(async (tx) => {
       const [row] = await tx
@@ -204,22 +199,50 @@ export class DisputesService {
           resolutionNote: 'Питання вирішено: клієнт самостійно відкликав скаргу без наслідків для бізнесу.',
           updatedAt: now
         })
-        .where(eq(orderDisputes.id, disputeId))
+        .where(
+          and(
+            eq(orderDisputes.id, disputeId),
+            eq(orderDisputes.orderId, orderId),
+            inArray(orderDisputes.status, ['open_store', 'escalated_platform'])
+          )
+        )
         .returning();
 
-      // Якщо замовлення вже доставлено і кошти були в холді, розморожуємо виплату закладу
-      if (order && order.status === 'delivered' && order.payoutStatus === 'held') {
-        await tx
+      if (!row) {
+        throw new ConflictException('Цей спір вже було закрито');
+      }
+
+      await tx.execute(sql`SELECT id FROM orders WHERE id = ${orderId} FOR UPDATE`);
+      const [lockedOrder] = await tx
+        .select()
+        .from(orders)
+        .where(eq(orders.id, orderId));
+
+      // Якщо замовлення вже доставлено, реально оплачено (або готівка) і кошти були в холді — атомарно розморожуємо Escrow
+      const isActuallyPaid =
+        lockedOrder &&
+        (lockedOrder.paymentStatus === 'paid' || lockedOrder.paymentMethod === 'cash');
+      if (
+        lockedOrder &&
+        lockedOrder.status === 'delivered' &&
+        lockedOrder.payoutStatus === 'held' &&
+        isActuallyPaid
+      ) {
+        const [releasedOrder] = await tx
           .update(orders)
           .set({ payoutStatus: 'released', updatedAt: now })
-          .where(eq(orders.id, orderId));
-        await tx
-          .update(stores)
-          .set({
-            payoutBalance: sql`${stores.payoutBalance} + ${order.totalAmount}`,
-            updatedAt: now
-          })
-          .where(eq(stores.id, order.storeId));
+          .where(and(eq(orders.id, orderId), eq(orders.payoutStatus, 'held')))
+          .returning({ id: orders.id });
+
+        if (releasedOrder) {
+          await tx
+            .update(stores)
+            .set({
+              payoutBalance: sql`${stores.payoutBalance} + ${lockedOrder.totalAmount}`,
+              updatedAt: now
+            })
+            .where(eq(stores.id, lockedOrder.storeId));
+        }
       }
 
       await tx.insert(orderMessages).values({
@@ -273,8 +296,18 @@ export class DisputesService {
           escalationReason: dto?.reason?.trim() || null,
           updatedAt: now
         })
-        .where(eq(orderDisputes.id, disputeId))
+        .where(
+          and(
+            eq(orderDisputes.id, disputeId),
+            eq(orderDisputes.orderId, orderId),
+            eq(orderDisputes.status, 'open_store')
+          )
+        )
         .returning();
+
+      if (!row) {
+        throw new ConflictException('Скаргу вже передано в BizX або закрито');
+      }
 
       const extra = dto?.reason?.trim() ? ` Коментар: ${dto.reason.trim()}` : '';
       await tx.insert(orderMessages).values({
@@ -490,20 +523,21 @@ export class DisputesService {
       throw new BadRequestException('Цю скаргу вже розглянуто та закрито');
     }
 
-    const [order] = await this.databaseService.db
-      .select()
-      .from(orders)
-      .where(eq(orders.id, dispute.orderId));
-
-    if (!order) {
-      throw new NotFoundException('Пов’язане замовлення не знайдено');
-    }
-
     const now = new Date();
     let strikeIssued = false;
     let storeSuspended = false;
 
     const updatedDispute = await this.databaseService.db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT id FROM orders WHERE id = ${dispute.orderId} FOR UPDATE`);
+      const [lockedOrder] = await tx
+        .select()
+        .from(orders)
+        .where(eq(orders.id, dispute.orderId));
+
+      if (!lockedOrder) {
+        throw new NotFoundException('Пов’язане замовлення не знайдено');
+      }
+
       if (dto.decision === 'business') {
         const [resolved] = await tx
           .update(orderDisputes)
@@ -514,26 +548,45 @@ export class DisputesService {
             resolutionNote: dto.resolutionNote.trim(),
             updatedAt: now
           })
-          .where(eq(orderDisputes.id, disputeId))
+          .where(
+            and(
+              eq(orderDisputes.id, disputeId),
+              inArray(orderDisputes.status, ['escalated_platform', 'open_store'])
+            )
+          )
           .returning();
 
-        // Якщо замовлення вже доставлено і було в холді, переводимо кошти у виплату закладу
-        if (order.status === 'delivered' && order.payoutStatus === 'held') {
-          await tx
+        if (!resolved) {
+          throw new ConflictException('Цю скаргу вже було розглянуто та закрито');
+        }
+
+        // Якщо замовлення вже доставлено, реально оплачено (або готівка) і було в холді, переводимо кошти у виплату закладу
+        const isActuallyPaid =
+          lockedOrder.paymentStatus === 'paid' || lockedOrder.paymentMethod === 'cash';
+        if (
+          lockedOrder.status === 'delivered' &&
+          lockedOrder.payoutStatus === 'held' &&
+          isActuallyPaid
+        ) {
+          const [releasedOrder] = await tx
             .update(orders)
             .set({ payoutStatus: 'released', updatedAt: now })
-            .where(eq(orders.id, order.id));
-          await tx
-            .update(stores)
-            .set({
-              payoutBalance: sql`${stores.payoutBalance} + ${order.totalAmount}`,
-              updatedAt: now
-            })
-            .where(eq(stores.id, order.storeId));
+            .where(and(eq(orders.id, lockedOrder.id), eq(orders.payoutStatus, 'held')))
+            .returning({ id: orders.id });
+
+          if (releasedOrder) {
+            await tx
+              .update(stores)
+              .set({
+                payoutBalance: sql`${stores.payoutBalance} + ${lockedOrder.totalAmount}`,
+                updatedAt: now
+              })
+              .where(eq(stores.id, lockedOrder.storeId));
+          }
         }
 
         await tx.insert(orderMessages).values({
-          orderId: order.id,
+          orderId: lockedOrder.id,
           senderId: userId,
           senderType: 'system',
           body: `Рішення BizX: скаргу закрито на користь закладу. Коментар: ${dto.resolutionNote.trim()}`,
@@ -555,13 +608,22 @@ export class DisputesService {
           resolutionNote: dto.resolutionNote.trim(),
           updatedAt: now
         })
-        .where(eq(orderDisputes.id, disputeId))
+        .where(
+          and(
+            eq(orderDisputes.id, disputeId),
+            inArray(orderDisputes.status, ['escalated_platform', 'open_store'])
+          )
+        )
         .returning();
 
-      const wasReleased = order.payoutStatus === 'released';
+      if (!resolved) {
+        throw new ConflictException('Цю скаргу вже було розглянуто та закрито');
+      }
+
+      const wasReleased = lockedOrder.payoutStatus === 'released';
       const nextPayoutStatus = wasReleased ? 'clawback' : 'refunded';
 
-      await tx
+      const [updatedOrder] = await tx
         .update(orders)
         .set({
           status: 'cancelled',
@@ -570,16 +632,21 @@ export class DisputesService {
           refundOfferStatus: null,
           updatedAt: now
         })
-        .where(eq(orders.id, order.id));
+        .where(and(eq(orders.id, lockedOrder.id), eq(orders.payoutStatus, lockedOrder.payoutStatus)))
+        .returning({ id: orders.id });
+
+      if (!updatedOrder) {
+        throw new ConflictException('Статус виплати замовлення вже було змінено');
+      }
 
       if (wasReleased) {
         await tx
           .update(stores)
           .set({
-            payoutBalance: sql`${stores.payoutBalance} - ${order.totalAmount}`,
+            payoutBalance: sql`${stores.payoutBalance} - ${lockedOrder.totalAmount}`,
             updatedAt: now
           })
-          .where(eq(stores.id, order.storeId));
+          .where(eq(stores.id, lockedOrder.storeId));
       }
 
       if (dto.issueStrike) {
@@ -589,7 +656,7 @@ export class DisputesService {
           .from(storeStrikes)
           .where(
             and(
-              eq(storeStrikes.storeId, order.storeId),
+              eq(storeStrikes.storeId, lockedOrder.storeId),
               isNull(storeStrikes.revokedAt),
               or(isNull(storeStrikes.expiresAt), gt(storeStrikes.expiresAt, now))
             )
@@ -599,7 +666,7 @@ export class DisputesService {
         const suspDays = willTriggerSuspension ? (dto.suspensionDays ?? 7) : null;
 
         await tx.insert(storeStrikes).values({
-          storeId: order.storeId,
+          storeId: lockedOrder.storeId,
           disputeId,
           issuedByUserId: userId,
           reason: (dto.strikeReason?.trim() || dto.resolutionNote.trim()),
@@ -626,12 +693,12 @@ export class DisputesService {
               suspensionReason: `Автоматичне призупинення через 3 активні страйки (${durationLabel}).`,
               updatedAt: now
             })
-            .where(eq(stores.id, order.storeId));
+            .where(eq(stores.id, lockedOrder.storeId));
           storeSuspended = true;
         }
       }
 
-      const amountUah = (order.totalAmount / 100).toFixed(2);
+      const amountUah = (lockedOrder.totalAmount / 100).toFixed(2);
       const payoutExplain = wasReleased
         ? 'суму утримано з балансу виплат закладу'
         : 'кошти повернено з резерву замовлення';
@@ -642,7 +709,7 @@ export class DisputesService {
           : '';
 
       await tx.insert(orderMessages).values({
-        orderId: order.id,
+        orderId: lockedOrder.id,
         senderId: userId,
         senderType: 'system',
         body: `Рішення BizX: скаргу вирішено на користь клієнта. Замовлення скасовано, повернення ${amountUah} ₴ (${payoutExplain}).${strikeNote} Коментар: ${dto.resolutionNote.trim()}`,
@@ -694,21 +761,24 @@ export class DisputesService {
       .where(eq(storeStrikes.storeId, storeId))
       .orderBy(desc(storeStrikes.createdAt));
 
-    const userIds = Array.from(
-      new Set(
-        rows
-          .flatMap((r) => [r.issuedByUserId, r.revokedByUserId])
-          .filter((id): id is string => Boolean(id))
-      )
-    );
+    const isPlatformStaff = allowed;
     const userMap = new Map<string, string>();
-    if (userIds.length > 0) {
-      const uRows = await this.databaseService.db
-        .select({ id: users.id, name: users.name })
-        .from(users)
-        .where(inArray(users.id, userIds));
-      for (const u of uRows) {
-        userMap.set(u.id, u.name);
+    if (isPlatformStaff) {
+      const userIds = Array.from(
+        new Set(
+          rows
+            .flatMap((r) => [r.issuedByUserId, r.revokedByUserId])
+            .filter((id): id is string => Boolean(id))
+        )
+      );
+      if (userIds.length > 0) {
+        const uRows = await this.databaseService.db
+          .select({ id: users.id, name: users.name })
+          .from(users)
+          .where(inArray(users.id, userIds));
+        for (const u of uRows) {
+          userMap.set(u.id, u.name);
+        }
       }
     }
 
@@ -717,14 +787,14 @@ export class DisputesService {
       id: r.id,
       storeId: r.storeId,
       disputeId: r.disputeId,
-      issuedByUserId: r.issuedByUserId,
-      issuedByName: r.issuedByUserId ? userMap.get(r.issuedByUserId) || null : null,
+      issuedByUserId: isPlatformStaff ? r.issuedByUserId : null,
+      issuedByName: isPlatformStaff && r.issuedByUserId ? userMap.get(r.issuedByUserId) || null : null,
       reason: r.reason,
       suspensionDays: r.suspensionDays,
       expiresAt: r.expiresAt ? r.expiresAt.toISOString() : null,
       revokedAt: r.revokedAt ? r.revokedAt.toISOString() : null,
-      revokedByUserId: r.revokedByUserId,
-      revokedByName: r.revokedByUserId ? userMap.get(r.revokedByUserId) || null : null,
+      revokedByUserId: isPlatformStaff ? r.revokedByUserId : null,
+      revokedByName: isPlatformStaff && r.revokedByUserId ? userMap.get(r.revokedByUserId) || null : null,
       revokeReason: r.revokeReason,
       isActive: !r.revokedAt && (!r.expiresAt || r.expiresAt > now),
       createdAt: r.createdAt.toISOString()
@@ -762,8 +832,12 @@ export class DisputesService {
           revokedByUserId: userId,
           revokeReason: dto.revokeReason.trim()
         })
-        .where(eq(storeStrikes.id, strikeId))
+        .where(and(eq(storeStrikes.id, strikeId), isNull(storeStrikes.revokedAt)))
         .returning();
+
+      if (!revoked) {
+        throw new ConflictException('Цей страйк вже було знято раніше');
+      }
 
       const [remainingRes] = await tx
         .select({ cnt: count() })

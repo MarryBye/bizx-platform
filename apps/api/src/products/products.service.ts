@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { escapeIlikePattern } from '@bizx/utils';
 import { DatabaseService } from '../database/database.service.js';
 import { StoresService } from '../stores/stores.service.js';
 import { RbacService } from '../rbac/rbac.service.js';
@@ -260,7 +261,7 @@ export class ProductsService {
     }
 
     if (query.search) {
-      conditions.push(ilike(products.name, `%${query.search}%`));
+      conditions.push(ilike(products.name, `%${escapeIlikePattern(query.search)}%`));
     }
 
     const whereClause = and(...conditions);
@@ -422,12 +423,22 @@ export class ProductsService {
       }
     }
 
+    const updatePayload: Partial<typeof products.$inferInsert> = {
+      updatedAt: new Date()
+    };
+    if (dto.name !== undefined) updatePayload.name = dto.name;
+    if (dto.categoryId !== undefined) updatePayload.categoryId = dto.categoryId;
+    if (dto.sku !== undefined) updatePayload.sku = dto.sku;
+    if (dto.description !== undefined) updatePayload.description = dto.description;
+    if (dto.price !== undefined) updatePayload.price = dto.price;
+    if (dto.oldPrice !== undefined) updatePayload.oldPrice = dto.oldPrice;
+    if (dto.imageUrl !== undefined) updatePayload.imageUrl = dto.imageUrl;
+    if (dto.inventoryCount !== undefined) updatePayload.inventoryCount = dto.inventoryCount;
+    if (dto.isActive !== undefined) updatePayload.isActive = dto.isActive;
+
     const [updated] = await this.databaseService.db
       .update(products)
-      .set({
-        ...dto,
-        updatedAt: new Date()
-      })
+      .set(updatePayload)
       .where(eq(products.id, id))
       .returning();
 

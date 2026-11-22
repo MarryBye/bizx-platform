@@ -1,47 +1,53 @@
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module.js';
 import { GlobalExceptionFilter } from './common/pg-exception.filter.js';
+import {
+  validateSecurityConfig,
+  isAllowedCorsOrigin,
+  parseTrustProxySetting
+} from './common/security/security-config.js';
+import { securityHeadersMiddleware } from './common/security/security-headers.middleware.js';
 import { createLogger } from '@bizx/utils';
 
 const logger = createLogger('NestAPI');
 
-const DEFAULT_ALLOWED_ORIGINS = [
-  'http://localhost:3100',
-  'http://localhost:3102',
-  'http://localhost:3103',
-  'http://localhost:8081',
-  'http://localhost:19006',
-  'http://127.0.0.1:3100',
-  'http://127.0.0.1:3102',
-  'http://127.0.0.1:3103',
-  'http://127.0.0.1:8081'
-];
-
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, {
-    logger: ['error', 'warn', 'log']
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    logger: ['error', 'warn', 'log'],
+    bodyParser: false
   });
 
+  // Fail-fast check for production cryptographic secrets (after ConfigModule loads .env)
+  validateSecurityConfig();
+
+  app.disable('x-powered-by');
+  app.set('trust proxy', parseTrustProxySetting(process.env.TRUST_PROXY));
+
+  app.use(securityHeadersMiddleware);
+  app.useBodyParser('json', { limit: '1mb' });
+  app.useBodyParser('urlencoded', { extended: true, limit: '1mb' });
   app.use(cookieParser());
   app.useGlobalFilters(new GlobalExceptionFilter());
 
-  const envOrigins = (process.env.CORS_ORIGINS || '')
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
-  const allowedOrigins = new Set([...DEFAULT_ALLOWED_ORIGINS, ...envOrigins]);
-
   app.enableCors({
-    origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
-      if (!origin) return callback(null, true);
-      if (allowedOrigins.has(origin) || /^https?:\/\/([a-z0-9-]+\.)?bizx\.ua(:\d+)?$/i.test(origin)) {
-        return callback(null, true);
-      }
-      return callback(null, false);
+    origin: (
+      origin: string | undefined,
+      callback: (err: Error | null, allow?: boolean) => void
+    ) => {
+      return callback(null, isAllowedCorsOrigin(origin));
     },
-    credentials: true
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'X-Requested-With',
+      'X-Store-Preview-Token'
+    ],
+    maxAge: 600
   });
 
   const port = process.env.PORT || 3101;

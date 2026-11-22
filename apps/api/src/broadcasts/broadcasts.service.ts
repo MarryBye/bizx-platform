@@ -7,6 +7,7 @@ import {
 import { DatabaseService } from '../database/database.service.js';
 import { RbacService } from '../rbac/rbac.service.js';
 import { StorageService } from '../storage/storage.service.js';
+import { sanitizeAttachmentFileName } from '../common/security/safe-storage-key.js';
 import {
   stores,
   users,
@@ -429,8 +430,10 @@ export class BroadcastsService {
       ? [
           {
             url: params.attachmentUrl,
-            fileName: params.attachmentUrl.split('/').pop() || 'promo-image.jpg',
-            mimeType: params.attachmentUrl.toLowerCase().endsWith('.pdf')
+            fileName: sanitizeAttachmentFileName(
+              params.attachmentUrl.split('?')[0].split('/').pop() || 'promo-image.jpg'
+            ),
+            mimeType: params.attachmentUrl.split('?')[0].toLowerCase().endsWith('.pdf')
               ? 'application/pdf'
               : 'image/jpeg',
             size: 0
@@ -520,6 +523,7 @@ export class BroadcastsService {
 
     let relatedProductName: string | null = null;
     let attachmentUrl = dto.attachmentUrl?.trim() || null;
+    this.storageService.assertNotPrivateAttachmentUrl(attachmentUrl);
 
     if (dto.relatedProductId) {
       const [prod] = await this.databaseService.db
@@ -539,6 +543,7 @@ export class BroadcastsService {
       }
       relatedProductName = prod.name;
       if (!attachmentUrl && prod.imageUrl) {
+        this.storageService.assertNotPrivateAttachmentUrl(prod.imageUrl);
         attachmentUrl = prod.imageUrl;
       }
     }
@@ -563,6 +568,45 @@ export class BroadcastsService {
       );
     }
 
+    // Атомарно резервуємо квоту розсилки під advisory lock, щоб виключити TOCTOU при паралельних запитах
+    const campaign = await this.databaseService.db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtext(${'store_broadcast_quota:' + store.id}))`
+      );
+      const [usedRow] = await tx
+        .select({ cnt: count() })
+        .from(broadcastCampaigns)
+        .where(
+          and(
+            eq(broadcastCampaigns.scope, 'store'),
+            eq(broadcastCampaigns.storeId, store.id),
+            gte(broadcastCampaigns.createdAt, startOfUtcDay())
+          )
+        );
+      if (Number(usedRow?.cnt || 0) >= quota.dailyLimit) {
+        throw new BadRequestException(
+          `Вичерпано денний ліміт розсилок вашого тарифу (${quota.dailyLimit} на добу). Ліміт оновиться о 00:00 UTC.`
+        );
+      }
+
+      const [inserted] = await tx
+        .insert(broadcastCampaigns)
+        .values({
+          scope: 'store',
+          storeId: store.id,
+          createdByUserId: userId,
+          type: 'promo',
+          targetAudience: { kind: 'store_subscribers', storeId: store.id },
+          subject: dto.subject.slice(0, 255),
+          body: dto.body,
+          attachmentUrl,
+          relatedProductId: dto.relatedProductId ?? null,
+          recipientsCount: recipientIds.length
+        })
+        .returning();
+      return inserted;
+    });
+
     const recipientsCount = await this.dispatchInboxBatch({
       recipientIds,
       senderType: 'promo',
@@ -578,21 +622,12 @@ export class BroadcastsService {
       createdByUserId: userId
     });
 
-    const [campaign] = await this.databaseService.db
-      .insert(broadcastCampaigns)
-      .values({
-        scope: 'store',
-        storeId: store.id,
-        createdByUserId: userId,
-        type: 'promo',
-        targetAudience: { kind: 'store_subscribers', storeId: store.id },
-        subject: dto.subject.slice(0, 255),
-        body: dto.body,
-        attachmentUrl,
-        relatedProductId: dto.relatedProductId ?? null,
-        recipientsCount
-      })
-      .returning();
+    if (recipientsCount !== campaign.recipientsCount) {
+      await this.databaseService.db
+        .update(broadcastCampaigns)
+        .set({ recipientsCount })
+        .where(eq(broadcastCampaigns.id, campaign.id));
+    }
 
     const [author] = await this.databaseService.db
       .select({ name: users.name, email: users.email })
@@ -909,6 +944,7 @@ export class BroadcastsService {
     const senderName =
       dto.type === 'technical' ? 'BizX Технічна служба' : 'BizX Офіційні новини';
     const attachmentUrl = dto.attachmentUrl?.trim() || null;
+    this.storageService.assertNotPrivateAttachmentUrl(attachmentUrl);
 
     const recipientsCount = await this.dispatchInboxBatch({
       recipientIds,
@@ -965,6 +1001,18 @@ export class BroadcastsService {
   // ============================================================================
   // 4. КОНСОЛЬ ТЕХПІДТРИМКИ BIZX (ПОВНОЦІННІ ВІДПОВІДІ НА ТІКЕТИ ПОШТИ)
   // ============================================================================
+
+  async assertSupportThreadExists(threadId: string): Promise<void> {
+    const [thread] = await this.databaseService.db
+      .select({ id: inboxThreads.id, senderType: inboxThreads.senderType })
+      .from(inboxThreads)
+      .where(eq(inboxThreads.id, threadId))
+      .limit(1);
+
+    if (!thread || thread.senderType !== 'support') {
+      throw new NotFoundException('Звернення до підтримки не знайдено');
+    }
+  }
 
   async getPlatformSupportSummary(userId: string): Promise<PlatformSupportUnreadSummary> {
     await this.rbacService.assertPlatformPermission(userId, 'platform.support.read');
@@ -1187,8 +1235,9 @@ export class BroadcastsService {
 
     const senderName = staff?.name ? `${staff.name} · Підтримка BizX` : 'Служба підтримки BizX';
     const body = dto.body?.trim() || null;
-    const attachments = this.storageService.stripAttachmentsSignatures(
-      (dto.attachments || []) as OrderMessageAttachment[]
+    const attachments = this.storageService.assertAttachmentsScopedToPrefix(
+      (dto.attachments || []) as OrderMessageAttachment[],
+      `inbox/${threadId}`
     );
     const now = new Date();
     const preview = body

@@ -6,6 +6,7 @@ import { DatabaseModule } from './database/database.module.js';
 import { StorageModule } from './storage/storage.module.js';
 import { QueuesModule } from './queues/queues.module.js';
 import { AuthModule } from './auth/auth.module.js';
+import { JwtAuthGuard } from './auth/guards/jwt-auth.guard.js';
 import { RbacModule } from './rbac/rbac.module.js';
 import { StoresModule } from './stores/stores.module.js';
 import { ProductsModule } from './products/products.module.js';
@@ -56,6 +57,10 @@ import * as path from 'path';
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard
+    },
+    {
+      provide: APP_GUARD,
+      useClass: JwtAuthGuard
     }
   ]
 })

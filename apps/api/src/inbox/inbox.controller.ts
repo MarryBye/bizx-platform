@@ -5,17 +5,19 @@ import {
   Param,
   Body,
   UseGuards,
-  UsePipes,
   UseInterceptors,
   UploadedFile,
   ForbiddenException
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { Throttle } from '@nestjs/throttler';
 import { InboxService } from './inbox.service.js';
 import { StorageService } from '../storage/storage.service.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import { CurrentUser } from '../auth/decorators/auth.decorators.js';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
+import { SafeUuidPipe } from '../common/security/safe-uuid.pipe.js';
+import { sanitizeAttachmentFileName } from '../common/security/safe-storage-key.js';
 import {
   validateChatAttachmentFile,
   MAX_IMAGE_FILE_SIZE,
@@ -64,10 +66,10 @@ export class InboxController {
   }
 
   @Post('threads/support')
-  @UsePipes(new ZodValidationPipe(createSupportThreadDtoSchema))
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   async createSupportThread(
     @CurrentUser('sub') userId: string,
-    @Body() dto: CreateSupportThreadDto
+    @Body(new ZodValidationPipe(createSupportThreadDtoSchema)) dto: CreateSupportThreadDto
   ): Promise<ApiResponse<InboxThreadItem>> {
     const data = await this.inboxService.createSupportThread(userId, dto);
     return {
@@ -79,7 +81,7 @@ export class InboxController {
 
   @Get('threads/:threadId/messages')
   async getMessages(
-    @Param('threadId') threadId: string,
+    @Param('threadId', SafeUuidPipe) threadId: string,
     @CurrentUser('sub') userId: string
   ): Promise<ApiResponse<InboxMessageItem[]>> {
     const data = await this.inboxService.getThreadMessages(threadId, userId);
@@ -92,7 +94,7 @@ export class InboxController {
 
   @Post('threads/:threadId/read')
   async markRead(
-    @Param('threadId') threadId: string,
+    @Param('threadId', SafeUuidPipe) threadId: string,
     @CurrentUser('sub') userId: string
   ): Promise<ApiResponse<{ updated: number }>> {
     const data = await this.inboxService.markThreadRead(threadId, userId);
@@ -105,7 +107,7 @@ export class InboxController {
 
   @Post('threads/:threadId/messages')
   async sendMessage(
-    @Param('threadId') threadId: string,
+    @Param('threadId', SafeUuidPipe) threadId: string,
     @CurrentUser('sub') userId: string,
     @Body(new ZodValidationPipe(sendInboxMessageDtoSchema)) dto: SendInboxMessageDto
   ): Promise<ApiResponse<InboxMessageItem>> {
@@ -118,9 +120,10 @@ export class InboxController {
   }
 
   @Post('threads/:threadId/upload')
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_IMAGE_FILE_SIZE } }))
   async uploadAttachment(
-    @Param('threadId') threadId: string,
+    @Param('threadId', SafeUuidPipe) threadId: string,
     @CurrentUser('sub') userId: string,
     @UploadedFile() file: UploadedFileDto
   ): Promise<ApiResponse<OrderMessageAttachmentDto>> {
@@ -129,7 +132,11 @@ export class InboxController {
       throw new ForbiddenException('Завантаження вкладень у цьому діалозі вимкнено');
     }
     const validated = validateChatAttachmentFile(file);
-    const fileKey = this.storageService.generateFileKey('inbox', validated.originalname);
+    const fileKey = this.storageService.generateFileKey(
+      `inbox/${threadId}`,
+      validated.originalname,
+      validated.mimetype
+    );
     const publicUrl = await this.storageService.uploadBuffer(
       fileKey,
       validated.buffer,
@@ -139,7 +146,7 @@ export class InboxController {
       success: true,
       data: {
         url: this.storageService.signPrivateUrl(publicUrl),
-        fileName: validated.originalname,
+        fileName: sanitizeAttachmentFileName(validated.originalname),
         mimeType: validated.mimetype,
         size: validated.size
       },

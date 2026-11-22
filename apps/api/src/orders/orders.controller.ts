@@ -7,16 +7,17 @@ import {
   Param,
   Query,
   UseGuards,
-  UsePipes,
   UseInterceptors,
   UploadedFile
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { Throttle } from '@nestjs/throttler';
 import { OrdersService, type EnrichedOrder } from './orders.service.js';
 import { DisputesService } from './disputes.service.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import { CurrentUser } from '../auth/decorators/auth.decorators.js';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
+import { SafeUuidPipe } from '../common/security/safe-uuid.pipe.js';
 import { MAX_IMAGE_FILE_SIZE, type UploadedFileDto } from '../common/file-upload.utils.js';
 import type { OrderRecord } from '@bizx/database';
 import {
@@ -53,10 +54,10 @@ export class OrdersController {
   ) {}
 
   @Post()
-  @UsePipes(new ZodValidationPipe(createOrderDtoSchema))
+  @Throttle({ default: { limit: 15, ttl: 60_000 } })
   async createOrder(
     @CurrentUser('sub') userId: string,
-    @Body() dto: CreateOrderDto
+    @Body(new ZodValidationPipe(createOrderDtoSchema)) dto: CreateOrderDto
   ): Promise<ApiResponse<EnrichedOrder>> {
     const order = await this.ordersService.createOrder(userId, dto);
     return { success: true, data: order, timestamp: new Date().toISOString() };
@@ -67,7 +68,10 @@ export class OrdersController {
     @CurrentUser('sub') userId: string,
     @Query('storeId') storeId?: string
   ): Promise<ApiResponse<EnrichedOrder[]>> {
-    const orders = await this.ordersService.getMyOrders(userId, storeId);
+    const orders = await this.ordersService.getMyOrders(
+      userId,
+      typeof storeId === 'string' && storeId ? storeId : undefined
+    );
     return { success: true, data: orders, timestamp: new Date().toISOString() };
   }
 
@@ -76,13 +80,16 @@ export class OrdersController {
     @CurrentUser('sub') userId: string,
     @Query('storeId') storeId?: string
   ): Promise<ApiResponse<{ totalUnreadMessages: number; pendingRefundOffersCount: number }>> {
-    const summary = await this.ordersService.getMyUnreadSummary(userId, storeId);
+    const summary = await this.ordersService.getMyUnreadSummary(
+      userId,
+      typeof storeId === 'string' && storeId ? storeId : undefined
+    );
     return { success: true, data: summary, timestamp: new Date().toISOString() };
   }
 
   @Get('store/:storeId')
   async getStoreOrders(
-    @Param('storeId') storeId: string,
+    @Param('storeId', SafeUuidPipe) storeId: string,
     @CurrentUser('sub') userId: string
   ): Promise<ApiResponse<EnrichedOrder[]>> {
     const orders = await this.ordersService.getStoreOrders(storeId, userId);
@@ -91,7 +98,7 @@ export class OrdersController {
 
   @Get('store/:storeId/unread-summary')
   async getStoreUnreadSummary(
-    @Param('storeId') storeId: string,
+    @Param('storeId', SafeUuidPipe) storeId: string,
     @CurrentUser('sub') userId: string
   ): Promise<ApiResponse<{ totalUnreadMessages: number; activeDisputesCount: number }>> {
     const summary = await this.ordersService.getStoreUnreadSummary(storeId, userId);
@@ -100,7 +107,7 @@ export class OrdersController {
 
   @Get('store/:storeId/customers')
   async getStoreCustomers(
-    @Param('storeId') storeId: string,
+    @Param('storeId', SafeUuidPipe) storeId: string,
     @CurrentUser('sub') userId: string
   ): Promise<ApiResponse<StoreCustomerSummaryItem[]>> {
     const customers = await this.ordersService.getStoreCustomers(storeId, userId);
@@ -109,7 +116,7 @@ export class OrdersController {
 
   @Get(':id')
   async getOrderById(
-    @Param('id') id: string,
+    @Param('id', SafeUuidPipe) id: string,
     @CurrentUser('sub') userId: string
   ): Promise<ApiResponse<EnrichedOrder>> {
     const order = await this.ordersService.getOrderById(id, userId);
@@ -117,11 +124,10 @@ export class OrdersController {
   }
 
   @Patch(':id/status')
-  @UsePipes(new ZodValidationPipe(updateOrderStatusDtoSchema))
   async updateOrderStatus(
-    @Param('id') id: string,
+    @Param('id', SafeUuidPipe) id: string,
     @CurrentUser('sub') userId: string,
-    @Body() dto: UpdateOrderStatusDto
+    @Body(new ZodValidationPipe(updateOrderStatusDtoSchema)) dto: UpdateOrderStatusDto
   ): Promise<ApiResponse<OrderRecord>> {
     const updated = await this.ordersService.updateOrderStatus(id, userId, dto);
     return { success: true, data: updated, timestamp: new Date().toISOString() };
@@ -131,7 +137,7 @@ export class OrdersController {
 
   @Get(':id/messages')
   async getMessages(
-    @Param('id') id: string,
+    @Param('id', SafeUuidPipe) id: string,
     @CurrentUser('sub') userId: string
   ): Promise<ApiResponse<OrderMessageItem[]>> {
     const data = await this.ordersService.getOrderMessages(id, userId);
@@ -139,11 +145,10 @@ export class OrdersController {
   }
 
   @Post(':id/messages')
-  @UsePipes(new ZodValidationPipe(sendOrderMessageDtoSchema))
   async sendMessage(
-    @Param('id') id: string,
+    @Param('id', SafeUuidPipe) id: string,
     @CurrentUser('sub') userId: string,
-    @Body() dto: SendOrderMessageDto
+    @Body(new ZodValidationPipe(sendOrderMessageDtoSchema)) dto: SendOrderMessageDto
   ): Promise<ApiResponse<OrderMessageItem>> {
     const data = await this.ordersService.sendOrderMessage(id, userId, dto);
     return { success: true, data, timestamp: new Date().toISOString() };
@@ -151,7 +156,7 @@ export class OrdersController {
 
   @Post(':id/messages/read')
   async markMessagesRead(
-    @Param('id') id: string,
+    @Param('id', SafeUuidPipe) id: string,
     @CurrentUser('sub') userId: string
   ): Promise<ApiResponse<{ updated: number }>> {
     const data = await this.ordersService.markOrderMessagesRead(id, userId);
@@ -159,9 +164,10 @@ export class OrdersController {
   }
 
   @Post(':id/messages/upload')
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_IMAGE_FILE_SIZE } }))
   async uploadChatAttachment(
-    @Param('id') id: string,
+    @Param('id', SafeUuidPipe) id: string,
     @CurrentUser('sub') userId: string,
     @UploadedFile() rawFile?: UploadedFileDto
   ): Promise<ApiResponse<OrderMessageAttachmentDto>> {
@@ -172,22 +178,20 @@ export class OrdersController {
   // ==================== QUICK REFUND OFFER ====================
 
   @Post(':id/refund-offer')
-  @UsePipes(new ZodValidationPipe(createRefundOfferDtoSchema))
   async createRefundOffer(
-    @Param('id') id: string,
+    @Param('id', SafeUuidPipe) id: string,
     @CurrentUser('sub') userId: string,
-    @Body() dto: CreateRefundOfferDto
+    @Body(new ZodValidationPipe(createRefundOfferDtoSchema)) dto: CreateRefundOfferDto
   ): Promise<ApiResponse<EnrichedOrder>> {
     const data = await this.ordersService.createRefundOffer(id, userId, dto);
     return { success: true, data, timestamp: new Date().toISOString() };
   }
 
   @Post(':id/refund-offer/respond')
-  @UsePipes(new ZodValidationPipe(respondRefundOfferDtoSchema))
   async respondRefundOffer(
-    @Param('id') id: string,
+    @Param('id', SafeUuidPipe) id: string,
     @CurrentUser('sub') userId: string,
-    @Body() dto: RespondRefundOfferDto
+    @Body(new ZodValidationPipe(respondRefundOfferDtoSchema)) dto: RespondRefundOfferDto
   ): Promise<ApiResponse<EnrichedOrder>> {
     const data = await this.ordersService.respondRefundOffer(id, userId, dto);
     return { success: true, data, timestamp: new Date().toISOString() };
@@ -196,11 +200,10 @@ export class OrdersController {
   // ==================== CUSTOMER DISPUTES ====================
 
   @Post(':id/disputes')
-  @UsePipes(new ZodValidationPipe(createDisputeDtoSchema))
   async openDispute(
-    @Param('id') id: string,
+    @Param('id', SafeUuidPipe) id: string,
     @CurrentUser('sub') userId: string,
-    @Body() dto: CreateDisputeDto
+    @Body(new ZodValidationPipe(createDisputeDtoSchema)) dto: CreateDisputeDto
   ): Promise<ApiResponse<OrderDisputeItem>> {
     const data = await this.disputesService.openDispute(id, userId, dto);
     return { success: true, data, timestamp: new Date().toISOString() };
@@ -208,8 +211,8 @@ export class OrdersController {
 
   @Post(':id/disputes/:disputeId/withdraw')
   async withdrawDispute(
-    @Param('id') id: string,
-    @Param('disputeId') disputeId: string,
+    @Param('id', SafeUuidPipe) id: string,
+    @Param('disputeId', SafeUuidPipe) disputeId: string,
     @CurrentUser('sub') userId: string
   ): Promise<ApiResponse<OrderDisputeItem>> {
     const data = await this.disputesService.withdrawDispute(id, disputeId, userId);
@@ -217,12 +220,11 @@ export class OrdersController {
   }
 
   @Post(':id/disputes/:disputeId/escalate')
-  @UsePipes(new ZodValidationPipe(escalateDisputeDtoSchema))
   async escalateDispute(
-    @Param('id') id: string,
-    @Param('disputeId') disputeId: string,
+    @Param('id', SafeUuidPipe) id: string,
+    @Param('disputeId', SafeUuidPipe) disputeId: string,
     @CurrentUser('sub') userId: string,
-    @Body() dto: EscalateDisputeDto
+    @Body(new ZodValidationPipe(escalateDisputeDtoSchema)) dto: EscalateDisputeDto
   ): Promise<ApiResponse<OrderDisputeItem>> {
     const data = await this.disputesService.escalateDispute(id, disputeId, userId, dto);
     return { success: true, data, timestamp: new Date().toISOString() };
@@ -231,11 +233,10 @@ export class OrdersController {
   // ==================== ORDER REVIEW (STAR RATING) ====================
 
   @Post(':id/review')
-  @UsePipes(new ZodValidationPipe(createStoreReviewDtoSchema))
   async createReview(
-    @Param('id') id: string,
+    @Param('id', SafeUuidPipe) id: string,
     @CurrentUser('sub') userId: string,
-    @Body() dto: CreateStoreReviewDto
+    @Body(new ZodValidationPipe(createStoreReviewDtoSchema)) dto: CreateStoreReviewDto
   ): Promise<ApiResponse<StoreReviewItem>> {
     const data = await this.ordersService.createOrderReview(id, userId, dto);
     return { success: true, data, timestamp: new Date().toISOString() };
