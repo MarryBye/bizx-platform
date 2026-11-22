@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { cn } from '../lib/utils';
+import { sanitizeUiUrl, SAFE_CHAT_ACCEPT, validateChatUploadFile } from '../lib/security';
 import {
   Send,
   Paperclip,
@@ -75,12 +76,17 @@ export const OrderChatBox: React.FC<OrderChatBoxProps> = ({
     }
   }, [messages.length]);
 
-  const mediaUrl = (u: string) => (resolveMediaUrl ? resolveMediaUrl(u) : u);
+  const mediaUrl = (u: string) => sanitizeUiUrl(resolveMediaUrl ? resolveMediaUrl(u) : u);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file || !onUploadAttachment) return;
+    const validation = validateChatUploadFile(file, locale);
+    if (!validation.ok) {
+      setError(validation.message);
+      return;
+    }
     setIsUploading(true);
     setError(null);
     try {
@@ -228,7 +234,20 @@ export const OrderChatBox: React.FC<OrderChatBoxProps> = ({
                     <div className="flex flex-wrap gap-1.5 pt-0.5">
                       {msg.attachments.map((att, idx) => {
                         const resolved = mediaUrl(att.url);
-                        const isImg = att.mimeType.startsWith('image/');
+                        if (!resolved) {
+                          return (
+                            <span
+                              key={`${att.fileName}-${idx}`}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium border border-slate-200 bg-slate-100 text-slate-400"
+                            >
+                              <FileText className="w-3.5 h-3.5 shrink-0" />
+                              <span className="truncate max-w-[160px]">{att.fileName}</span>
+                            </span>
+                          );
+                        }
+                        const isImg =
+                          att.mimeType.startsWith('image/') &&
+                          !att.mimeType.toLowerCase().includes('svg');
                         if (isImg) {
                           return (
                             <a
@@ -363,7 +382,7 @@ export const OrderChatBox: React.FC<OrderChatBoxProps> = ({
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="image/*,application/pdf"
+                  accept={SAFE_CHAT_ACCEPT}
                   onChange={handleFileSelect}
                   className="hidden"
                 />

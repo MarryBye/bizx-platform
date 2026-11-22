@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { cn } from '../lib/utils';
+import { sanitizeUiUrl } from '../lib/security';
 import {
   Mail,
   Lock,
@@ -252,6 +253,8 @@ export const AuthCard: React.FC<AuthCardProps> = ({
                 <input
                   type="text"
                   required
+                  autoComplete="name"
+                  maxLength={120}
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder={copy.fullNamePlaceholder}
@@ -272,6 +275,8 @@ export const AuthCard: React.FC<AuthCardProps> = ({
                 <input
                   type="email"
                   required
+                  autoComplete="email"
+                  maxLength={255}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="name@example.com"
@@ -311,6 +316,9 @@ export const AuthCard: React.FC<AuthCardProps> = ({
               <input
                 type="password"
                 required
+                autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                minLength={mode === 'register' ? 8 : undefined}
+                maxLength={128}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
@@ -342,17 +350,23 @@ export const AuthCard: React.FC<AuthCardProps> = ({
         </form>
 
         {/* Redirect to external registration if registration is disabled on this panel */}
-        {!allowRegister && externalRegisterUrl && (
-          <div className="mt-5 pt-4 border-t border-slate-100 text-center">
-            <a
-              href={externalRegisterUrl}
-              className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-700 hover:text-slate-900 hover:underline"
-            >
-              <span>{externalRegisterText || copy.defaultExternalRegister}</span>
-              <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
-            </a>
-          </div>
-        )}
+        {!allowRegister &&
+          (() => {
+            const safeExternalUrl = sanitizeUiUrl(externalRegisterUrl, { allowRelative: true });
+            if (!safeExternalUrl) return null;
+            return (
+              <div className="mt-5 pt-4 border-t border-slate-100 text-center">
+                <a
+                  href={safeExternalUrl}
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-700 hover:text-slate-900 hover:underline"
+                >
+                  <span>{externalRegisterText || copy.defaultExternalRegister}</span>
+                  <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
+                </a>
+              </div>
+            );
+          })()}
 
         {/* Optional Custom Footer Notice */}
         {footerNotice && (
