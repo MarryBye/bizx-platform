@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Modal,
   SafeAreaView,
@@ -46,25 +46,28 @@ export const InboxModal: React.FC<InboxModalProps> = ({
   // 1-click promo unsubscribe state
   const [unsubscribedStores, setUnsubscribedStores] = useState<Record<string, boolean>>({});
   const [isUnsubscribing, setIsUnsubscribing] = useState(false);
+  const hasLoadedThreadsRef = useRef(false);
 
-  const loadThreads = useCallback(
-    async (silent = false) => {
-      if (!silent) setIsLoading(true);
-      try {
-        const res = await mobileApi.inbox.getThreads();
-        if (res.success && res.data) {
-          setThreads(res.data);
-          const total = res.data.reduce((acc, item) => acc + (item.unreadCount || 0), 0);
-          onUnreadChanged?.(total);
-        }
-      } catch {
-        // ignore
-      } finally {
-        if (!silent) setIsLoading(false);
+  const loadThreads = useCallback(async (silent = false) => {
+    if (!silent) setIsLoading(true);
+    try {
+      const res = await mobileApi.inbox.getThreads();
+      if (res.success && res.data) {
+        hasLoadedThreadsRef.current = true;
+        setThreads(res.data);
       }
-    },
-    [onUnreadChanged]
-  );
+    } catch {
+      // ignore
+    } finally {
+      if (!silent) setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!hasLoadedThreadsRef.current || !onUnreadChanged) return;
+    const total = threads.reduce((acc, item) => acc + (item.unreadCount || 0), 0);
+    onUnreadChanged(total);
+  }, [threads, onUnreadChanged]);
 
   useEffect(() => {
     if (!visible) return;
@@ -77,31 +80,25 @@ export const InboxModal: React.FC<InboxModalProps> = ({
     return () => clearInterval(interval);
   }, [visible, loadThreads]);
 
-  const openThread = useCallback(
-    async (thread: InboxThreadItem) => {
-      setSelectedThread(thread);
-      setShowNewTicket(false);
-      setMessages([]);
-      try {
-        const res = await mobileApi.inbox.getMessages(thread.id);
-        if (res.success && res.data) {
-          setMessages(res.data);
-          if (thread.unreadCount > 0) {
-            await mobileApi.inbox.markRead(thread.id).catch(() => {});
-            setThreads((prev) => {
-              const next = prev.map((t) => (t.id === thread.id ? { ...t, unreadCount: 0 } : t));
-              const total = next.reduce((acc, item) => acc + (item.unreadCount || 0), 0);
-              onUnreadChanged?.(total);
-              return next;
-            });
-          }
+  const openThread = useCallback(async (thread: InboxThreadItem) => {
+    setSelectedThread(thread);
+    setShowNewTicket(false);
+    setMessages([]);
+    try {
+      const res = await mobileApi.inbox.getMessages(thread.id);
+      if (res.success && res.data) {
+        setMessages(res.data);
+        if (thread.unreadCount > 0) {
+          await mobileApi.inbox.markRead(thread.id).catch(() => {});
+          setThreads((prev) =>
+            prev.map((t) => (t.id === thread.id ? { ...t, unreadCount: 0 } : t))
+          );
         }
-      } catch {
-        // ignore
       }
-    },
-    [onUnreadChanged]
-  );
+    } catch {
+      // ignore
+    }
+  }, []);
 
   // Poll active thread messages while viewing a replyable conversation
   useEffect(() => {

@@ -58,6 +58,7 @@ export const App: React.FC = () => {
   const [unreadSupportCount, setUnreadSupportCount] = useState<number>(0);
   const [newPendingAlert, setNewPendingAlert] = useState<number | null>(null);
   const prevPendingStoresRef = useRef<number | null>(null);
+  const hasLoadedBusinessesRef = useRef(false);
 
   const myPermissions = myAccess?.permissions ?? [];
   const hasPerm = (code: string) => Boolean(myAccess && myPermissions.includes(code));
@@ -103,6 +104,7 @@ export const App: React.FC = () => {
               ownerName: st.ownerName || undefined,
               ownerEmail: st.ownerEmail || undefined
             }));
+            hasLoadedBusinessesRef.current = true;
             setBusinesses(mapped);
             const pCount = mapped.filter((b) => b.status === 'pending').length;
             setPendingStoresCount(pCount);
@@ -291,7 +293,15 @@ export const App: React.FC = () => {
     setNewPendingAlert(null);
     setActionError(null);
     prevPendingStoresRef.current = null;
+    hasLoadedBusinessesRef.current = false;
   }, []);
+
+  useEffect(() => {
+    if (!hasLoadedBusinessesRef.current) return;
+    const pCount = businesses.filter((b) => b.status === 'pending').length;
+    prevPendingStoresRef.current = pCount;
+    setPendingStoresCount(pCount);
+  }, [businesses]);
 
   // Check auth on mount & listen for global 401 unauthorized events
   useEffect(() => {
@@ -359,8 +369,8 @@ export const App: React.FC = () => {
           ? updatedStore?.suspensionReason ?? payload.suspensionReason ?? null
           : null;
 
-      setBusinesses((prev) => {
-        const next = prev.map((b) =>
+      setBusinesses((prev) =>
+        prev.map((b) =>
           b.id === id
             ? {
                 ...b,
@@ -369,12 +379,8 @@ export const App: React.FC = () => {
                 suspensionReason: nextReason
               }
             : b
-        );
-        const pCount = next.filter((b) => b.status === 'pending').length;
-        prevPendingStoresRef.current = pCount;
-        setPendingStoresCount(pCount);
-        return next;
-      });
+        )
+      );
 
       if (selectedBusiness && selectedBusiness.id === id) {
         setSelectedBusiness((prev) =>
@@ -409,13 +415,9 @@ export const App: React.FC = () => {
     try {
       const res = await platformApi.stores.approveStore(id);
       if (res.success) {
-        setBusinesses((prev) => {
-          const next = prev.map((b) => (b.id === id ? { ...b, status: 'active' as const } : b));
-          const pCount = next.filter((b) => b.status === 'pending').length;
-          prevPendingStoresRef.current = pCount;
-          setPendingStoresCount(pCount);
-          return next;
-        });
+        setBusinesses((prev) =>
+          prev.map((b) => (b.id === id ? { ...b, status: 'active' as const } : b))
+        );
         if (selectedBusiness && selectedBusiness.id === id) {
           setSelectedBusiness((prev) => (prev ? { ...prev, status: 'active' } : null));
         }
@@ -438,13 +440,9 @@ export const App: React.FC = () => {
     try {
       const res = await platformApi.stores.rejectStore(id, { reason });
       if (res.success) {
-        setBusinesses((prev) => {
-          const next = prev.map((b) => (b.id === id ? { ...b, status: 'draft' as const } : b));
-          const pCount = next.filter((b) => b.status === 'pending').length;
-          prevPendingStoresRef.current = pCount;
-          setPendingStoresCount(pCount);
-          return next;
-        });
+        setBusinesses((prev) =>
+          prev.map((b) => (b.id === id ? { ...b, status: 'draft' as const } : b))
+        );
         if (selectedBusiness && selectedBusiness.id === id) {
           setSelectedBusiness((prev) => (prev ? { ...prev, status: 'draft' } : null));
         }

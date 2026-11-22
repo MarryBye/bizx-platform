@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { api } from '../../lib/api';
 import {
   OrderChatBox,
@@ -57,6 +57,7 @@ export const AccountInbox: React.FC<AccountInboxProps> = ({ locale, onUnreadChan
   const [supportError, setSupportError] = useState<string | null>(null);
   const [unsubscribedStores, setUnsubscribedStores] = useState<Record<string, boolean>>({});
   const [unsubscribingStoreId, setUnsubscribingStoreId] = useState<string | null>(null);
+  const hasLoadedThreadsRef = useRef(false);
 
   const handleUnsubscribePromoStore = async (storeId: string) => {
     setUnsubscribingStoreId(storeId);
@@ -80,56 +81,52 @@ export const AccountInbox: React.FC<AccountInboxProps> = ({ locale, onUnreadChan
     [threads, selectedThreadId]
   );
 
-  const loadThreads = useCallback(
-    async (silent = false) => {
-      if (!silent) setIsLoadingThreads(true);
-      try {
-        const res = await api.inbox.getThreads();
-        if (res.success && res.data) {
-          setThreads(res.data);
-          const totalUnread = res.data.reduce((acc, item) => acc + (item.unreadCount || 0), 0);
-          onUnreadChanged?.(totalUnread);
-          if (!selectedThreadId && res.data.length > 0 && typeof window !== 'undefined' && window.innerWidth >= 1024) {
-            setSelectedThreadId(res.data[0].id);
-          }
+  const loadThreads = useCallback(async (silent = false) => {
+    if (!silent) setIsLoadingThreads(true);
+    try {
+      const res = await api.inbox.getThreads();
+      if (res.success && res.data) {
+        hasLoadedThreadsRef.current = true;
+        setThreads(res.data);
+        if (res.data.length > 0 && typeof window !== 'undefined' && window.innerWidth >= 1024) {
+          setSelectedThreadId((prev) => prev ?? res.data[0].id);
         }
-      } catch {
-        // ignore
-      } finally {
-        if (!silent) setIsLoadingThreads(false);
       }
-    },
-    [onUnreadChanged, selectedThreadId]
-  );
+    } catch {
+      // ignore
+    } finally {
+      if (!silent) setIsLoadingThreads(false);
+    }
+  }, []);
 
-  const loadMessages = useCallback(
-    async (threadId: string, silent = false) => {
-      if (!silent) setIsLoadingMessages(true);
-      try {
-        const res = await api.inbox.getMessages(threadId);
-        if (res.success && res.data) {
-          setMessages(res.data);
-          const hasUnread = res.data.some(
-            (m) => m.senderRole !== 'recipient' && !m.readByRecipientAt
+  const loadMessages = useCallback(async (threadId: string, silent = false) => {
+    if (!silent) setIsLoadingMessages(true);
+    try {
+      const res = await api.inbox.getMessages(threadId);
+      if (res.success && res.data) {
+        setMessages(res.data);
+        const hasUnread = res.data.some(
+          (m) => m.senderRole !== 'recipient' && !m.readByRecipientAt
+        );
+        if (hasUnread) {
+          await api.inbox.markRead(threadId).catch(() => {});
+          setThreads((prev) =>
+            prev.map((t) => (t.id === threadId ? { ...t, unreadCount: 0 } : t))
           );
-          if (hasUnread) {
-            await api.inbox.markRead(threadId).catch(() => {});
-            setThreads((prev) => {
-              const next = prev.map((t) => (t.id === threadId ? { ...t, unreadCount: 0 } : t));
-              const totalUnread = next.reduce((acc, item) => acc + (item.unreadCount || 0), 0);
-              onUnreadChanged?.(totalUnread);
-              return next;
-            });
-          }
         }
-      } catch {
-        // ignore
-      } finally {
-        if (!silent) setIsLoadingMessages(false);
       }
-    },
-    [onUnreadChanged]
-  );
+    } catch {
+      // ignore
+    } finally {
+      if (!silent) setIsLoadingMessages(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!hasLoadedThreadsRef.current || !onUnreadChanged) return;
+    const totalUnread = threads.reduce((acc, item) => acc + (item.unreadCount || 0), 0);
+    onUnreadChanged(totalUnread);
+  }, [threads, onUnreadChanged]);
 
   useEffect(() => {
     void loadThreads(false);
